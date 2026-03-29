@@ -2,16 +2,23 @@
 node_modules/
 .pnp
 .pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
 # Logs
 logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# Compilación y builds
+# Compilación y builds (Next.js & NestJS)
 dist/
 dist-ssr/
 build/
@@ -19,13 +26,14 @@ build/
 out/
 /.svelte-kit
 .vercel/
+/generated/prisma
+*.tsbuildinfo
+next-env.d.ts
 
 # Variables de entorno
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Bases de datos SQLite o Prisma
 *.db
@@ -33,14 +41,34 @@ out/
 *.sqlite-journal
 prisma/dev.db
 
-# OS
+# Testing
+coverage/
+.nyc_output/
+
+# OS y temporales
 .DS_Store
 *.pem
+.temp
+.tmp
+pids
+*.pid
+*.seed
+*.pid.lock
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# Editor de código
+# IDEs y Editor de código
 .vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 !.vscode/extensions.json
 .idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 *.suo
 *.ntvs*
 *.njsproj
