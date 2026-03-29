@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activos_fijos {
+  id                Int       @id @default(autoincrement())
+  nombre            String    @db.VarChar(150)
+  valor_estimado    Decimal   @db.Decimal(10, 2)
+  fecha_adquisicion DateTime  @db.Date
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ajustes_inventario {
+  id                Int              @id @default(autoincrement())
+  lote_id           Int
+  cantidad_ajustada Int
+  tipo_ajuste       String           @db.VarChar(50)
+  costo_asumido     Decimal          @db.Decimal(10, 2)
+  fecha             DateTime?        @default(now()) @db.Timestamptz(6)
+  justificacion     String?
+  lotes_inventario  lotes_inventario @relation(fields: [lote_id], references: [id], onUpdate: NoAction, map: "fk_lote_ajuste")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model cajas_turnos {
+  id                      Int                       @id @default(autoincrement())
+  fecha_apertura          DateTime?                 @default(now()) @db.Timestamptz(6)
+  fondo_inicial           Decimal                   @db.Decimal(10, 2)
+  estado                  String                    @default("ABIERTA") @db.VarChar(20)
+  fecha_cierre            DateTime?                 @db.Timestamptz(6)
+  efectivo_esperado       Decimal?                  @db.Decimal(10, 2)
+  efectivo_declarado      Decimal?                  @db.Decimal(10, 2)
+  diferencia              Decimal?                  @db.Decimal(10, 2)
+  observaciones           String?
+  movimientos_financieros movimientos_financieros[]
+  ventas                  ventas[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model categorias {
+  id        Int         @id @default(autoincrement())
+  nombre    String      @unique @db.VarChar(100)
+  productos productos[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model categorias_gastos {
+  id                      Int                       @id @default(autoincrement())
+  nombre                  String                    @unique @db.VarChar(100)
+  tipo                    String                    @db.VarChar(20)
+  movimientos_financieros movimientos_financieros[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model compras_inventario {
+  id                Int                 @id @default(autoincrement())
+  proveedor         String              @db.VarChar(150)
+  monto_total       Decimal             @db.Decimal(10, 2)
+  estado_pago       String              @db.VarChar(20)
+  origen_fondos     String              @db.VarChar(50)
+  fecha             DateTime?           @default(now()) @db.Timestamptz(6)
+  cuentas_por_pagar cuentas_por_pagar[]
+  lotes_inventario  lotes_inventario[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model cuentas_por_pagar {
+  id                 Int                 @id @default(autoincrement())
+  compra_id          Int?
+  acreedor           String              @db.VarChar(150)
+  monto_deuda        Decimal             @db.Decimal(10, 2)
+  saldo_pendiente    Decimal             @db.Decimal(10, 2)
+  fecha_creacion     DateTime?           @default(now()) @db.Timestamptz(6)
+  compras_inventario compras_inventario? @relation(fields: [compra_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_compra")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model detalle_venta_lotes {
+  id                  Int              @id @default(autoincrement())
+  detalle_venta_id    Int
+  lote_id             Int
+  cantidad_descargada Int
+  costo_aplicado      Decimal          @db.Decimal(10, 4)
+  detalle_ventas      detalle_ventas   @relation(fields: [detalle_venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_detalle_venta")
+  lotes_inventario    lotes_inventario @relation(fields: [lote_id], references: [id], onUpdate: NoAction, map: "fk_lote_descarga")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model detalle_ventas {
+  id                  Int                   @id @default(autoincrement())
+  venta_id            Int
+  presentacion_id     Int
+  cantidad            Int
+  subtotal            Decimal               @db.Decimal(10, 2)
+  detalle_venta_lotes detalle_venta_lotes[]
+  presentaciones      presentaciones        @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction, map: "fk_presentacion")
+  ventas              ventas                @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venta")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model lotes_inventario {
+  id                         Int                   @id @default(autoincrement())
+  producto_id                Int
+  compra_id                  Int
+  costo_unitario_adquisicion Decimal               @db.Decimal(10, 4)
+  cantidad_inicial           Int
+  cantidad_disponible        Int
+  fecha_ingreso              DateTime?             @default(now()) @db.Timestamptz(6)
+  fecha_vencimiento          DateTime?             @db.Date
+  ajustes_inventario         ajustes_inventario[]
+  detalle_venta_lotes        detalle_venta_lotes[]
+  compras_inventario         compras_inventario    @relation(fields: [compra_id], references: [id], onUpdate: NoAction, map: "fk_compra_lote")
+  productos                  productos             @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto_lote")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model movimientos_financieros {
+  id                 Int                @id @default(autoincrement())
+  caja_turno_id      Int?
+  tipo_movimiento    String             @db.VarChar(50)
+  monto              Decimal            @db.Decimal(10, 2)
+  categoria_gasto_id Int?
+  descripcion        String
+  fecha              DateTime?          @default(now()) @db.Timestamptz(6)
+  cajas_turnos       cajas_turnos?      @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
+  categorias_gastos  categorias_gastos? @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
+  caja_general       caja_general?
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model presentaciones {
+  id                Int              @id @default(autoincrement())
+  producto_id       Int
+  codigo_barras     String?          @unique @db.VarChar(50)
+  descripcion       String           @db.VarChar(100)
+  factor_conversion Int
+  precio_venta      Decimal          @db.Decimal(10, 2)
+  detalle_ventas    detalle_ventas[]
+  productos         productos        @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model productos {
+  id               Int                @id @default(autoincrement())
+  nombre           String             @db.VarChar(150)
+  categoria_id     Int
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  lotes_inventario lotes_inventario[]
+  presentaciones   presentaciones[]
+  categorias       categorias         @relation(fields: [categoria_id], references: [id], onUpdate: NoAction, map: "fk_categoria")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model usuarios {
+  id            Int       @id @default(autoincrement())
+  nombre        String    @db.VarChar(100)
+  rol           String    @db.VarChar(20)
+  password_hash String    @db.VarChar(255)
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ventas {
+  id             Int              @id @default(autoincrement())
+  caja_turno_id  Int
+  total          Decimal          @db.Decimal(10, 2)
+  fecha          DateTime?        @default(now()) @db.Timestamptz(6)
+  estado             String           @default("COMPLETADA") @db.VarChar(20)
+  justificacion_nula String?          @db.Text
+  fecha_anulacion    DateTime?        @db.Timestamptz(6)
+  detalle_ventas     detalle_ventas[]
+  cajas_turnos       cajas_turnos     @relation(fields: [caja_turno_id], references: [id], onUpdate: NoAction, map: "fk_caja_venta")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model caja_general {
+  id                    Int       @id @default(autoincrement())
+  movimiento_origen_id  Int?      @unique
+  monto                 Decimal   @db.Decimal(10, 2)
+  descripcion           String
+  fecha                 DateTime? @default(now()) @db.Timestamptz(6)
+
+  movimientos_financieros movimientos_financieros? @relation(fields: [movimiento_origen_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+}

@@ -1,0 +1,52 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { CategoriasModule } from './categorias/categorias.module';
+import { ProductosModule } from './productos/productos.module';
+import { PresentacionesModule } from './presentaciones/presentaciones.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { CajasTurnosModule } from './cajas_turnos/cajas_turnos.module';
+import { VentasModule } from './ventas/ventas.module';
+import { ComprasModule } from './compras/compras.module';
+import { CategoriasGastosModule } from './categorias_gastos/categorias_gastos.module';
+import { MovimientosFinancierosModule } from './movimientos_financieros/movimientos_financieros.module';
+import { AjustesInventarioModule } from './ajustes_inventario/ajustes_inventario.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
+import { AuthModule } from './auth/auth.module';
+import { CajaGeneralModule } from './caja_general/caja_general.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    CategoriasModule,
+    ProductosModule,
+    PresentacionesModule,
+    CajasTurnosModule,
+    VentasModule,
+    ComprasModule,
+    CategoriasGastosModule,
+    MovimientosFinancierosModule,
+    AjustesInventarioModule,
+    UsuariosModule,
+    AuthModule,
+    CajaGeneralModule,
+  ],
+  controllers: [AppController],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
+})
+export class AppModule {}

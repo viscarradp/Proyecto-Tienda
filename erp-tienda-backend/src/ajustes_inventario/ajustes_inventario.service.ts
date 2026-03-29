@@ -1,0 +1,105 @@
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+
+@Injectable()
+export class AjustesInventarioService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createAjusteDto: CreateAjusteInventarioDto) {
+    const { lote_id, cantidad_ajustada, tipo_ajuste, justificacion } =
+      createAjusteDto;
+
+    // Todo el método create() debe ejecutarse dentro de un this.prisma.$transaction
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Buscar y Validar el Lote
+      const lote = await tx.lotes_inventario.findUnique({
+        where: { id: lote_id },
+      });
+
+      if (!lote) {
+        throw new NotFoundException(`Lote con ID ${lote_id} no encontrado`);
+      }
+
+      // 2. Validar Cantidad
+      if (lote.cantidad_disponible < cantidad_ajustada) {
+        throw new BadRequestException(
+          'La cantidad a ajustar supera la disponibilidad del lote',
+        );
+      }
+
+      // 3. Calcular Costo de la Pérdida
+      // cantidad_ajustada * lote.costo_unitario_adquisicion
+      const costo_asumido = new Prisma.Decimal(cantidad_ajustada).mul(
+        lote.costo_unitario_adquisicion,
+      );
+
+      // 4. Actualizar el Lote: Resta la cantidad_ajustada de la cantidad_disponible
+      await tx.lotes_inventario.update({
+        where: { id: lote_id },
+        data: {
+          cantidad_disponible: {
+            decrement: cantidad_ajustada,
+          },
+        },
+      });
+
+      // 5. Registrar el Ajuste
+      return await tx.ajustes_inventario.create({
+        data: {
+          lote_id,
+          cantidad_ajustada,
+          tipo_ajuste,
+          justificacion,
+          costo_asumido,
+        },
+        include: {
+          lotes_inventario: {
+            include: {
+              productos: true,
+            },
+          },
+        },
+      });
+    });
+  }
+
+  findAll() {
+    return this.prisma.ajustes_inventario.findMany({
+      orderBy: { fecha: 'desc' },
+      include: {
+        lotes_inventario: {
+          include: {
+            productos: true,
+          },
+        },
+      },
+    });
+  }
+
+  async findOne(id: number) {
+    const ajuste = await this.prisma.ajustes_inventario.findUnique({
+      where: { id },
+      include: {
+        lotes_inventario: {
+          include: {
+            productos: true,
+          },
+        },
+      },
+    });
+
+    if (!ajuste) {
+      throw new NotFoundException(
+        `Ajuste de inventario con ID ${id} no encontrado`,
+      );
+    }
+
+    return ajuste;
+  }
+}

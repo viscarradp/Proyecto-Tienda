@@ -1,0 +1,26 @@
+ turno_id |        fecha_apertura         | fondo_inicial | total_ventas | otros_ingresos | total_egresos | calculo_esperado_real | efectivo_esperado_sistema | integridad_esperado 
+----------+-------------------------------+---------------+--------------+----------------+---------------+-----------------------+---------------------------+---------------------
+    99001 | 2026-03-27 17:35:11.963772+00 |        100.00 |        30.00 |              0 |             0 |                130.00 |                    130.00 | CORRECTO
+    99002 | 2026-03-28 17:35:11.963772+00 |         50.00 |        60.00 |              0 |             0 |                110.00 |                    110.00 | CORRECTO
+    99003 | 2026-03-29 05:35:11.963772+00 |         50.00 |        15.00 |              0 |          5.00 |                 60.00 |                     60.00 | CORRECTO
+(3 rows)
+
+ turno_id | efectivo_esperado | efectivo_declarado | diferencia_almacenada | diferencia_calculada | integridad_descuadre 
+----------+-------------------+--------------------+-----------------------+----------------------+----------------------
+    99001 |            130.00 |             130.00 |                  0.00 |                 0.00 | CORRECTO
+    99002 |            110.00 |             100.00 |                -10.00 |               -10.00 | CORRECTO
+    99003 |             60.00 |              60.00 |                  0.00 |                 0.00 | CORRECTO
+(3 rows)
+
+ venta_id | total_venta_cabecera | suma_detalles | integridad_factura 
+----------+----------------------+---------------+--------------------
+    99003 |                15.00 |         15.00 | CORRECTO
+    99002 |                60.00 |         60.00 | CORRECTO
+    99001 |                30.00 |         30.00 | CORRECTO
+(3 rows)
+
+ caja_general_id | monto_caja_general | monto_movimiento_origen | tipo_movimiento | integridad_caja_general 
+-----------------+--------------------+-------------------------+-----------------+-------------------------
+           99001 |            -150.00 |                  150.00 | EGRESO          | CORRECTO
+(1 row)
+
