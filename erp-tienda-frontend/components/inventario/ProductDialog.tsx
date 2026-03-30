@@ -236,7 +236,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
             <div className="flex items-center justify-between">
               <Label className="text-xs font-bold uppercase tracking-wider text-zinc-400">Presentaciones de Venta</Label>
               <Button type="button" variant="outline" size="sm" onClick={addPresentacion}
-                className="border-zinc-800 text-white hover:bg-zinc-900 hover:text-white rounded-lg gap-1 h-7 text-xs">
+                className="border-zinc-800 text-black hover:bg-zinc-900 hover:text-white rounded-lg gap-1 h-7 text-xs">
                 <Plus className="h-3 w-3" /> Agregar
               </Button>
             </div>
