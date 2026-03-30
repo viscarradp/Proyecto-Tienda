@@ -83,7 +83,8 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
         if (original && (
           original.descripcion !== pres.descripcion ||
           original.codigo_barras !== pres.codigo_barras ||
-          original.factor_conversion !== pres.factor_conversion
+          original.factor_conversion !== pres.factor_conversion ||
+          original.precio_venta !== pres.precio_venta
         )) {
           await apiFetch(`/presentaciones/${pres.id}`, {
             method: "PATCH",
@@ -91,7 +92,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
               descripcion: pres.descripcion.trim(),
               codigo_barras: pres.codigo_barras?.trim() || undefined,
               factor_conversion: pres.factor_conversion,
-              // We do NOT send precio_venta to preserve its current state
+              precio_venta: parseFloat(pres.precio_venta)
             })
           })
         }
@@ -114,7 +115,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             Edición de Producto
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
-            Modifica nombres, categorías y códigos de barras. Precios y stock están bloqueados por seguridad.
+            Modifica nombres, categorías, códigos de barras y precios de venta. El stock sigue bloqueado por seguridad.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,10 +157,6 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Presentaciones Configuradas</h3>
-              <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-lg text-[10px] font-bold">
-                <ShieldAlert className="w-3 h-3" />
-                PRECIOS BLOQUEADOS
-              </div>
             </div>
             
             <div className="space-y-3">
@@ -197,9 +194,12 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-zinc-500 uppercase">Precio ($)</Label>
                     <Input
-                      disabled
-                      value={parseFloat(pres.precio_venta).toFixed(2)}
-                      className="h-8 text-xs font-mono font-bold text-zinc-500 bg-black/20 border-zinc-900 cursor-not-allowed select-none"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={pres.precio_venta}
+                      onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
+                      className="h-8 text-xs font-mono font-bold text-emerald-400 bg-black/50 border-zinc-800 focus-visible:ring-emerald-500"
                     />
                   </div>
                 </div>
