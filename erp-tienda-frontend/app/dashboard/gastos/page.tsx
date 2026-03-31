@@ -143,7 +143,6 @@ export default function GastosPage() {
         await apiFetch("/movimientos-financieros", {
           method: "POST",
           body: JSON.stringify({
-            caja_turno_id: cajaActiva!.id,
             tipo_movimiento: 'EGRESO_OPERATIVO',
             monto: montoParsed,
             descripcion: descripcion,

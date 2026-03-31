@@ -3,7 +3,7 @@ import { MovimientosFinancierosService } from './movimientos_financieros.service
 import { CreateMovimientosFinancieroDto } from './dto/create-movimientos_financiero.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
-@Roles('ADMIN', 'CAJERO')
+@Roles('ADMIN', 'CAJERO', 'VENDEDOR')
 @Controller('movimientos-financieros')
 export class MovimientosFinancierosController {
   constructor(

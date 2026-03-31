@@ -257,6 +257,8 @@ export default function POSPage() {
   const handleAddToCart = React.useCallback((row: PresentacionRow) => {
     addItem({
       id: `pres-${row.presentacion_id}`,
+      producto_nombre: row.producto_nombre,
+      presentacion_nombre: row.presentacion_desc,
       nombre: row.factor_conversion === 1
         ? row.producto_nombre
         : `${row.producto_nombre} (${row.presentacion_desc})`,
@@ -459,7 +461,14 @@ export default function POSPage() {
               items.map((item) => (
                 <div key={item.id} className="p-4 border border-zinc-900 bg-zinc-950/50 shadow-sm hover:border-zinc-800 hover:bg-zinc-900 transition-all rounded-2xl group flex flex-col gap-3">
                   <div className="flex justify-between items-start gap-2">
-                    <h4 className="text-sm font-bold text-zinc-200 leading-tight flex-1">{item.nombre}</h4>
+                    <div className="flex-1 space-y-1">
+                      <h4 className="text-sm font-black text-white leading-tight uppercase tracking-tight">
+                        {item.producto_nombre || item.nombre}
+                      </h4>
+                      <p className="text-[11px] font-bold text-blue-500 uppercase flex items-center gap-1.5">
+                        <Store className="h-3 w-3" /> {item.presentacion_nombre || "Unidad"}
+                      </p>
+                    </div>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-600 hover:text-red-400 rounded-md hover:bg-red-400/10 flex-shrink-0" onClick={() => removeItem(item.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

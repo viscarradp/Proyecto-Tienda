@@ -12,7 +12,7 @@ import { CreateCategoriasGastoDto } from './dto/create-categorias_gasto.dto';
 import { UpdateCategoriasGastoDto } from './dto/update-categorias_gasto.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
-@Roles('ADMIN')
+@Roles('ADMIN', 'CAJERO', 'VENDEDOR')
 @Controller('categorias-gastos')
 export class CategoriasGastosController {
   constructor(
