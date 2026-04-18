@@ -16,6 +16,9 @@ import {
   ArrowDownRight,
   Loader2,
   Vault,
+  Plus,
+  X,
+  Check,
 } from "lucide-react"
 
 /* ─────────────── Types ─────────────── */
@@ -94,6 +97,11 @@ export default function StatsPage() {
   const [saldoBoveda, setSaldoBoveda] = useState<CajaGeneralSaldo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showInyeccion, setShowInyeccion] = useState(false)
+  const [inyeccionMonto, setInyeccionMonto] = useState("")
+  const [inyeccionDesc, setInyeccionDesc] = useState("")
+  const [inyeccionLoading, setInyeccionLoading] = useState(false)
+  const [inyeccionMsg, setInyeccionMsg] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -222,14 +230,103 @@ export default function StatsPage() {
               accent="violet"
             />
             {saldoBoveda && (
-              <KPICard
-                label="Caja General"
-                value={fmt(saldoBoveda.saldo_actual)}
-                icon={Vault}
-                accent={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "emerald" : "red"}
-              />
+              <div className="relative">
+                <KPICard
+                  label="Caja General"
+                  value={fmt(saldoBoveda.saldo_actual)}
+                  icon={Vault}
+                  accent={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "emerald" : "red"}
+                />
+                <button
+                  onClick={() => { setShowInyeccion(!showInyeccion); setInyeccionMsg(null) }}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                  title="Inyectar capital"
+                >
+                  {showInyeccion ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             )}
           </div>
+
+          {/* ── Modal Inyección de Capital ── */}
+          {showInyeccion && (
+            <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-5 animate-in slide-in-from-top-2 duration-300">
+              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Vault className="w-4 h-4" />
+                Inyectar Capital a Caja General
+              </h3>
+              <p className="text-zinc-500 text-xs mb-4">
+                Registra dinero que el dueño deposita directamente en la bóveda.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <label className="text-zinc-500 text-xs mb-1 block">Monto ($)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="500.00"
+                    value={inyeccionMonto}
+                    onChange={(e) => setInyeccionMonto(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white font-mono text-lg focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div className="flex-[2]">
+                  <label className="text-zinc-500 text-xs mb-1 block">Descripción (opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Capital inicial del dueño"
+                    value={inyeccionDesc}
+                    onChange={(e) => setInyeccionDesc(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    disabled={inyeccionLoading || !inyeccionMonto || parseFloat(inyeccionMonto) <= 0}
+                    onClick={async () => {
+                      setInyeccionLoading(true)
+                      setInyeccionMsg(null)
+                      try {
+                        await apiFetch("/caja-general/inyeccion", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            monto: parseFloat(inyeccionMonto),
+                            descripcion: inyeccionDesc || undefined,
+                          }),
+                        })
+                        setInyeccionMsg(`✅ $${parseFloat(inyeccionMonto).toFixed(2)} depositados`)
+                        setInyeccionMonto("")
+                        setInyeccionDesc("")
+                        fetchData()
+                        setTimeout(() => {
+                          setShowInyeccion(false)
+                          setInyeccionMsg(null)
+                        }, 2000)
+                      } catch (err) {
+                        setInyeccionMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
+                      } finally {
+                        setInyeccionLoading(false)
+                      }
+                    }}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-bold rounded-xl transition-all flex items-center gap-2"
+                  >
+                    {inyeccionLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    Depositar
+                  </button>
+                </div>
+              </div>
+              {inyeccionMsg && (
+                <p className={`mt-3 text-sm font-medium ${inyeccionMsg.startsWith("✅") ? "text-emerald-400" : "text-red-400"}`}>
+                  {inyeccionMsg}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ── Estado de Resultados Detallado ── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
