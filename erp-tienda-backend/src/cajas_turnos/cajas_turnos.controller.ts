@@ -35,6 +35,12 @@ export class CajasTurnosController {
     return this.cajasTurnosService.getActiva();
   }
 
+  @Get('ultimo-cierre')
+  @ApiOperation({ summary: 'Obtener información del último turno cerrado' })
+  getUltimoCierre() {
+    return this.cajasTurnosService.getUltimoCierre();
+  }
+
   @Patch(':id/cerrar')
   @ApiOperation({ summary: 'Cerrar un turno de caja' })
   @ApiResponse({

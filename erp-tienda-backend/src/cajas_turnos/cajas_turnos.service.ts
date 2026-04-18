@@ -24,14 +24,52 @@ export class CajasTurnosService {
       );
     }
 
-    // 2. Crear nuevo turno
-    return this.prisma.cajas_turnos.create({
-      data: {
-        fondo_inicial: createCajaTurnoDto.fondo_inicial,
-        estado: 'ABIERTA',
-        fecha_apertura: new Date(),
-        efectivo_esperado: createCajaTurnoDto.fondo_inicial, // Al abrir, lo esperado es el fondo inicial
-      },
+    // 2. Obtener el monto que quedó en la gaveta en el último cierre
+    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
+      where: { estado: 'CERRADA' },
+      orderBy: { fecha_cierre: 'desc' },
+    });
+    const sobranteAnterior = ultimoCierre ? Number(ultimoCierre.efectivo_declarado) : 0;
+    const fondoInicial = createCajaTurnoDto.fondo_inicial;
+    
+    // 3. Crear el turno y los movimientos de ajuste en transacción
+    return await this.prisma.$transaction(async (tx) => {
+      const nuevoTurno = await tx.cajas_turnos.create({
+        data: {
+          fondo_inicial: fondoInicial,
+          estado: 'ABIERTA',
+          fecha_apertura: new Date(),
+          // Lo esperado siempre coincide con lo que reportamos al inicio
+          efectivo_esperado: fondoInicial, 
+        },
+      });
+
+      const diferencia = fondoInicial - sobranteAnterior;
+
+      // Si inició con MÁS de lo que había, es capital extra (inyección)
+      if (diferencia > 0) {
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: nuevoTurno.id,
+            tipo_movimiento: 'INGRESO_CAPITAL',
+            monto: new Prisma.Decimal(diferencia),
+            descripcion: 'Inyección de capital (Inicio de turno mayor al cierre anterior)',
+          },
+        });
+      } 
+      // Si inició con MENOS de lo que había, es pérdida/faltante
+      else if (diferencia < 0) {
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: nuevoTurno.id,
+            tipo_movimiento: 'AJUSTE_FALTANTE',
+            monto: new Prisma.Decimal(Math.abs(diferencia)),
+            descripcion: 'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
+          },
+        });
+      }
+
+      return nuevoTurno;
     });
   }
 
@@ -47,6 +85,18 @@ export class CajasTurnosService {
     }
 
     return activa;
+  }
+
+  async getUltimoCierre() {
+    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
+      where: { estado: 'CERRADA' },
+      orderBy: { fecha_cierre: 'desc' },
+    });
+
+    return {
+      fondo_siguiente: ultimoCierre ? ultimoCierre.efectivo_declarado : 0,
+      fecha_cierre: ultimoCierre ? ultimoCierre.fecha_cierre : null,
+    };
   }
 
   async cerrar(id: number, closeCajaTurnoDto: CloseCajaTurnoDto) {
