@@ -80,6 +80,7 @@ export default function POSPage() {
   const [checkoutSuccess, setCheckoutSuccess] = React.useState(false)
   const [checkoutError, setCheckoutError] = React.useState("")
   const [pagoCliente, setPagoCliente] = React.useState<string>("")
+  const [ultimoCierreFondo, setUltimoCierreFondo] = React.useState<number | null>(null)
 
   // ─── Filtros ───
   const [categoriaActiva, setCategoriaActiva] = React.useState("Todos")
@@ -96,8 +97,19 @@ export default function POSPage() {
     try {
       const caja = await apiFetch<CajaTurno>("/cajas-turnos/activa")
       setCajaActiva(caja)
+      setUltimoCierreFondo(null)
     } catch {
       setCajaActiva(null)
+      try {
+        const ult = await apiFetch<{fondo_siguiente: number | string}>("/cajas-turnos/ultimo-cierre")
+        const parsedVal = Number(ult.fondo_siguiente) || 0
+        setUltimoCierreFondo(parsedVal)
+        if (parsedVal > 0) {
+          setFondoInicial(parsedVal.toString())
+        }
+      } catch {
+        setUltimoCierreFondo(0)
+      }
     } finally {
       setCajaLoading(false)
     }
@@ -218,6 +230,8 @@ export default function POSPage() {
       setCheckoutSuccess(true)
       // Recargar datos para actualizar stock
       loadData()
+      // Recargar caja para actualizar el efectivo esperado
+      loadCaja()
       setTimeout(() => setCheckoutSuccess(false), 3000)
     } catch (err: unknown) {
       setCheckoutError(err instanceof Error ? err.message : "Error al procesar venta")
@@ -316,14 +330,14 @@ export default function POSPage() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               ) : cajaActiva ? (
-                <Button variant="outline" onClick={() => setCloseCajaDialog(true)}
+                <Button variant="outline" onClick={() => { loadCaja(); setCloseCajaDialog(true); }}
                   className="h-14 px-5 rounded-2xl border-emerald-800/50 bg-emerald-950/30 font-bold gap-3 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 hidden md:flex transition-all">
                   <Store className="h-5 w-5 text-emerald-500" />
                   Caja Abierta
                   <DoorClosed className="h-4 w-4 opacity-50" />
                 </Button>
               ) : (
-                <Button onClick={() => setOpenCajaDialog(true)}
+                <Button onClick={() => { loadCaja(); setOpenCajaDialog(true); }}
                   className="h-14 px-5 rounded-2xl bg-amber-600 hover:bg-amber-500 font-bold gap-3 text-white hidden md:flex transition-all shadow-lg shadow-amber-900/20">
                   <DoorOpen className="h-5 w-5" />
                   Abrir Caja
@@ -574,8 +588,46 @@ export default function POSPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAbrirCaja} className="space-y-4 mt-2">
+            
+            {ultimoCierreFondo !== null && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Total dejado en turno anterior:</span>
+                  <span className="font-black text-white text-sm">${Number(ultimoCierreFondo).toFixed(2)}</span>
+                </div>
+                
+                {ultimoCierreFondo !== null && fondoInicial !== "" && (
+                  (() => {
+                    const diff = parseFloat(fondoInicial) - Number(ultimoCierreFondo);
+                    if (diff > 0) {
+                      return (
+                        <div className="bg-blue-500/10 text-blue-400 p-2 rounded-lg mt-2 flex items-start gap-2">
+                          <Plus className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p>Iniciando con <strong>${Math.abs(diff).toFixed(2)}</strong> extra. Se registrará como inyección de capital.</p>
+                        </div>
+                      )
+                    } else if (diff < 0) {
+                      return (
+                        <div className="bg-red-500/10 text-red-400 p-2 rounded-lg mt-2 flex items-start gap-2">
+                          <Minus className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p>Iniciando con <strong>${Math.abs(diff).toFixed(2)}</strong> menos. Se registrará como faltante.</p>
+                        </div>
+                      )
+                    } else {
+                      return (
+                        <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg mt-2 flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p>Iniciando con el mismo monto exacto que se dejó ayer.</p>
+                        </div>
+                      )
+                    }
+                  })()
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Fondo Inicial ($)</Label>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Fondo Inicial Físico ($)</Label>
               <Input type="number" min={0} step="0.01" value={fondoInicial}
                 onChange={(e) => setFondoInicial(e.target.value)}
                 className="bg-black/50 border-zinc-800 text-white h-14 rounded-xl text-2xl font-black text-center focus-visible:ring-emerald-500"
