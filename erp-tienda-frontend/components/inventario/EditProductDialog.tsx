@@ -109,7 +109,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="max-w-4xl bg-zinc-950 border-zinc-900 border text-white p-0 shadow-2xl">
+      <DialogContent className="max-w-7xl w-[95vw] bg-zinc-950 border-zinc-900 border text-white p-0 shadow-2xl">
         <DialogHeader className="px-6 py-4 border-b border-zinc-900">
           <DialogTitle className="font-black text-lg flex items-center gap-2">
             Edición de Producto
