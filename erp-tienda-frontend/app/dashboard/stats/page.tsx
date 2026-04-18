@@ -15,6 +15,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
+  Vault,
 } from "lucide-react"
 
 /* ─────────────── Types ─────────────── */
@@ -40,6 +41,11 @@ interface ProductoTop {
   costo_fifo: string
   margen: string
   margen_porcentaje: string
+}
+
+interface CajaGeneralSaldo {
+  saldo_actual: string
+  total_depositos: number
 }
 
 /* ─────────────── Helpers ─────────────── */
@@ -85,6 +91,7 @@ export default function StatsPage() {
   const [periodo, setPeriodo] = useState<Periodo>("mes")
   const [estado, setEstado] = useState<EstadoResultados | null>(null)
   const [productos, setProductos] = useState<ProductoTop[]>([])
+  const [saldoBoveda, setSaldoBoveda] = useState<CajaGeneralSaldo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -95,13 +102,15 @@ export default function StatsPage() {
       const { desde, hasta } = getPeriodoDates(periodo)
       const qs = `desde=${desde}&hasta=${hasta}`
 
-      const [estadoRes, productosRes] = await Promise.all([
+      const [estadoRes, productosRes, saldoRes] = await Promise.all([
         apiFetch(`/reportes/estado-resultados?${qs}`) as Promise<EstadoResultados>,
         apiFetch(`/reportes/productos-top?${qs}&limit=15`) as Promise<ProductoTop[]>,
+        apiFetch(`/caja-general/saldo`) as Promise<CajaGeneralSaldo>,
       ])
 
       setEstado(estadoRes)
       setProductos(productosRes)
+      setSaldoBoveda(saldoRes)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar reportes")
     } finally {
@@ -179,7 +188,7 @@ export default function StatsPage() {
       {estado && (
         <>
           {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {/* Utilidad Neta (hero card) */}
             <KPICard
               label="Utilidad Neta"
@@ -212,6 +221,14 @@ export default function StatsPage() {
               icon={ShoppingCart}
               accent="violet"
             />
+            {saldoBoveda && (
+              <KPICard
+                label="Caja General"
+                value={fmt(saldoBoveda.saldo_actual)}
+                icon={Vault}
+                accent={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "emerald" : "red"}
+              />
+            )}
           </div>
 
           {/* ── Estado de Resultados Detallado ── */}

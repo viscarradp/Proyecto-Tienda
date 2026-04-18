@@ -63,13 +63,9 @@ function SidebarContent() {
   return (
     <div className="flex flex-col h-full bg-black border-r border-zinc-900">
       <div className="p-6">
-        <div className="flex items-center gap-3 mb-8 px-2">
-          <div className="bg-blue-600 p-2.5 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-            <Store className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-black text-xl tracking-tight text-white uppercase">Tienda Karlita</h1>
-            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">Admin Panel</p>
+        <div className="flex items-center justify-center mb-8 px-2">
+          <div className="bg-blue-600 p-3 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.45)]">
+            <Store className="h-7 w-7 text-white" />
           </div>
         </div>
 

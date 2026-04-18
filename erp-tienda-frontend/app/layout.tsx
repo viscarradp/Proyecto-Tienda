@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ERP Tienda | Gestión de Inventario y POS",
+  title: "ERP Tienda Karlita",
   description: "Sistema integral de gestión para tiendas, inventarios y puntos de venta.",
 };
 
