@@ -35,6 +35,22 @@ export class CajaGeneralService {
     });
   }
 
+  async inyectarCapital(monto: number, descripcion?: string) {
+    if (!monto || monto <= 0) {
+      throw new BadRequestException(
+        'El monto de inyección debe ser mayor a 0',
+      );
+    }
+
+    return this.prisma.caja_general.create({
+      data: {
+        monto: monto,
+        descripcion:
+          descripcion || `Inyección de capital del dueño — $${monto.toFixed(2)}`,
+      },
+    });
+  }
+
   async getSaldo() {
     const result = await this.prisma.caja_general.aggregate({
       _sum: { monto: true },

@@ -16,6 +16,18 @@ export class CajaGeneralController {
     return this.cajaGeneralService.create(createDto);
   }
 
+  @Post('inyeccion')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Inyectar capital del dueño directamente a la caja general' })
+  inyectarCapital(
+    @Body() body: { monto: number; descripcion?: string },
+  ) {
+    return this.cajaGeneralService.inyectarCapital(
+      body.monto,
+      body.descripcion,
+    );
+  }
+
   @Get('saldo')
   @Roles('ADMIN', 'CAJERO', 'VENDEDOR')
   @ApiOperation({ summary: 'Obtener el saldo actual sumando todos los depósitos' })

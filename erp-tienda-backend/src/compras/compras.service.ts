@@ -113,6 +113,20 @@ export class ComprasService {
           },
         });
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
+        // Validar fondos suficientes en caja general
+        const saldoAgg = await tx.caja_general.aggregate({
+          _sum: { monto: true },
+        });
+        const saldoDisponible = Number(saldoAgg._sum.monto ?? 0);
+
+        if (saldoDisponible < montoCalculado) {
+          throw new BadRequestException(
+            `Fondos insuficientes en caja general. ` +
+              `Disponible: $${saldoDisponible.toFixed(2)}, ` +
+              `Requerido: $${montoCalculado.toFixed(2)}`,
+          );
+        }
+
         const montoDecimal = new Prisma.Decimal(-montoCalculado);
         await tx.caja_general.create({
           data: {
