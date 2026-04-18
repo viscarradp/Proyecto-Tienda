@@ -65,7 +65,7 @@ export class UsuariosService implements OnModuleInit {
 
   // Método interno para autenticación que SÍ devuelve el password_hash
   async findByNombreInternal(nombre: string) {
-    return this.prisma.usuarios.findFirst({
+    return this.prisma.usuarios.findUnique({
       where: { nombre },
     });
   }

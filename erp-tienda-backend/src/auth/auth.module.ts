@@ -12,7 +12,13 @@ import { JwtStrategy } from './jwt.strategy';
     PassportModule,
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET || 'super-secret-key',
+      secret:
+        process.env.JWT_SECRET ||
+        (() => {
+          throw new Error(
+            'JWT_SECRET no está configurado. Define la variable de entorno antes de iniciar el servidor.',
+          );
+        })(),
       signOptions: { expiresIn: '12h' },
     }),
   ],

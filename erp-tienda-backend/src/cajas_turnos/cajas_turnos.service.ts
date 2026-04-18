@@ -151,25 +151,37 @@ export class CajasTurnosService {
 
     const total_ventas = sumVentas.total ?? new Prisma.Decimal(0);
     
-    // Sum egresos
+    // Sum egresos operativos (gastos del negocio, excluye retiros a bóveda)
     const egresos = turno.movimientos_financieros
       .filter(m => m.tipo_movimiento === 'EGRESO_OPERATIVO')
       .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
     
-    // Sum ingresos
+    // Sum ingresos de capital
     const ingresos = turno.movimientos_financieros
       .filter(m => m.tipo_movimiento === 'INGRESO_CAPITAL')
       .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
     
-    // Sum retiros
+    // Sum retiros a bóveda (traslado a caja general, no gasto operativo)
     const retiros = turno.movimientos_financieros
       .filter(m => m.tipo_movimiento === 'RETIRO_BOVEDA')
+      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
+
+    // BUG 8: Sum pagos a proveedores (egreso real de caja por compras)
+    const pagos_proveedores = turno.movimientos_financieros
+      .filter(m => m.tipo_movimiento === 'PAGO_PROVEEDOR')
+      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
+
+    // BUG 4 + BUG 8: Sum mermas de inventario (pérdida patrimonial, no salida de efectivo)
+    const mermas_inventario = turno.movimientos_financieros
+      .filter(m => m.tipo_movimiento === 'MERMA_INVENTARIO')
       .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
 
     return {
       turno: turno,
       total_ventas,
-      total_egresos: egresos,
+      total_egresos_operativos: egresos,
+      total_pagos_proveedores: pagos_proveedores,
+      total_mermas_inventario: mermas_inventario,
       total_ingresos_capital: ingresos,
       total_retiros_boveda: retiros,
       count_ventas: countVentas.id,

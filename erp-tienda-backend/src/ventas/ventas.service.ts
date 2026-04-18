@@ -180,9 +180,7 @@ export class VentasService {
       where: { id },
       include: {
         detalle_ventas: {
-          include: {
-            detalle_venta_lotes: true,
-          },
+          include: { detalle_venta_lotes: true },
         },
       },
     });
@@ -193,6 +191,20 @@ export class VentasService {
 
     if (venta.estado === 'ANULADA') {
       throw new BadRequestException('La venta ya se encuentra anulada');
+    }
+
+    // ── BUG 5: Verificar que el turno de caja esté abierto ──
+    // Si el turno ya fue cerrado, su cuadre histórico (diferencia) es inmutable.
+    // Modificar efectivo_esperado después del cierre corrompería ese registro.
+    const turno = await this.prisma.cajas_turnos.findUnique({
+      where: { id: venta.caja_turno_id },
+    });
+
+    if (!turno || turno.estado !== 'ABIERTA') {
+      throw new BadRequestException(
+        'No se puede anular una venta de un turno de caja ya cerrado. ' +
+          'Las anulaciones solo son posibles durante el turno activo.',
+      );
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -220,8 +232,8 @@ export class VentasService {
         }
       }
 
-      // 3. Revisar estado de la caja turno. Generalmente si está abierta el esperado bajará.
-      // Incluso si está cerrada, el esperado histórico debe cuadrar bajando, reduciendo la meta o aumentando el faltante.
+      // 3. Reducir el efectivo esperado del turno activo
+      // (Ya validamos arriba que el turno está ABIERTA)
       await tx.cajas_turnos.update({
         where: { id: venta.caja_turno_id },
         data: {

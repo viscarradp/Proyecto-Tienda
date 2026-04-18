@@ -15,7 +15,6 @@ export class AjustesInventarioService {
     const { lote_id, cantidad_ajustada, tipo_ajuste, justificacion } =
       createAjusteDto;
 
-    // Todo el método create() debe ejecutarse dentro de un this.prisma.$transaction
     return await this.prisma.$transaction(async (tx) => {
       // 1. Buscar y Validar el Lote
       const lote = await tx.lotes_inventario.findUnique({
@@ -34,7 +33,6 @@ export class AjustesInventarioService {
       }
 
       // 3. Calcular Costo de la Pérdida
-      // cantidad_ajustada * lote.costo_unitario_adquisicion
       const costo_asumido = new Prisma.Decimal(cantidad_ajustada).mul(
         lote.costo_unitario_adquisicion,
       );
@@ -50,7 +48,7 @@ export class AjustesInventarioService {
       });
 
       // 5. Registrar el Ajuste
-      return await tx.ajustes_inventario.create({
+      const ajuste = await tx.ajustes_inventario.create({
         data: {
           lote_id,
           cantidad_ajustada,
@@ -66,6 +64,32 @@ export class AjustesInventarioService {
           },
         },
       });
+
+      // 6. BUG 4: Registrar la pérdida financieramente en el turno activo
+      // La merma es una pérdida patrimonial (activo de inventario se reduce),
+      // pero NO es una salida de efectivo de la gaveta, por eso NO se toca
+      // efectivo_esperado. Solo queda como registro contable del período.
+      const cajaActiva = await tx.cajas_turnos.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+
+      if (cajaActiva) {
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: cajaActiva.id,
+            tipo_movimiento: 'MERMA_INVENTARIO',
+            monto: costo_asumido,
+            descripcion:
+              `Merma: ${tipo_ajuste}` +
+              (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
+              ` (Lote #${lote_id})`,
+          },
+        });
+        // NOTA: NO se hace decrement de efectivo_esperado porque la merma
+        // no es salida de gaveta; es pérdida de inventario (activo).
+      }
+
+      return ajuste;
     });
   }
 

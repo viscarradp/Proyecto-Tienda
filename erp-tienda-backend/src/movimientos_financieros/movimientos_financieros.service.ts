@@ -64,6 +64,23 @@ export class MovimientosFinancierosService {
           data: { efectivo_esperado: { increment: createMovimientosFinancieroDto.monto } },
         });
       } else if (esEgreso) {
+        // ── BUG 9: Validar fondos suficientes antes de decrementar ──
+        // La lectura ocurre dentro de la tx → PostgreSQL aplica bloqueo de fila,
+        // previniendo condiciones de carrera entre requests concurrentes.
+        const cajaActual = await tx.cajas_turnos.findUnique({
+          where: { id: cajaTurno.id },
+          select: { efectivo_esperado: true },
+        });
+
+        const esperado = Number(cajaActual?.efectivo_esperado ?? 0);
+        if (esperado < createMovimientosFinancieroDto.monto) {
+          throw new BadRequestException(
+            `Fondos insuficientes en caja. ` +
+              `Disponible: $${esperado.toFixed(2)}, ` +
+              `Requerido: $${createMovimientosFinancieroDto.monto}`,
+          );
+        }
+
         await tx.cajas_turnos.update({
           where: { id: cajaTurno.id },
           data: { efectivo_esperado: { decrement: createMovimientosFinancieroDto.monto } },

@@ -9,6 +9,12 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
+    // NOTA: Para ejecutar migraciones DDL contra Supabase, usar DIRECT_URL (puerto 5432).
+    // pgBouncer (DATABASE_URL, puerto 6543) no soporta DDL en modo de pool de transacciones.
+    // Comando para migrar: cambiar temporalmente a DIRECT_URL o ejecutar con la variable:
+    //   DATABASE_URL=$DIRECT_URL npx prisma db push
+    //
+    // En runtime, PrismaClient usa DATABASE_URL del .env directamente (no esta config).
     url: process.env["DATABASE_URL"],
   },
 });

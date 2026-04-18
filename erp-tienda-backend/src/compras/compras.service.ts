@@ -14,12 +14,31 @@ export class ComprasService {
   async create(createCompraDto: CreateCompraDto) {
     const { detalles_lotes, ...compraData } = createCompraDto;
 
+    // ── BUG 2: Validar coherencia lógica AL_CREDITO vs origen_fondos ──
+    // Una compra a crédito significa que todavía no se paga.
+    // No puede descontar dinero real de la caja POS ni de la caja general.
+    if (
+      compraData.estado_pago === 'AL_CREDITO' &&
+      compraData.origen_fondos !== 'CAPITAL_DUEÑOS'
+    ) {
+      throw new BadRequestException(
+        'Una compra a crédito no puede descontar fondos de caja. ' +
+          'Usa "CAPITAL_DUEÑOS" como origen o cambia el estado de pago a "PAGADO".',
+      );
+    }
+
+    // ── BUG 3: Calcular monto_total desde los lotes (no confiar en el cliente) ──
+    const montoCalculado = detalles_lotes.reduce(
+      (sum, lote) => sum + lote.cantidad_inicial * lote.costo_unitario_adquisicion,
+      0,
+    );
+
     return await this.prisma.$transaction(async (tx) => {
-      // Paso 1: Crear el registro de compra
+      // Paso 1: Crear el registro de compra usando el monto calculado
       const compra = await tx.compras_inventario.create({
         data: {
           proveedor: compraData.proveedor,
-          monto_total: compraData.monto_total,
+          monto_total: montoCalculado, // ← monto real, no el del cliente
           estado_pago: compraData.estado_pago,
           origen_fondos: compraData.origen_fondos,
         },
@@ -42,13 +61,15 @@ export class ComprasService {
       }
 
       // Paso 3: Cuentas por Pagar
+      // Gracias a la validación del Bug 2, si llegamos aquí con AL_CREDITO,
+      // el origen_fondos es CAPITAL_DUEÑOS → no habrá doble impacto financiero.
       if (compraData.estado_pago === 'AL_CREDITO') {
         await tx.cuentas_por_pagar.create({
           data: {
             compra_id: compra.id,
             acreedor: compraData.proveedor,
-            monto_deuda: compraData.monto_total,
-            saldo_pendiente: compraData.monto_total,
+            monto_deuda: montoCalculado,
+            saldo_pendiente: montoCalculado,
           },
         });
       }
@@ -65,11 +86,21 @@ export class ComprasService {
           );
         }
 
+        // ── BUG 9: Validar fondos suficientes antes de decrementar ──
+        const efectivoDisponible = Number(cajaActiva.efectivo_esperado ?? 0);
+        if (efectivoDisponible < montoCalculado) {
+          throw new BadRequestException(
+            `Fondos insuficientes en caja POS. ` +
+              `Disponible: $${efectivoDisponible.toFixed(2)}, ` +
+              `Requerido: $${montoCalculado.toFixed(2)}`,
+          );
+        }
+
         await tx.movimientos_financieros.create({
           data: {
             caja_turno_id: cajaActiva.id,
             tipo_movimiento: 'PAGO_PROVEEDOR',
-            monto: compraData.monto_total,
+            monto: montoCalculado,
             descripcion: `Pago a proveedor ${compraData.proveedor} por compra ID ${compra.id}`,
           },
         });
@@ -78,11 +109,11 @@ export class ComprasService {
         await tx.cajas_turnos.update({
           where: { id: cajaActiva.id },
           data: {
-            efectivo_esperado: { decrement: compraData.monto_total },
+            efectivo_esperado: { decrement: montoCalculado },
           },
         });
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
-        const montoDecimal = new Prisma.Decimal(-compraData.monto_total);
+        const montoDecimal = new Prisma.Decimal(-montoCalculado);
         await tx.caja_general.create({
           data: {
             monto: montoDecimal,
