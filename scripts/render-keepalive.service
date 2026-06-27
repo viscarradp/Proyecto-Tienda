@@ -1,0 +1,21 @@
+[Unit]
+Description=Render ERP Backend Keep-Alive Daemon
+After=network.target
+
+[Service]
+Type=simple
+# ==============================================================================
+# IMPORTANTE: Cambia los siguientes valores.
+# 1. Update ExecStart pointing to the absolute path of keep_alive.sh
+# 2. Add your EXACT render application Health URL (like /health or / API root)
+# ==============================================================================
+ExecStart=/bin/bash /opt/erp-keepalive/keep_alive.sh https://tu-erp-backend.onrender.com/health 840
+
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=erp-keepalive
+
+[Install]
+WantedBy=multi-user.target
