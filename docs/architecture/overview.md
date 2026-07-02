@@ -1,0 +1,81 @@
+# Arquitectura — Visión General
+
+## Qué es el sistema
+
+Un ERP/POS a medida para una tienda de colonia (negocio de abarrotes): control
+de inventario por lotes (FIFO), ventas con caja registradora, compras a
+proveedores, gastos, y turnos de caja. El objetivo es que el dueño del negocio
+sepa, sin ambigüedad, cuánto vendió, cuánto gastó y si es rentable — sin ser
+una persona técnica.
+
+## Las dos aplicaciones
+
+```
+erp-tienda-backend/    API REST — NestJS 11 + Prisma 7 + PostgreSQL (Supabase)
+erp-tienda-frontend/   UI — Next.js 16 (App Router) + React 19 + Zustand
+```
+
+Se despliegan por separado (frontend y backend en distintos servicios/hosts).
+La comunicación es HTTP con JWT en el header `Authorization: Bearer`.
+
+## Flujo de una petición (backend)
+
+```
+Cliente HTTP
+   │
+   ▼
+ThrottlerGuard      ← límite de requests por IP (incluso en rutas @Public)
+   │
+   ▼
+JwtAuthGuard         ← exige JWT válido, salvo rutas marcadas @Public()
+   │
+   ▼
+RolesGuard           ← exige un rol de @Roles(...) si el endpoint lo pide
+   │
+   ▼
+Controller           ← recibe el request, delega al Service
+   │
+   ▼
+Service               ← lógica de negocio, usa PrismaService (this.prisma.$transaction)
+   │
+   ▼
+PrismaService (@prisma/adapter-pg) → PostgreSQL (Supabase)
+```
+
+Los tres guards son **globales** (`APP_GUARD` en `app.module.ts`): por defecto
+todo endpoint nuevo requiere JWT válido. Para hacer una ruta pública hay que
+marcarla explícitamente con `@Public()`. Esto es intencional — "seguro por
+defecto".
+
+## Módulos del backend
+
+Un módulo de NestJS por entidad de negocio, cada uno con
+`*.controller.ts` (rutas HTTP), `*.service.ts` (lógica + acceso a datos vía
+Prisma) y `dto/` (validación de entrada con `class-validator`):
+
+`auth`, `usuarios`, `categorias`, `productos`, `presentaciones`, `compras`,
+`ajustes_inventario`, `ventas`, `cajas_turnos`, `caja_general`,
+`movimientos_financieros`, `categorias_gastos`, `reportes`.
+
+`prisma/` no es un módulo de negocio: expone `PrismaService`, un wrapper de
+`PrismaClient` inyectable en cualquier servicio (es `@Global()`, no hace falta
+importarlo en cada módulo).
+
+## Frontend
+
+Next.js con App Router. **Todas las páginas del dashboard son Client
+Components** (`'use client'`): el fetch de datos ocurre en el navegador vía
+`lib/api.ts` (`apiFetch`), que inyecta el JWT desde una cookie en cada
+petición. El estado compartido entre componentes (carrito de venta, caché de
+inventario) vive en dos stores de Zustand (`src/store/`).
+
+No hay `middleware.ts`: la protección de rutas en el frontend es solo visual
+(oculta botones/menús según el rol). La autorización real la hace siempre el
+backend. Ver [`security.md`](../security.md) y
+[`roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md).
+
+## Ver también
+
+- [`data-model.md`](data-model.md) — tablas y el motor FIFO de inventario.
+- [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) — reglas de negocio.
+- [`../security.md`](../security.md) — autenticación y hardening aplicado.
