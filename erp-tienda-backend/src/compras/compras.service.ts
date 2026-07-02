@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompraDto } from './dto/create-compra.dto';
 import { Prisma } from '@prisma/client';
+import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
 
 @Injectable()
 export class ComprasService {
@@ -76,9 +77,15 @@ export class ComprasService {
 
       // Paso 4: Impacto en Caja
       if (compraData.origen_fondos === 'CAJA_POS') {
-        const cajaActiva = await tx.cajas_turnos.findFirst({
-          where: { estado: 'ABIERTA' },
-        });
+        // Bloquea la fila del turno abierto: evita que dos compras concurrentes
+        // lean el mismo efectivo_esperado y ambas pasen la validación de fondos
+        // (ver docs/decisions/0001-concurrencia-for-update.md).
+        const [cajaActiva] = await tx.$queryRaw<CajaTurnoRow[]>`
+          SELECT id, efectivo_esperado
+          FROM cajas_turnos
+          WHERE estado = 'ABIERTA'
+          FOR UPDATE
+        `;
 
         if (!cajaActiva) {
           throw new BadRequestException(
@@ -113,6 +120,12 @@ export class ComprasService {
           },
         });
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
+        // caja_general es un libro de movimientos (no un contador de una sola
+        // fila), así que el saldo se calcula con SUM(). Un advisory lock
+        // serializa esta sección crítica entre transacciones concurrentes
+        // (ver docs/decisions/0001-concurrencia-for-update.md).
+        await acquireAdvisoryLock(tx, 'caja_general_ledger');
+
         // Validar fondos suficientes en caja general
         const saldoAgg = await tx.caja_general.aggregate({
           _sum: { monto: true },

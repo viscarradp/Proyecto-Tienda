@@ -6,6 +6,7 @@ import {
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
 
 @Injectable()
 export class VentasService {
@@ -69,14 +70,18 @@ export class VentasService {
         });
 
         // 4. El Algoritmo FIFO (El corazón del sistema)
-        // Busca TODOS los lotes_inventario de ese producto_id donde cantidad_disponible > 0
-        const lotes = await tx.lotes_inventario.findMany({
-          where: {
-            producto_id: presentacion.producto_id,
-            cantidad_disponible: { gt: 0 },
-          },
-          orderBy: { fecha_ingreso: 'asc' }, // los más viejos primero
-        });
+        // Bloquea los lotes candidatos con FOR UPDATE: bajo concurrencia, una
+        // segunda venta del mismo producto debe esperar a que esta transacción
+        // termine antes de leer cantidad_disponible, evitando sobreventa
+        // (ver docs/decisions/0001-concurrencia-for-update.md).
+        const lotes = await tx.$queryRaw<LoteInventarioRow[]>`
+          SELECT id, producto_id, cantidad_disponible, costo_unitario_adquisicion
+          FROM lotes_inventario
+          WHERE producto_id = ${presentacion.producto_id}
+            AND cantidad_disponible > 0
+          ORDER BY fecha_ingreso ASC
+          FOR UPDATE
+        `;
 
         let loteIndex = 0;
         // Inicia un bucle while (unidades_base_requeridas > 0)
@@ -111,7 +116,10 @@ export class VentasService {
               detalle_venta_id: detalleVenta.id,
               lote_id: lote.id,
               cantidad_descargada: cantidad_a_descontar,
-              costo_aplicado: lote.costo_unitario_adquisicion, // congelando el costo_aplicado
+              // congelando costo_aplicado; $queryRaw puede devolver el Decimal como string
+              costo_aplicado: new Prisma.Decimal(
+                lote.costo_unitario_adquisicion,
+              ),
             },
           });
 
@@ -193,21 +201,27 @@ export class VentasService {
       throw new BadRequestException('La venta ya se encuentra anulada');
     }
 
-    // ── BUG 5: Verificar que el turno de caja esté abierto ──
-    // Si el turno ya fue cerrado, su cuadre histórico (diferencia) es inmutable.
-    // Modificar efectivo_esperado después del cierre corrompería ese registro.
-    const turno = await this.prisma.cajas_turnos.findUnique({
-      where: { id: venta.caja_turno_id },
-    });
-
-    if (!turno || turno.estado !== 'ABIERTA') {
-      throw new BadRequestException(
-        'No se puede anular una venta de un turno de caja ya cerrado. ' +
-          'Las anulaciones solo son posibles durante el turno activo.',
-      );
-    }
-
     return await this.prisma.$transaction(async (tx) => {
+      // ── BUG 5: Verificar que el turno de caja esté abierto ──
+      // Si el turno ya fue cerrado, su cuadre histórico (diferencia) es inmutable.
+      // Modificar efectivo_esperado después del cierre corrompería ese registro.
+      // Se valida DENTRO de la tx con la fila bloqueada (FOR UPDATE): si el turno
+      // se cierra justo en este instante, esta anulación debe verlo y rechazarse
+      // (ver docs/decisions/0001-concurrencia-for-update.md).
+      const [turno] = await tx.$queryRaw<CajaTurnoRow[]>`
+        SELECT id, estado
+        FROM cajas_turnos
+        WHERE id = ${venta.caja_turno_id}
+        FOR UPDATE
+      `;
+
+      if (!turno || turno.estado !== 'ABIERTA') {
+        throw new BadRequestException(
+          'No se puede anular una venta de un turno de caja ya cerrado. ' +
+            'Las anulaciones solo son posibles durante el turno activo.',
+        );
+      }
+
       // 1. Marcar como anulada
       const ventaAnulada = await tx.ventas.update({
         where: { id },

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateMovimientosFinancieroDto } from './dto/create-movimientos_financiero.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CajaTurnoRow } from '../common/concurrency';
 
 @Injectable()
 export class MovimientosFinancierosService {
@@ -65,12 +66,15 @@ export class MovimientosFinancierosService {
         });
       } else if (esEgreso) {
         // ── BUG 9: Validar fondos suficientes antes de decrementar ──
-        // La lectura ocurre dentro de la tx → PostgreSQL aplica bloqueo de fila,
-        // previniendo condiciones de carrera entre requests concurrentes.
-        const cajaActual = await tx.cajas_turnos.findUnique({
-          where: { id: cajaTurno.id },
-          select: { efectivo_esperado: true },
-        });
+        // FOR UPDATE bloquea la fila del turno: una segunda solicitud de egreso
+        // concurrente espera a que esta tx termine antes de leer efectivo_esperado
+        // (ver docs/decisions/0001-concurrencia-for-update.md).
+        const [cajaActual] = await tx.$queryRaw<CajaTurnoRow[]>`
+          SELECT efectivo_esperado
+          FROM cajas_turnos
+          WHERE id = ${cajaTurno.id}
+          FOR UPDATE
+        `;
 
         const esperado = Number(cajaActual?.efectivo_esperado ?? 0);
         if (esperado < createMovimientosFinancieroDto.monto) {
