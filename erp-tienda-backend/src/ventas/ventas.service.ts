@@ -26,6 +26,26 @@ export class VentasService {
 
     // Todo el método create() debe estar dentro de un this.prisma.$transaction
     return await this.prisma.$transaction(async (tx) => {
+      // Bloquea la fila del turno ANTES de insertar la venta (que la
+      // referencia por FK) y revalida que siga ABIERTA. Si se bloqueara
+      // después de insertar, dos ventas concurrentes sobre el mismo turno
+      // podrían deadlockearse: ambas retienen el lock compartido implícito
+      // que Postgres toma en el INSERT por la FK (FOR KEY SHARE) y luego
+      // ambas intentan escalarlo a exclusivo al mismo tiempo (error 40P01).
+      // Ver docs/decisions/0001-concurrencia-for-update.md.
+      const [turnoLocked] = await tx.$queryRaw<CajaTurnoRow[]>`
+        SELECT id, estado
+        FROM cajas_turnos
+        WHERE id = ${cajaTurno.id}
+        FOR UPDATE
+      `;
+
+      if (!turnoLocked || turnoLocked.estado !== 'ABIERTA') {
+        throw new BadRequestException(
+          'No hay turno de caja abierto para registrar la venta',
+        );
+      }
+
       // 2. Inicializar Venta: Crea el registro en tx.ventas con total: 0
       const venta = await tx.ventas.create({
         data: {

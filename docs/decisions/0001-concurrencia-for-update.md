@@ -84,3 +84,45 @@ Implementado en `erp-tienda-backend/src/common/concurrency.ts`
   quedan documentadas como trabajo futuro para producción — ver
   [`0002-sin-migraciones-hasta-produccion.md`](0002-sin-migraciones-hasta-produccion.md)
   y [`../roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md).
+
+## Gotcha descubierto en pruebas: orden de bloqueo vs. INSERT con FK
+
+Durante la verificación manual de esta Fase 0 (ventas y egresos concurrentes
+reales contra una base de datos de prueba), `movimientos_financieros.create()`
+produjo un **deadlock real de PostgreSQL** (`40P01`) bajo concurrencia alta.
+
+**Causa:** cuando una transacción hace `INSERT` de una fila con una FK (ej.
+`movimientos_financieros.caja_turno_id → cajas_turnos.id`), PostgreSQL toma
+automáticamente un lock `FOR KEY SHARE` (compartido) sobre la fila referenciada,
+para impedir que se borre mientras la referencia exista. El código original
+hacía el `INSERT` primero y el `SELECT ... FOR UPDATE` (explícito) después. Dos
+transacciones concurrentes podían terminar así:
+
+1. Tx A inserta su movimiento → toma `FOR KEY SHARE` sobre el turno.
+2. Tx B inserta su movimiento → también toma `FOR KEY SHARE` sobre el turno
+   (compatible, ambas lo sostienen a la vez).
+3. Tx A intenta `FOR UPDATE` sobre el turno → debe esperar a que se libere el
+   `FOR KEY SHARE` de Tx B.
+4. Tx B intenta `FOR UPDATE` sobre el turno → debe esperar a que se libere el
+   `FOR KEY SHARE` de Tx A.
+5. Espera circular → PostgreSQL detecta el deadlock y aborta una de las dos
+   transacciones con error `40P01`, que llegaba al cliente como un 500 crudo
+   (sin traducir a una respuesta HTTP clara).
+
+**Regla aplicada (y ya corregida en el código):** dentro de una transacción,
+**siempre adquiere el `FOR UPDATE` sobre una fila *antes* de insertar
+cualquier otra fila que la referencie por FK** — nunca después. Se corrigió
+en `movimientos_financieros.service.ts` (donde se detectó) y,
+preventivamente, en `ventas.service.ts create()` (mismo patrón: insertaba la
+`venta` con FK a `cajas_turnos` antes del incremento final a esa misma fila).
+Se revisaron también `compras.service.ts`, `cajas_turnos.service.ts` y
+`ventas.service.ts anular()`: en todos esos casos el `FOR UPDATE`/advisory
+lock ya se adquiere antes de cualquier `INSERT` referenciante, así que no
+requerían cambios.
+
+**Verificado con:** pruebas de humo con `curl` en paralelo contra un
+PostgreSQL 16 desechable (Docker), ejercitando los cuatro escenarios (FIFO,
+egresos, apertura de turno, cierre de turno) con concurrencia real. Antes del
+fix: `500 Internal Server Error` bajo carga. Después: respuestas limpias
+(`201`/`400`/`409` según corresponda), aritmética exacta (nunca stock ni
+saldo negativo) y cero deadlocks en el log del servidor.
