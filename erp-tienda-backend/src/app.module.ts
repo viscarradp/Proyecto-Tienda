@@ -21,6 +21,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { GLOBAL_THROTTLE_LIMIT } from './common/throttler-limits';
 
 @Module({
   imports: [
@@ -33,7 +34,7 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter'
       {
         name: 'default',
         ttl: 60000,
-        limit: 60,
+        limit: GLOBAL_THROTTLE_LIMIT,
       },
     ]),
     PrismaModule,
