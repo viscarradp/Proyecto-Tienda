@@ -1,4 +1,11 @@
-import { IsNumber, IsString, IsNotEmpty, NotEquals, IsOptional, IsInt } from 'class-validator';
+import {
+  IsNumber,
+  IsString,
+  IsNotEmpty,
+  NotEquals,
+  IsOptional,
+  IsInt,
+} from 'class-validator';
 
 export class CreateCajaGeneralDto {
   @IsNumber()

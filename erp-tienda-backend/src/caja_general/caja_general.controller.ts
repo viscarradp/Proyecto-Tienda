@@ -18,10 +18,10 @@ export class CajaGeneralController {
 
   @Post('inyeccion')
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Inyectar capital del dueño directamente a la caja general' })
-  inyectarCapital(
-    @Body() body: { monto: number; descripcion?: string },
-  ) {
+  @ApiOperation({
+    summary: 'Inyectar capital del dueño directamente a la caja general',
+  })
+  inyectarCapital(@Body() body: { monto: number; descripcion?: string }) {
     return this.cajaGeneralService.inyectarCapital(
       body.monto,
       body.descripcion,
@@ -30,7 +30,9 @@ export class CajaGeneralController {
 
   @Get('saldo')
   @Roles('ADMIN', 'CAJERO', 'VENDEDOR')
-  @ApiOperation({ summary: 'Obtener el saldo actual sumando todos los depósitos' })
+  @ApiOperation({
+    summary: 'Obtener el saldo actual sumando todos los depósitos',
+  })
   getSaldo() {
     return this.cajaGeneralService.getSaldo();
   }

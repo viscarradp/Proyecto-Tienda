@@ -30,7 +30,8 @@ export class ComprasService {
 
     // ── BUG 3: Calcular monto_total desde los lotes (no confiar en el cliente) ──
     const montoCalculado = detalles_lotes.reduce(
-      (sum, lote) => sum + lote.cantidad_inicial * lote.costo_unitario_adquisicion,
+      (sum, lote) =>
+        sum + lote.cantidad_inicial * lote.costo_unitario_adquisicion,
       0,
     );
 

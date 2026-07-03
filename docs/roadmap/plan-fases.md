@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-03 (Fase 2 mergeada a `master`).
+> **Última actualización:** 2026-07-04 (Fase 3 completada, pendiente de merge a `master`).
 
 ---
 
@@ -246,16 +246,67 @@ la implementación.
 
 ---
 
-## Fase 3 — Higiene del Proyecto — ⏳ PENDIENTE (continuo, sin fecha límite dura)
+## Fase 3 — Higiene del Proyecto — ✅ COMPLETADA (2026-07-04)
 
-### Alcance
-1. **Actualizar/limpiar documentación obsoleta de la raíz** — ver auditoría de `.md` de la raíz (sección siguiente de esta sesión; si existe, ver `docs/roadmap/plan-fases.md` historial de conversación o el resultado de esa auditoría específica).
-2. **Testing real**: hoy no hay más que el scaffolding por defecto de NestJS (`app.controller.spec.ts`). Prioridad: tests de integración para el motor FIFO y el cierre de caja, idealmente con casos de concurrencia (complementando las pruebas manuales de humo de Fase 0).
-3. **Docker + CI/CD**: `docker-compose` para levantar todo con un comando; CI (lint + test + build) en GitHub Actions. Ya estaba en el roadmap original del `README.md`.
-4. **Decisión de negocio pendiente**: ¿el sistema debe soportar medios de pago no-efectivo (tarjeta, transferencia)? Hoy toda venta se asume en efectivo (ver [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md)). No es un bug, es un supuesto de alcance que puede necesitar revisión con el dueño del negocio.
+**Rama:** `feature/fase3-testing-docker-ci`.
 
-### No iniciado
-Ningún archivo de código se ha tocado para esta fase todavía.
+### Alcance original y qué pasó con cada ítem
+
+1. **Documentación obsoleta de la raíz** — ya se había resuelto durante
+   Fase 0 (eliminación de `BUGS-REPORT.md`/`CONTEXT-AGENTS.md`, actualización
+   de `README.md`). Este ítem del plan quedó desactualizado por escribirse
+   antes de que ese trabajo ocurriera — no había nada pendiente al llegar a
+   Fase 3.
+2. **Testing real** — hecho. 7 tests e2e (`test/*.e2e-spec.ts`) cubriendo el
+   motor FIFO (H1) y las invariantes de turnos de caja (H7), no cobertura
+   exhaustiva del CRUD. Decisión de alcance documentada en
+   [`../decisions/0009-testing-docker-ci.md`](../decisions/0009-testing-docker-ci.md).
+3. **Docker + CI/CD** — hecho, con una decisión explícita de minimizar
+   alcance: `docker-compose.yml` solo levanta Postgres (no todo el stack);
+   backend y frontend siguen corriendo nativos. CI en
+   `.github/workflows/ci.yml` (dos jobs: backend con Postgres de servicio,
+   frontend). Detalle en el ADR 0009.
+4. **Medios de pago no-efectivo** — **resuelto por el usuario: NO.** El
+   sistema es solo efectivo, a propósito, sin planes de agregar tarjeta o
+   transferencia. Documentado como decisión de producto (no supuesto
+   temporal) en [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md).
+
+### Hallazgo colateral: `.prettierrc` faltaba en el disco (no en el repo)
+
+Al escribir los tests e2e, correr lint reveló que Prettier usaba comillas
+dobles por defecto mientras que **todo el código ya escrito** usa comillas
+simples. La causa no era que el proyecto nunca tuviera un `.prettierrc`
+— sí lo tiene, comiteado desde el primer commit — sino que faltaba **en el
+disco de este entorno de trabajo** (una eliminación local nunca comiteada,
+previa a esta sesión). Esto habría hecho fallar el gate de `lint` en CI
+desde el primer commit, sin relación con el trabajo de esta fase. Se
+restauró con `git restore` (no se creó un archivo nuevo) y se corrió
+`eslint --fix` una vez sobre `src/` para limpiar la deuda de formato
+preexistente (puro whitespace, verificado con `git diff -w`). Detalle en
+el ADR 0009.
+
+### Verificación real
+
+- Los 7 tests e2e corridos contra un Postgres real (`docker-compose`):
+  todos en verde.
+- **Prueba de que los tests tienen dientes:** se revirtió deliberadamente
+  el `FOR UPDATE` del motor FIFO (fix de Fase 0) y se confirmó que el test
+  de concurrencia lo detecta (sobreventa real: 0 rechazos donde debía haber
+  al menos 1) antes de restaurar el fix y re-verificar que todo vuelve a
+  pasar.
+- `npm run build` y `npm run lint:check` (sin `--fix`, tal como corre en
+  CI) limpios en backend; build/lint limpios en frontend (sin cambios en
+  esta fase).
+- **Permiso explícito del usuario:** Prisma bloqueó automáticamente el
+  primer intento de `db push --force-reset` por detectar que lo invocaba un
+  agente de IA, exigiendo confirmación humana explícita antes de proceder
+  (mecanismo de seguridad correcto — nunca se intentó sortear). El usuario
+  confirmó y se procedió. Ver ADR 0009 para el detalle completo.
+
+### Pendiente de Fase 3
+
+Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
+"no" como decisión explícita de producto, no como código).
 
 ---
 
@@ -271,6 +322,10 @@ Ningún archivo de código se ha tocado para esta fase todavía.
 - ¿Cuándo mergear `feature/fase0-hardening` a `master`? → Resuelto el 2026-07-02, mergeado con `--no-ff` (commit `9a563a1`).
 - Método de aplicar índices en Fase 1 → Resuelto el 2026-07-03: se preparan y verifican en este entorno (Postgres desechable), pero el `db push` final contra Supabase real lo corre el usuario manualmente (sin credenciales en este entorno). Ver sección de Fase 1 arriba.
 - ¿Incluir `usuario_id` en Fase 1? → Resuelto el 2026-07-03: diferido, queda en `hardening-backlog.md` ítem 4.
+- ¿Medios de pago no-efectivo (tarjeta, transferencia)? → Resuelto el 2026-07-04: **no**, decisión explícita del usuario. El sistema es solo efectivo a propósito — ver `../domain/caja-y-ventas.md`.
+- Alcance de Docker en Fase 3 (¿todo el stack o solo Postgres?) → Resuelto el 2026-07-04: solo Postgres, siguiendo la regla explícita del usuario de no agregar complejidad innecesaria. Ver ADR 0009.
+
+**Todas las fases del plan original (0-3) están completas.** Si se retoma este proyecto y no hay una fase nueva explícita en mente, este documento ya no tiene "siguiente paso" obvio — revisar `hardening-backlog.md` para deuda técnica diferida, o preguntar al usuario qué sigue.
 
 ---
 

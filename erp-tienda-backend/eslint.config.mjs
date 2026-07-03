@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    // global-setup.js es un script de tooling para Jest (no código de
+    // aplicación cubierto por tsconfig.json) — se ejecuta directo con Node.
+    ignores: ['eslint.config.mjs', 'test/global-setup.js'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -44,7 +44,9 @@ export class CreateCompraDto {
 
   // monto_total se acepta por compatibilidad con el frontend, pero el backend
   // SIEMPRE lo ignora y recalcula desde los lotes: Σ(cantidad × costo_unitario).
-  @ApiPropertyOptional({ description: 'Ignorado por el backend, se calcula desde los lotes' })
+  @ApiPropertyOptional({
+    description: 'Ignorado por el backend, se calcula desde los lotes',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -71,7 +73,9 @@ export class CreateCompraDto {
     description: 'Listado de lotes adquiridos',
   })
   @IsArray()
-  @ArrayMinSize(1, { message: 'La compra debe incluir al menos un lote de inventario' })
+  @ArrayMinSize(1, {
+    message: 'La compra debe incluir al menos un lote de inventario',
+  })
   @ValidateNested({ each: true })
   @Type(() => CreateLoteDto)
   detalles_lotes: CreateLoteDto[];

@@ -71,12 +71,18 @@ export class MovimientosFinancierosService {
       });
 
       const esIngreso = ['INGRESO_CAPITAL'].includes(tipo_movimiento);
-      const esEgreso = ['EGRESO_OPERATIVO', 'RETIRO_BOVEDA'].includes(tipo_movimiento);
+      const esEgreso = ['EGRESO_OPERATIVO', 'RETIRO_BOVEDA'].includes(
+        tipo_movimiento,
+      );
 
       if (esIngreso) {
         await tx.cajas_turnos.update({
           where: { id: cajaTurno.id },
-          data: { efectivo_esperado: { increment: createMovimientosFinancieroDto.monto } },
+          data: {
+            efectivo_esperado: {
+              increment: createMovimientosFinancieroDto.monto,
+            },
+          },
         });
       } else if (esEgreso) {
         // ── BUG 9: Validar fondos suficientes antes de decrementar ──
@@ -91,7 +97,11 @@ export class MovimientosFinancierosService {
 
         await tx.cajas_turnos.update({
           where: { id: cajaTurno.id },
-          data: { efectivo_esperado: { decrement: createMovimientosFinancieroDto.monto } },
+          data: {
+            efectivo_esperado: {
+              decrement: createMovimientosFinancieroDto.monto,
+            },
+          },
         });
       }
 
@@ -99,9 +109,11 @@ export class MovimientosFinancierosService {
         await tx.caja_general.create({
           data: {
             monto: createMovimientosFinancieroDto.monto,
-            descripcion: 'Depósito automático - ' + createMovimientosFinancieroDto.descripcion,
-            movimiento_origen_id: movimiento.id
-          }
+            descripcion:
+              'Depósito automático - ' +
+              createMovimientosFinancieroDto.descripcion,
+            movimiento_origen_id: movimiento.id,
+          },
         });
       }
 
@@ -111,7 +123,7 @@ export class MovimientosFinancierosService {
 
   findAll(tipo_movimiento?: string, limit?: number) {
     const whereClause = tipo_movimiento ? { tipo_movimiento } : {};
-    
+
     return this.prisma.movimientos_financieros.findMany({
       where: whereClause,
       orderBy: { fecha: 'desc' },
