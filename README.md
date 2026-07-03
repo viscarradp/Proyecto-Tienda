@@ -170,6 +170,17 @@ npx prisma db push
 npx prisma db seed
 ```
 
+### Postgres local con Docker (opcional, para desarrollo o para correr tests)
+
+```bash
+docker compose up -d postgres
+```
+
+Levanta un Postgres 16 en `localhost:5432` (usuario/contraseña `postgres`,
+base `erp_tienda_dev`). Útil si no quieres depender de Supabase para
+desarrollar localmente, y es lo que usan los tests e2e — ver
+[`docs/operations/testing.md`](docs/operations/testing.md).
+
 ## Notas
 
 - CORS usa una allowlist explícita vía `CORS_ORIGINS` (ver arriba), no está abierto a cualquier origen.
@@ -181,11 +192,10 @@ npx prisma db seed
 
 El roadmap vigente, con el estado detallado de cada fase (qué está hecho, qué
 falta y por qué), vive en
-[`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md). Resumen de lo
-pendiente a nivel de infraestructura del proyecto (Fase 3):
+[`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md). CI (lint + test +
+build en GitHub Actions, `.github/workflows/ci.yml`) y Docker para Postgres
+local ya están en su lugar — pendiente a nivel de infraestructura:
 
-- Agregar `docker-compose` para levantar todo con un comando.
-- Agregar CI (lint + test + build) en GitHub Actions.
 - Incorporar versionado y changelog.
 
 ## Licencia

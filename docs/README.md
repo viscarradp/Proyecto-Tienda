@@ -15,6 +15,7 @@ adivinar el porqué de las cosas.
 | Entender las reglas de negocio de caja, ventas y mermas | [`domain/caja-y-ventas.md`](domain/caja-y-ventas.md) |
 | Saber cómo funciona la autenticación/autorización | [`security.md`](security.md) |
 | Configurar el proyecto (variables de entorno) | [`operations/configuration.md`](operations/configuration.md) |
+| Correr los tests o levantar Postgres local | [`operations/testing.md`](operations/testing.md) |
 | Entender **por qué** se tomó una decisión técnica | [`decisions/`](decisions/) (ADRs) |
 | Ver qué se dejó pendiente a propósito | [`roadmap/hardening-backlog.md`](roadmap/hardening-backlog.md) |
 
