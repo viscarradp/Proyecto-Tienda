@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Plus, X, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -149,7 +150,7 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
           fecha_vencimiento: "",
         }])
       } else {
-        alert("El código escaneado no pertenece a ningún producto registrado.")
+        toast.warning("El código escaneado no pertenece a ningún producto registrado.")
       }
     }
   })

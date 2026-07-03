@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -30,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
 import { useInventoryStore, type Producto, type Categoria } from "../../../src/store/inventoryStore"
 import { apiFetch } from "@/lib/api"
@@ -57,11 +59,28 @@ interface CajaTurno {
 }
 
 export default function POSPage() {
-  const { addItem, items, updateQuantity, removeItem, clearCart, getTotal } = useCartStore()
+  const { addItem, items, updateQuantity, removeItem, clearCart, getTotal } = useCartStore(
+    useShallow((state) => ({
+      addItem: state.addItem,
+      items: state.items,
+      updateQuantity: state.updateQuantity,
+      removeItem: state.removeItem,
+      clearCart: state.clearCart,
+      getTotal: state.getTotal,
+    }))
+  )
   const [mounted, setMounted] = React.useState(false)
 
   // ─── Datos del backend ───
-  const { productos, categorias, loading, error, fetchInventory } = useInventoryStore()
+  const { productos, categorias, loading, error, fetchInventory } = useInventoryStore(
+    useShallow((state) => ({
+      productos: state.productos,
+      categorias: state.categorias,
+      loading: state.loading,
+      error: state.error,
+      fetchInventory: state.fetchInventory,
+    }))
+  )
 
   // ─── Caja/Turno ───
   const [cajaActiva, setCajaActiva] = React.useState<CajaTurno | null>(null)
@@ -124,7 +143,7 @@ export default function POSPage() {
     e.preventDefault()
     const fondoParsed = parseFloat(fondoInicial)
     if (isNaN(fondoParsed) || fondoParsed < 0) {
-      alert("Por favor ingresa un fondo inicial válido (mayor o igual a 0)")
+      toast.error("Por favor ingresa un fondo inicial válido (mayor o igual a 0)")
       return
     }
     setCajaActionLoading(true)
@@ -137,7 +156,7 @@ export default function POSPage() {
       setOpenCajaDialog(false)
       setFondoInicial("")
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Error al abrir caja")
+      toast.error(err instanceof Error ? err.message : "Error al abrir caja")
     } finally {
       setCajaActionLoading(false)
     }
@@ -151,12 +170,12 @@ export default function POSPage() {
     const bovedaParsed = parseFloat(montoBoveda) || 0
 
     if (isNaN(efectivoParsed) || efectivoParsed < 0) {
-      alert("Por favor ingresa un total de efectivo físico válido")
+      toast.error("Por favor ingresa un total de efectivo físico válido")
       return
     }
 
     if (bovedaParsed > efectivoParsed) {
-      alert("El monto enviado a bóveda no puede ser mayor al total físico en caja.")
+      toast.error("El monto enviado a bóveda no puede ser mayor al total físico en caja.")
       return
     }
 
@@ -201,7 +220,7 @@ export default function POSPage() {
       setMontoBoveda("")
       setObservacionesCierre("")
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Error al cerrar caja")
+      toast.error(err instanceof Error ? err.message : "Error al cerrar caja")
     } finally {
       setCajaActionLoading(false)
     }
@@ -286,8 +305,7 @@ export default function POSPage() {
     if (targetRow) {
       handleAddToCart(targetRow)
     } else {
-      console.warn(`Código no encontrado en catálogo: ${barcode}`)
-      // Podríamos poner un toast notification aquí
+      toast.warning(`Código no encontrado en el catálogo: ${barcode}`)
     }
   }, [allRows, handleAddToCart])
 
