@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api"
 import Cookies from "js-cookie"
+import { useShallow } from "zustand/react/shallow"
 import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/ProductDialog"
 import { CompraForm } from "@/components/inventario/CompraForm"
 import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventarioDialog"
@@ -55,7 +56,15 @@ interface Compra {
 
 export default function InventarioPage() {
   const [mounted, setMounted] = React.useState(false)
-  const { productos, categorias, loading: invLoading, fetchInventory, invalidateCache } = useInventoryStore()
+  const { productos, categorias, loading: invLoading, fetchInventory, invalidateCache } = useInventoryStore(
+    useShallow((state) => ({
+      productos: state.productos,
+      categorias: state.categorias,
+      loading: state.loading,
+      fetchInventory: state.fetchInventory,
+      invalidateCache: state.invalidateCache,
+    }))
+  )
   const [compras, setCompras] = React.useState<Compra[]>([])
   const [loading, setLoading] = React.useState(true)
   const [globalError, setGlobalError] = React.useState("")

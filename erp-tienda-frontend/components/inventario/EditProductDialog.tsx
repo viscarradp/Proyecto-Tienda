@@ -29,7 +29,10 @@ interface EditProductDialogProps {
 }
 
 export function EditProductDialog({ open, onClose, onSuccess, producto }: EditProductDialogProps) {
-  const { categorias } = useInventoryStore()
+  // Selector de un solo campo: no necesita useShallow (una referencia no
+  // compuesta ya evita re-renders cuando cambian otros campos del store,
+  // ej. productos, cada vez que se refresca el inventario en otra vista).
+  const categorias = useInventoryStore((state) => state.categorias)
   
   const [nombre, setNombre] = React.useState("")
   const [categoriaId, setCategoriaId] = React.useState("")

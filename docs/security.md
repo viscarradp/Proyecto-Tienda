@@ -13,6 +13,8 @@
   envía en cada request como `Authorization: Bearer <token>`. Esta cookie
   **no es httpOnly** (limitación de `js-cookie`, que solo puede leer/escribir
   cookies accesibles por JavaScript) — ver `roadmap/hardening-backlog.md`.
+  Desde Fase 2 sí lleva `Secure` + `SameSite=Lax` y su expiración (12h) está
+  alineada a la del JWT real — ver [`decisions/0008-cookie-flags.md`](decisions/0008-cookie-flags.md).
 
 ## Autorización
 
@@ -30,8 +32,14 @@
   botones/menús). La autorización real siempre la hace el backend — un
   usuario `CAJERO` que manipule la UI o llame la API directamente sigue
   bloqueado por `RolesGuard`.
+- `proxy.ts` protege `/dashboard/*` a nivel de servidor desde Fase 2 (antes
+  la única protección era un `useEffect` en el cliente, que corría después
+  de montar el contenido). Es una verificación liviana — no reemplaza al
+  backend como autoridad de seguridad. Ver [`decisions/0007-proxy-verificacion-liviana.md`](decisions/0007-proxy-verificacion-liviana.md).
 
-## Hardening aplicado (Fase 0)
+## Hardening aplicado
+
+### Fase 0 — Backend (concurrencia y superficie HTTP)
 
 | Riesgo | Mitigación | Dónde |
 |---|---|---|
@@ -42,6 +50,14 @@
 | Swagger expuesto en producción | Se monta solo si `NODE_ENV !== 'production'` (o `ENABLE_SWAGGER=true`) | `main.ts` |
 | Sobreventa/sobregiro por condiciones de carrera | Bloqueo pesimista (`FOR UPDATE` / advisory lock) — ver [`decisions/0001`](decisions/0001-concurrencia-for-update.md) | `ventas`, `compras`, `movimientos_financieros`, `cajas_turnos` |
 
+### Fase 2 — Frontend
+
+| Riesgo | Mitigación | Dónde |
+|---|---|---|
+| `/dashboard/*` sin protección de servidor | `proxy.ts` verifica presencia y expiración del JWT antes de renderizar | `proxy.ts` — ADR [`0007`](decisions/0007-proxy-verificacion-liviana.md) |
+| Cookie del JWT sin flags de seguridad, expiración desalineada | `Secure` + `SameSite=Lax`, expiración alineada a 12h | `app/auth/login/page.tsx` — ADR [`0008`](decisions/0008-cookie-flags.md) |
+| Estado de sesión anterior visible en terminal compartida | `reset()`/`clearCart()` de los stores de Zustand en logout | `dashboard/layout.tsx` |
+
 Detalle de cada decisión en `decisions/`.
 
 ## Pendiente (a propósito, no es un descuido)
@@ -49,7 +65,6 @@ Detalle de cada decisión en `decisions/`.
 Ver [`roadmap/hardening-backlog.md`](roadmap/hardening-backlog.md) para la
 lista completa con su justificación. Los más relevantes en seguridad:
 
-- `middleware.ts` en el frontend (protección de rutas a nivel de servidor).
 - Migrar el JWT a una cookie `httpOnly` gestionada por el backend (o aceptar
   el patrón Bearer actual documentando el riesgo).
 - Trazabilidad de autor: las operaciones financieras no registran qué

@@ -94,9 +94,13 @@ Components** (`'use client'`): el fetch de datos ocurre en el navegador vía
 petición. El estado compartido entre componentes (carrito de venta, caché de
 inventario) vive en dos stores de Zustand (`src/store/`).
 
-No hay `middleware.ts`: la protección de rutas en el frontend es solo visual
-(oculta botones/menús según el rol). La autorización real la hace siempre el
-backend. Ver [`security.md`](../security.md) y
+`proxy.ts` (raíz del proyecto — en Next.js 16 reemplaza a `middleware.ts`)
+protege `/dashboard/*` a nivel de servidor: verifica que exista el JWT y que
+no esté obviamente vencido antes de renderizar cualquier página del
+dashboard. Es una verificación liviana (no valida la firma criptográfica) —
+ver [`../decisions/0007-proxy-verificacion-liviana.md`](../decisions/0007-proxy-verificacion-liviana.md).
+El filtrado de botones/menús por rol en la UI sigue siendo solo visual; la
+autorización real la hace siempre el backend. Ver [`security.md`](../security.md) y
 [`roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md).
 
 ## Ver también

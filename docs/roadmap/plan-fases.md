@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-03 (Fase 1 mergeada a `master`).
+> **Última actualización:** 2026-07-03 (Fase 2 completada, pendiente de merge a `master`).
 
 ---
 
@@ -171,20 +171,78 @@ Es una operación aditiva seguro (`CREATE INDEX`), sin pérdida de datos.
 
 ---
 
-## Fase 2 — Frontend y Robustez — ⏳ PENDIENTE
+## Fase 2 — Frontend y Robustez — ✅ COMPLETADA (2026-07-03)
 
-**Hallazgos que resuelve:** H10 (middleware.ts), H11 (cookie JWT), H13 (Server Components), H14 (reset de Zustand), H27 (error/loading boundaries), H29 (Toaster no montado), H30 (accesibilidad), H32 (selectores de Zustand).
+**Rama:** `feature/fase2-frontend-robustez` — mergeada a `master` con `--no-ff`.
 
-### Alcance
-1. `middleware.ts` en Next.js para proteger `/dashboard/*` a nivel de servidor (hoy la protección es 100% cliente, sobre una cookie `user` en texto plano que no es el JWT).
-2. Acciones `reset()` en `cartStore` e `inventoryStore`, invocadas en logout (hoy el estado sobrevive entre sesiones de distintos cajeros en una terminal compartida).
-3. Flags `Secure` + `SameSite` en la cookie del JWT; alinear expiración cookie (24h) con expiración JWT real (12h).
-4. Montar `<Toaster>` (ya existe el componente, nunca se renderiza) y reemplazar los `alert()` nativos del POS.
-5. `error.tsx` / `loading.tsx` / `not-found.tsx` — no existe ninguno en todo el App Router.
-6. Selectores granulares de Zustand (`useShallow`) en vez de desestructurar el store completo, para evitar re-renders innecesarios.
+**Hallazgos que resuelve:** H10 (middleware.ts), H11 (cookie JWT), H14 (reset
+de Zustand), H27 (error/loading boundaries), H29 (Toaster no montado), H32
+(selectores de Zustand). H13 (Server Components) y H30 (accesibilidad)
+habían quedado listados en el plan original pero **nunca tuvieron un ítem
+correspondiente en el alcance numerado** — inconsistencia del plan original,
+no un recorte silencioso de esta fase. Ambos quedan documentados como
+pendientes en [`hardening-backlog.md`](hardening-backlog.md).
 
-### No iniciado
-Ningún archivo de código se ha tocado para esta fase todavía.
+### Hallazgo durante la investigación: Next.js 16 renombró `middleware.ts` a `proxy.ts`
+
+Antes de escribir código se leyó la documentación empaquetada en
+`node_modules/next/dist/docs/` (como indica `AGENTS.md` del frontend) y se
+confirmó que Next 16 **deprecó `middleware.ts` en favor de `proxy.ts`**
+(función exportada `proxy`, no `middleware`). Se implementó con la
+convención nueva. También se detectó que `error.tsx` en Next 16.2+ agregó el
+prop `unstable_retry` (reemplazando el uso recomendado de `reset`), usado en
+la implementación.
+
+### Qué se hizo (los 6 ítems del alcance original)
+
+1. **`proxy.ts`** (raíz del frontend): protege `/dashboard/*` verificando
+   presencia y expiración (no firma) del JWT — decisión de diseño explicada
+   en [`../decisions/0007-proxy-verificacion-liviana.md`](../decisions/0007-proxy-verificacion-liviana.md).
+2. **`reset()` en `inventoryStore`** (acción nueva) y reutilización del
+   `clearCart()` ya existente en `cartStore`, ambos invocados en
+   `handleLogout()` de `dashboard/layout.tsx`.
+3. **Cookies del JWT** con `Secure` + `SameSite=Lax` y expiración alineada a
+   12h (antes 24h, desalineada del JWT real) — ver
+   [`../decisions/0008-cookie-flags.md`](../decisions/0008-cookie-flags.md).
+4. **`<Toaster>` montado** en `app/layout.tsx`; los 6 `alert()` nativos (5 en
+   `pos/page.tsx`, 1 en `CompraForm.tsx`) y el `console.warn` de código de
+   barras no encontrado (citado explícitamente en el hallazgo H29) se
+   reemplazaron por `toast.error`/`toast.warning` de `sonner`.
+5. **`app/error.tsx`, `app/loading.tsx`, `app/not-found.tsx`** creados a
+   nivel raíz (cubren todo el árbol de `app/` por herencia; no se
+   duplicaron por segmento, siguiendo "no sobreingeniería").
+6. **Selectores `useShallow`** en `pos/page.tsx` (ambos stores) e
+   `inventario/page.tsx` (`inventoryStore`); `EditProductDialog.tsx` se
+   cambió a un selector de un solo campo (no necesita `useShallow`).
+
+### Verificación real
+
+- `npm run build` (producción, con Turbopack): compiló limpio, TypeScript
+  sin errores, y el log de build confirmó `ƒ Proxy (Middleware)` — Next.js
+  reconoció `proxy.ts` correctamente — y la ruta `/_not-found` generada.
+- `npm run lint`: cero problemas nuevos introducidos (se verificó contra
+  `git diff` que los warnings/errores preexistentes reportados por eslint no
+  tocan ninguna línea modificada en esta fase).
+- `proxy.ts` probado con `curl` contra el build de producción, con tokens
+  JWT construidos a mano (mismo formato, sin necesitar el secreto real ya
+  que el proxy no valida firma):
+  - Sin cookie `token` → `307` a `/auth/login`.
+  - Token con `exp` vencido → `307` a `/auth/login`.
+  - Token con `exp` vigente → `200` (pasa).
+- `not-found.tsx` probado con `curl` sobre una ruta inexistente bajo
+  `/dashboard`: `404` con el contenido esperado en el HTML.
+- Prueba de circuito completo: login real contra el backend (Postgres
+  desechable vía Docker, mismo método que Fase 0/1) → JWT real → ese token
+  usado como cookie contra el `proxy.ts` del frontend → `200`, confirmando
+  que Fase 0/1 (backend) y Fase 2 (frontend) son compatibles de punta a
+  punta.
+
+### Pendiente de Fase 2
+
+- Nada de los 6 ítems del alcance. H13 (Server Components) y H30
+  (accesibilidad: logout como `<div onClick>`, nav con `<span>` dentro de
+  `<Link>`) quedan en [`hardening-backlog.md`](hardening-backlog.md) como
+  ítems nuevos, no cubiertos por esta fase.
 
 ---
 
