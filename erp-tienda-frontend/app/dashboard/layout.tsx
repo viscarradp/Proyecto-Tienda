@@ -19,6 +19,8 @@ import Cookies from "js-cookie"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
+import { useCartStore } from "@/src/store/cartStore"
+import { useInventoryStore } from "@/src/store/inventoryStore"
 
 const NAV_ITEMS = [
   { name: 'Vender', icon: Store, href: '/dashboard/pos' },
@@ -50,6 +52,13 @@ function SidebarContent() {
   const handleLogout = () => {
     Cookies.remove("token", { path: '/' })
     Cookies.remove("user", { path: '/' })
+    // Limpia el estado en memoria: en una terminal compartida, el siguiente
+    // cajero no debe heredar el carrito ni el inventario cacheado de la
+    // sesión anterior. Se usa getState() (no el hook) porque es una acción
+    // imperativa en un event handler, no una lectura reactiva — evita
+    // suscribir el sidebar a cambios de esos stores sin necesidad.
+    useCartStore.getState().clearCart()
+    useInventoryStore.getState().reset()
     router.push("/auth/login")
   }
 

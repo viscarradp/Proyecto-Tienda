@@ -42,6 +42,7 @@ interface InventoryState {
   // Actions
   fetchInventory: (forceRefresh?: boolean) => Promise<void>
   invalidateCache: () => void
+  reset: () => void
 }
 
 // Tiempo de cache: 3 minutos. Si ha pasado este tiempo, refresca automáticamente.
@@ -90,5 +91,12 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
   invalidateCache: () => {
     set({ lastFetched: null })
+  },
+
+  // Limpia el catálogo cacheado por completo. Se invoca en logout: en una
+  // terminal compartida, el siguiente cajero no debe heredar el inventario
+  // (ni un error previo) del usuario anterior.
+  reset: () => {
+    set({ productos: [], categorias: [], lastFetched: null, loading: false, error: null })
   }
 }))
