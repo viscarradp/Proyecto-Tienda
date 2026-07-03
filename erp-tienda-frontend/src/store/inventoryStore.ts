@@ -83,8 +83,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         lastFetched: Date.now(),
         loading: false 
       })
-    } catch (err: any) {
-      set({ error: err.message || "Error al cargar inventario", loading: false })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al cargar inventario"
+      set({ error: message, loading: false })
       console.error("Zustand Inventory Error:", err)
     }
   },

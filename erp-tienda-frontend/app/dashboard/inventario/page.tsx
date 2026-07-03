@@ -111,8 +111,8 @@ export default function InventarioPage() {
 
       const resComp = await apiFetch<Compra[]>("/compras")
       setCompras(Array.isArray(resComp) ? resComp : [])
-    } catch (err: any) {
-      setGlobalError(err.message || "Error al cargar la base de inventario")
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : "Error al cargar la base de inventario")
     } finally {
       setLoading(false)
     }

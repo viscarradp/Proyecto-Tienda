@@ -9,7 +9,7 @@ interface UseBarcodeScannerOptions {
 
 export function useBarcodeScanner({ onScan, enabled = true }: UseBarcodeScannerOptions) {
   const buffer = useRef('');
-  const lastKeyTime = useRef(Date.now());
+  const lastKeyTime = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
