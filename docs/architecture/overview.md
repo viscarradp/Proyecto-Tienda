@@ -8,6 +8,31 @@ proveedores, gastos, y turnos de caja. El objetivo es que el dueño del negocio
 sepa, sin ambigüedad, cuánto vendió, cuánto gastó y si es rentable — sin ser
 una persona técnica.
 
+## Motivación y alcance
+
+El proyecto nació para resolver un problema concreto de un negocio familiar:
+la gestión manual de una tienda de colonia propicia pérdida de trazabilidad
+en el inventario (mermas no registradas), descuadres en el flujo de efectivo
+(gaveta física) y falta de visibilidad sobre los márgenes de ganancia reales
+por la fluctuación de costos de adquisición. El usuario final típico **no es
+una persona técnica ni una empresaria** — es alguien que solo quiere llevar
+su negocio de forma más fácil y saber si es rentable. Esto es la razón de la
+regla de diseño "no sobreingeniería" que aparece en
+[`../roadmap/plan-fases.md`](../roadmap/plan-fases.md): las soluciones deben
+ser proporcionales a una tienda con 1-2 cajas, no a un escenario enterprise
+o multi-tenant.
+
+Alcance definido: catálogo de productos, control de caja (apertura/cierre,
+ingresos/egresos), compras e inventario por lotes, ventas con descarga FIFO,
+control de mermas, y autenticación con roles `ADMIN`/`CAJERO`.
+
+**Fuera de alcance a propósito** (no son omisiones, son decisiones de
+producto): módulos de Recursos Humanos, CRM complejo de clientes, cuentas por
+cobrar a largo plazo, e integración con pasarelas de pago electrónico — el
+enfoque actual es transaccional físico/efectivo (ver también
+[`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) sobre el supuesto
+de que toda venta es en efectivo).
+
 ## Las dos aplicaciones
 
 ```

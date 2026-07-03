@@ -9,6 +9,7 @@ adivinar el porqué de las cosas.
 
 | Si quieres... | Ve a... |
 |---|---|
+| **Saber en qué fase va el proyecto y qué sigue** | [`roadmap/plan-fases.md`](roadmap/plan-fases.md) ⭐ empieza aquí para retomar trabajo |
 | Entender qué hace el sistema y cómo fluye una petición | [`architecture/overview.md`](architecture/overview.md) |
 | Entender las tablas de la base de datos y el motor FIFO | [`architecture/data-model.md`](architecture/data-model.md) |
 | Entender las reglas de negocio de caja, ventas y mermas | [`domain/caja-y-ventas.md`](domain/caja-y-ventas.md) |
