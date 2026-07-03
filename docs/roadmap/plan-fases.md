@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-03 (Fase 1 completada y verificada, pendiente de merge a `master`).
+> **Última actualización:** 2026-07-03 (Fase 1 mergeada a `master`).
 
 ---
 
@@ -98,7 +98,7 @@ Commit: `832e3e0 fix(backend): evitar deadlock por orden de bloqueo vs INSERT co
 
 ## Fase 1 — Base de Datos y Operaciones — ✅ COMPLETADA (2026-07-03)
 
-**Rama:** `feature/fase1-indices-excepciones`.
+**Rama:** `feature/fase1-indices-excepciones` — mergeada a `master` con `--no-ff` y pusheada a `origin/master` el 2026-07-03.
 
 **Hallazgos que resuelve:** H5 (índices). El filtro de excepciones no era un
 hallazgo numerado de la auditoría, pero estaba en `hardening-backlog.md`
@@ -167,7 +167,7 @@ Es una operación aditiva seguro (`CREATE INDEX`), sin pérdida de datos.
 ### Pendiente de Fase 1
 
 - [ ] Correr `npx prisma db push` contra la Supabase real (paso manual, ver arriba — no depende de mergear la rama).
-- Índices y filtro de excepciones están completos y verificados; el código está pendiente de merge a `master` (ver [`../../README.md`](../../README.md) o preguntar el estado actual de la rama `feature/fase1-indices-excepciones`).
+- Índices y filtro de excepciones están completos, verificados y mergeados a `master`. Fase 1 cerrada salvo el paso manual de arriba.
 
 ---
 
