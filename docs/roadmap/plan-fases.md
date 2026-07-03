@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-02 (Fase 0 mergeada a `master`).
+> **Última actualización:** 2026-07-03 (Fase 1 completada y verificada, pendiente de merge a `master`).
 
 ---
 
@@ -96,28 +96,78 @@ Commit: `832e3e0 fix(backend): evitar deadlock por orden de bloqueo vs INSERT co
 
 ---
 
-## Fase 1 — Base de Datos y Operaciones — ⏳ PENDIENTE
+## Fase 1 — Base de Datos y Operaciones — ✅ COMPLETADA (2026-07-03)
 
-**Hallazgos que resuelve:** H5 (índices), H6 (migraciones — parcialmente diferido por decisión explícita, ver abajo), H8 (trazabilidad de autor, severidad Media pero agrupada aquí por tocar el mismo tipo de archivos).
+**Rama:** `feature/fase1-indices-excepciones`.
 
-### Alcance original (de `AUDITORIA-TECNICA.md`)
-1. Añadir `@@index` a todas las FKs y a `fecha`/`estado`/`tipo_movimiento` en `schema.prisma`.
-2. Establecer baseline de migraciones versionadas de Prisma.
-3. Aplicar constraints de BD (`CHECK cantidad_disponible >= 0`, índice único parcial para "un solo turno ABIERTA") como defensa en profundidad adicional al bloqueo de aplicación de la Fase 0.
-4. Añadir `usuario_id` a `ventas`, `movimientos_financieros`, `cajas_turnos`, `ajustes_inventario`.
-5. Filtro global de excepciones (traducir errores de Prisma como `P2002` a respuestas HTTP claras).
+**Hallazgos que resuelve:** H5 (índices). El filtro de excepciones no era un
+hallazgo numerado de la auditoría, pero estaba en `hardening-backlog.md`
+como ítem "Menores" y se resolvió en el mismo bloque de trabajo por tocar el
+mismo tipo de riesgo (respuestas HTTP incorrectas).
 
-### ⚠️ Re-evaluar antes de empezar: impacto de "sin migraciones todavía"
-La decisión de **no adoptar migraciones hasta producción** (ver [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md)) se tomó **durante Fase 0**, después de que el plan original de Fase 1 fuera escrito. Esto significa que el punto 2 (baseline de migraciones) y el punto 3 (constraints de BD) **quedan explícitamente pospuestos hasta producción** — ya están documentados como tal en [`hardening-backlog.md`](hardening-backlog.md) ítems 1 y 2, con el SQL exacto a aplicar cuando corresponda.
+### Decisión de alcance tomada antes de empezar
 
-El punto 1 (índices) **sí se puede aplicar ahora sin migraciones**, vía `npx prisma db push` directamente sobre Supabase (igual que se hace hoy para cualquier cambio de schema en este proyecto). Es la única pieza de Fase 1 que no depende de la decisión de migraciones.
+El plan original agrupaba tentativamente 5 puntos en Fase 1. Antes de
+ejecutar, se re-evaluó con el usuario:
 
-**Antes de ejecutar Fase 1, preguntar al usuario:**
-- ¿Aplicar los índices ahora vía `db push` (opción rápida, consistente con el flujo actual), o esperar al baseline de migraciones para aplicar todo junto (índices + constraints) en un solo paso ordenado?
-- ¿Es buen momento para el punto 4 (`usuario_id`)? Requiere decidir si el sistema ya maneja más de un usuario/cajero activo en la práctica (si sigue siendo un solo operador, la urgencia es menor).
+- **Migraciones baseline y constraints de BD** (puntos 2 y 3 originales):
+  quedan explícitamente pospuestos hasta producción — decisión ya tomada en
+  Fase 0 ([`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md)),
+  documentados con el SQL exacto en [`hardening-backlog.md`](hardening-backlog.md) ítems 1-2.
+- **`usuario_id` / trazabilidad de autor** (punto 4 original, hallazgo H8):
+  se decidió **diferir** — es un cambio más invasivo (schema + 5 services +
+  un decorator `@CurrentUser()` nuevo) que no se justifica mientras el
+  negocio opere con un solo cajero activo. Queda en
+  [`hardening-backlog.md`](hardening-backlog.md) ítem 4.
+- **Alcance final de Fase 1:** solo índices (punto 1) + filtro global de
+  excepciones (punto 5) — ambos de bajo riesgo y alto valor.
 
-### No iniciado
-Ningún archivo de código se ha tocado para esta fase todavía.
+### Qué se hizo
+
+1. **16 índices añadidos a `schema.prisma`** (`@@index`), cada uno
+   justificado por un patrón de consulta real verificado en el código (no
+   especulativo) — incluye 4 índices compuestos donde la evidencia mostraba
+   dos columnas siempre filtradas juntas (`lotes_inventario(producto_id,
+   fecha_ingreso)` para el motor FIFO, `cajas_turnos(estado, fecha_cierre)`,
+   `ventas(estado, fecha)`, `movimientos_financieros(tipo_movimiento,
+   fecha)`). Detalle completo por índice en
+   [`../decisions/0005-indices-bd.md`](../decisions/0005-indices-bd.md).
+2. **`PrismaExceptionFilter` global** (`src/common/filters/prisma-exception.filter.ts`,
+   registrado vía `APP_FILTER`): traduce `P2002`→409, `P2003`→400, `P2025`→404
+   en vez del 500 genérico, para los servicios que no tenían manejo local
+   propio. Detalle en [`../decisions/0006-filtro-excepciones-prisma.md`](../decisions/0006-filtro-excepciones-prisma.md).
+
+### Verificación real
+
+Contra un PostgreSQL 16 desechable (Docker), igual que en Fase 0:
+
+- `npx prisma validate` / `format`: schema válido.
+- `npx prisma db push`: sincroniza sin errores.
+- `pg_indexes`: los 16 índices existen con las columnas correctas.
+- `EXPLAIN` sobre la consulta exacta del motor FIFO: el planner usa
+  `Bitmap Index Scan` sobre el nuevo índice compuesto (no *sequential scan*).
+- HTTP end-to-end: `POST /usuarios` con `nombre` duplicado → `409` limpio
+  (antes `500`); `DELETE /productos/:id` con una presentación asociada →
+  `400` limpio (antes `500`). Log del servidor sin excepciones sin manejar.
+
+### ⚠️ Paso manual pendiente: aplicar contra Supabase real
+
+Este entorno de desarrollo **no tiene las credenciales de la Supabase real**
+(no hay `.env`), así que el cambio de schema se verificó en una base
+desechable pero **no se aplicó a la base de datos real del proyecto**.
+Ejecutar manualmente cuando se retome el trabajo:
+
+```bash
+cd erp-tienda-backend
+npx prisma db push
+```
+
+Es una operación aditiva seguro (`CREATE INDEX`), sin pérdida de datos.
+
+### Pendiente de Fase 1
+
+- [ ] Correr `npx prisma db push` contra la Supabase real (paso manual, ver arriba — no depende de mergear la rama).
+- Índices y filtro de excepciones están completos y verificados; el código está pendiente de merge a `master` (ver [`../../README.md`](../../README.md) o preguntar el estado actual de la rama `feature/fase1-indices-excepciones`).
 
 ---
 
@@ -156,10 +206,13 @@ Ningún archivo de código se ha tocado para esta fase todavía.
 | # | Decisión | Contexto | Urgencia |
 |---|---|---|---|
 | 1 | GCP vs. AWS para el backend | El usuario está reconsiderando GCP; Supabase se mantiene para la BD en ambos casos | Baja — el código ya es agnóstico de proveedor |
-| 2 | Método de aplicar índices en Fase 1 | `db push` ahora vs. esperar baseline de migraciones | Media — bloquea el inicio de Fase 1 |
-| 3 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
+| 2 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
 
-**Resueltas:** ¿cuándo mergear `feature/fase0-hardening` a `master`? → Resuelto el 2026-07-02, mergeado con `--no-ff` (commit `9a563a1`).
+**Resueltas:**
+
+- ¿Cuándo mergear `feature/fase0-hardening` a `master`? → Resuelto el 2026-07-02, mergeado con `--no-ff` (commit `9a563a1`).
+- Método de aplicar índices en Fase 1 → Resuelto el 2026-07-03: se preparan y verifican en este entorno (Postgres desechable), pero el `db push` final contra Supabase real lo corre el usuario manualmente (sin credenciales en este entorno). Ver sección de Fase 1 arriba.
+- ¿Incluir `usuario_id` en Fase 1? → Resuelto el 2026-07-03: diferido, queda en `hardening-backlog.md` ítem 4.
 
 ---
 

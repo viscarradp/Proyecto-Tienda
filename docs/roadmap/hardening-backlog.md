@@ -7,6 +7,7 @@ hallazgos: ver `AUDITORIA-TECNICA.md` en la raíz del repo.
 ## Antes de entrar a producción (bloqueante)
 
 ### 1. Adoptar migraciones de Prisma versionadas
+
 **Por qué se difirió:** el proyecto está en desarrollo activo, sin instancias
 de producción — ver [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md).
 **Cuándo:** antes del primer despliegue a producción.
@@ -15,6 +16,7 @@ establecer un baseline desde el estado actual de Supabase; de ahí en
 adelante, todo cambio de schema pasa por `migrate dev`/`migrate deploy`.
 
 ### 2. Constraints de base de datos como defensa en profundidad
+
 **Por qué se difirió:** las invariantes ya están garantizadas en la capa de
 aplicación (ADR 0001); aplicar esto ahora, sin migraciones, generaría drift
 entre el schema versionado y la BD real.
@@ -31,46 +33,38 @@ CREATE UNIQUE INDEX ux_cajas_turnos_una_abierta
   ON cajas_turnos (estado) WHERE estado = 'ABIERTA';
 ```
 
-### 3. Índices sobre columnas FK y de filtro (hallazgo H5)
-**Por qué se difirió:** con el volumen de datos actual (desarrollo, pocos
-registros) no hay impacto medible; agregarlos ahora sin medir es
-optimización prematura.
-**Cuándo:** antes de producción, o antes si el histórico de datos de
-desarrollo/staging empieza a sentirse lento.
-**Qué aplicar** (vía migración, no a mano en Supabase):
-`lotes_inventario.producto_id`, `detalle_ventas.venta_id`,
-`detalle_ventas.presentacion_id`, `detalle_venta_lotes.detalle_venta_id`,
-`detalle_venta_lotes.lote_id`, `ventas.caja_turno_id`, `ventas.fecha`,
-`movimientos_financieros.caja_turno_id`, `movimientos_financieros.tipo_movimiento`,
-`movimientos_financieros.fecha`. Considerar un índice compuesto
-`lotes_inventario(producto_id, fecha_ingreso)` para acelerar el orden FIFO.
-
 ## Importante, no bloqueante
 
-### 4. `middleware.ts` en el frontend
+### 3. `middleware.ts` en el frontend
+
 **Por qué se difirió:** fuera del alcance de Fase 0 (backend/integridad). La
 autorización real ya la garantiza el backend; hoy el frontend solo pierde
 "defensa en profundidad" de UX (un usuario sin sesión ve el shell de la UI
 antes de ser redirigido).
 **Cuándo:** Fase 2 del plan de auditoría original (frontend).
 
-### 5. Trazabilidad de autor en operaciones financieras (hallazgo H8)
+### 4. Trazabilidad de autor en operaciones financieras (hallazgo H8)
+
 **Por qué se difirió:** requiere agregar `usuario_id` a varias tablas
 (`ventas`, `movimientos_financieros`, `cajas_turnos`, `ajustes_inventario`),
-lo cual toca el schema — más natural de hacer junto con el ítem 1
-(migraciones) que a mano ahora.
+un decorator `@CurrentUser()` nuevo y tocar 5 services distintos — se evaluó
+explícitamente incluirlo en Fase 1 junto con los índices y se decidió
+diferirlo por ser un cambio más invasivo y de menor urgencia mientras el
+negocio siga operando con un solo cajero activo.
 **Cuándo:** junto con la adopción de migraciones, o antes si el negocio
 empieza a tener más de un cajero y se vuelve necesario saber quién hizo qué.
 
-### 6. Cookie JWT httpOnly
+### 5. Cookie JWT httpOnly
+
 **Por qué se difirió:** requiere que el backend gestione la cookie (hoy la
 pone el frontend vía `js-cookie`, que no puede marcarla `httpOnly`). Es un
 cambio de contrato cliente-servidor, no un fix aislado.
-**Cuándo:** evaluar junto con el ítem 4, al revisar seguridad del frontend.
+**Cuándo:** evaluar junto con el ítem 3, al revisar seguridad del frontend.
 
 ## Escalabilidad (activar solo si se necesita)
 
-### 7. Store compartido (Redis) para el rate-limiter
+### 6. Store compartido (Redis) para el rate-limiter
+
 **Por qué se difirió:** el backend corre en una sola instancia hoy; Redis
 agregaría una dependencia de infraestructura sin beneficio actual —
 "soluciones escalables" no significa "infraestructura que no se usa
@@ -87,6 +81,3 @@ el conteo entre instancias.
 - Endpoint `POST /caja-general/inyeccion` usa un tipo inline en vez de un DTO
   — evade el `ValidationPipe` global. Bajo riesgo (ya está tras
   `@Roles('ADMIN')`), pero es una corrección de una sola clase DTO.
-- Filtro global de excepciones para traducir errores de Prisma (ej. `P2002`
-  de `usuarios.create`) a respuestas HTTP claras en vez del 500 genérico de
-  Nest.
