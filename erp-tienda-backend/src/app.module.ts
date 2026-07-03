@@ -17,9 +17,10 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { AuthModule } from './auth/auth.module';
 import { CajaGeneralModule } from './caja_general/caja_general.module';
 import { ReportesModule } from './reportes/reportes.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 @Module({
   imports: [
@@ -66,6 +67,13 @@ import { RolesGuard } from './auth/guards/roles.guard';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Red de seguridad: traduce errores de Prisma no manejados localmente
+    // (P2002/P2003/P2025) a respuestas HTTP claras en vez de un 500 genérico
+    // (ver docs/decisions/0006-filtro-excepciones-prisma.md).
+    {
+      provide: APP_FILTER,
+      useClass: PrismaExceptionFilter,
     },
   ],
 })

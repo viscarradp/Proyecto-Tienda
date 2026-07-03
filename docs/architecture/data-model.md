@@ -78,10 +78,15 @@ económica real, al costo de adquisición de ese lote).
 - **`activos_fijos`**: registro simple de activos del negocio (mobiliario,
   equipo), no tiene lógica asociada todavía.
 
+## Índices
+
+Desde Fase 1, las columnas FK y las combinaciones de filtro usadas realmente
+por el código (ej. el motor FIFO, los reportes, "buscar el turno abierto")
+tienen `@@index` en `schema.prisma`. Detalle completo, evidencia por índice y
+verificación en [`../decisions/0005-indices-bd.md`](../decisions/0005-indices-bd.md).
+
 ## Deuda técnica conocida (ver `roadmap/hardening-backlog.md`)
 
-- **Cero índices** (`@@index`) sobre columnas FK y de filtro — no es un
-  problema hoy con poco volumen, pero se degradará con el histórico.
 - Varios campos que representan estados (`ventas.estado`,
   `cajas_turnos.estado`, `usuarios.rol`, etc.) son `String` libre en el schema
   en vez de un enum — validados en la capa de aplicación (DTOs), no en la BD.
