@@ -47,10 +47,15 @@ export default function LoginPage() {
 
       const data: LoginResponse = await res.json()
 
-      // Guardar token JWT (expira en 1 día)
-      Cookies.set("token", data.access_token, { expires: 1, path: "/" })
+      // Expiración de la cookie alineada al JWT real (expiresIn: '12h' en el
+      // backend, ver auth.module.ts) — antes decía 1 día y quedaba
+      // desincronizada. Secure + SameSite=Lax: localhost cuenta como
+      // contexto seguro en navegadores modernos, así que no rompe el
+      // desarrollo local (ver docs/decisions/0008-cookie-flags.md).
+      const cookieOptions = { expires: 0.5, path: "/", secure: true, sameSite: "lax" as const }
+      Cookies.set("token", data.access_token, cookieOptions)
       // Guardar info del usuario para mostrar en el sidebar
-      Cookies.set("user", JSON.stringify(data.usuario), { expires: 1, path: "/" })
+      Cookies.set("user", JSON.stringify(data.usuario), cookieOptions)
 
       router.push("/dashboard/pos")
       router.refresh()
