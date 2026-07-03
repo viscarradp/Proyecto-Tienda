@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CategoriasModule } from './categorias/categorias.module';
@@ -23,6 +24,17 @@ import { RolesGuard } from './auth/guards/roles.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Límite global por IP; /auth/login tiene un límite más estricto
+    // (ver @Throttle en auth.controller.ts). Store en memoria: correcto para
+    // una sola instancia; si se escala a varias instancias, migrar a un
+    // store compartido (Redis) — ver docs/roadmap/hardening-backlog.md.
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000,
+        limit: 60,
+      },
+    ]),
     PrismaModule,
     CategoriasModule,
     ProductosModule,
@@ -41,6 +53,12 @@ import { RolesGuard } from './auth/guards/roles.guard';
   controllers: [AppController],
   providers: [
     AppService,
+    // Orden: Throttler primero (aplica incluso a rutas @Public, como login),
+    // luego autenticación, luego autorización por rol.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

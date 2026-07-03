@@ -9,6 +9,12 @@ Este repositorio contiene dos aplicaciones principales:
 - Backend API en NestJS + Prisma + PostgreSQL.
 - Frontend web en Next.js (App Router) + React + Tailwind CSS.
 
+> 📖 **Documentación completa en [`docs/`](docs/README.md)**: arquitectura, modelo de datos,
+> reglas de negocio, seguridad, configuración, decisiones técnicas (ADRs) y el
+> [plan de trabajo vigente con su estado actual](docs/roadmap/plan-fases.md). Este README
+> es solo la guía rápida de instalación/arranque; para entender el *por qué* de las cosas,
+> `docs/` es la fuente de verdad.
+
 ## Arquitectura
 
 - `erp-tienda-backend`: API REST, autenticacion JWT, validacion, Swagger y acceso a datos con Prisma.
@@ -58,19 +64,30 @@ Este repositorio contiene dos aplicaciones principales:
 
 ## Configuracion de Variables de Entorno
 
+Cada app tiene un `.env.example` con todas las variables documentadas
+(`erp-tienda-backend/.env.example`, `erp-tienda-frontend/.env.example`).
+Cópialo a `.env` (backend) o `.env.local` (frontend) y completa los valores
+reales. Detalle de cada variable en
+[`docs/operations/configuration.md`](docs/operations/configuration.md).
+
 ### Backend (`erp-tienda-backend/.env`)
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/erp_tienda"
-JWT_SECRET="cambia-esto-en-produccion"
+JWT_SECRET="reemplaza-con-un-secreto-largo-y-aleatorio"
 PORT=3000
+INITIAL_ADMIN_PASSWORD="cambia-esta-contraseña"
+CORS_ORIGINS="http://localhost:3001"
+NODE_ENV=development
 ```
 
-Variables usadas en backend:
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `PORT` (opcional, por defecto 3000)
+- `DATABASE_URL`, `JWT_SECRET`: obligatorias, el backend no arranca sin ellas.
+- `PORT` (opcional, por defecto 3000).
+- `INITIAL_ADMIN_PASSWORD`: contraseña del usuario `admin` que se crea automáticamente
+  la primera vez que arranca con la base de datos vacía. **Si no la defines, no se
+  crea ningún usuario admin** — no hay credencial hardcodeada por diseño.
+- `CORS_ORIGINS` (opcional, por defecto `http://localhost:3001`): orígenes permitidos, separados por coma.
+- `NODE_ENV` / `ENABLE_SWAGGER` (opcional): en `production`, Swagger se desactiva a menos que `ENABLE_SWAGGER=true`.
 
 ### Frontend (`erp-tienda-frontend/.env.local`)
 
@@ -141,21 +158,31 @@ npm run lint         # lint
 
 ## Base de Datos y Prisma
 
-En backend:
+⚠️ **Este proyecto todavía no usa migraciones de Prisma** (decisión deliberada
+mientras está en desarrollo activo sin instancias de producción — ver
+[`docs/decisions/0002-sin-migraciones-hasta-produccion.md`](docs/decisions/0002-sin-migraciones-hasta-produccion.md)).
+El schema se sincroniza directamente contra la base de datos:
 
 ```bash
 cd erp-tienda-backend
 npx prisma generate
-npx prisma migrate dev
+npx prisma db push
 npx prisma db seed
 ```
 
 ## Notas
 
-- CORS esta habilitado en backend para desarrollo local.
+- CORS usa una allowlist explícita vía `CORS_ORIGINS` (ver arriba), no está abierto a cualquier origen.
 - El frontend envia JWT en header `Authorization: Bearer <token>`.
+- Swagger disponible en `http://localhost:3000/api` solo fuera de `NODE_ENV=production`
+  (o si defines `ENABLE_SWAGGER=true`).
 
-## Roadmap Sugerido
+## Roadmap
+
+El roadmap vigente, con el estado detallado de cada fase (qué está hecho, qué
+falta y por qué), vive en
+[`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md). Resumen de lo
+pendiente a nivel de infraestructura del proyecto (Fase 3):
 
 - Agregar `docker-compose` para levantar todo con un comando.
 - Agregar CI (lint + test + build) en GitHub Actions.

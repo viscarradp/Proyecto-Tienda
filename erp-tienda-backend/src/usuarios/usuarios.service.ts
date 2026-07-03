@@ -12,17 +12,34 @@ export class UsuariosService implements OnModuleInit {
 
   async onModuleInit() {
     const count = await this.prisma.usuarios.count();
-    if (count === 0) {
-      const password_hash = await bcrypt.hash('admin123', this.saltRounds);
-      await this.prisma.usuarios.create({
-        data: {
-          nombre: 'admin',
-          rol: 'ADMIN',
-          password_hash,
-        },
-      });
-      console.log('--- SEEDING: Usuario administrador por defecto creado (admin/admin123) ---');
+    if (count > 0) {
+      return;
     }
+
+    // No hay usuarios y las rutas están bloqueadas por defecto (guards
+    // globales): sin un admin inicial nadie podría autenticarse. La
+    // contraseña viene de env, nunca hardcodeada ni impresa en logs.
+    const initialPassword = process.env.INITIAL_ADMIN_PASSWORD;
+    if (!initialPassword) {
+      console.warn(
+        '--- SEEDING: No hay usuarios registrados y falta la variable de entorno ' +
+          'INITIAL_ADMIN_PASSWORD. No se creó ningún usuario administrador. ' +
+          'Define INITIAL_ADMIN_PASSWORD y reinicia el servidor para crear el admin inicial. ---',
+      );
+      return;
+    }
+
+    const password_hash = await bcrypt.hash(initialPassword, this.saltRounds);
+    await this.prisma.usuarios.create({
+      data: {
+        nombre: 'admin',
+        rol: 'ADMIN',
+        password_hash,
+      },
+    });
+    console.log(
+      '--- SEEDING: Usuario administrador "admin" creado con la contraseña de INITIAL_ADMIN_PASSWORD. ---',
+    );
   }
 
   async create(createUsuarioDto: CreateUsuarioDto) {

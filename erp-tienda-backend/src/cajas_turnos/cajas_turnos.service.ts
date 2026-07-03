@@ -7,33 +7,40 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCajaTurnoDto } from './dto/create-caja_turno.dto';
 import { CloseCajaTurnoDto } from './dto/close-caja_turno.dto';
 import { Prisma } from '@prisma/client';
+import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
 
 @Injectable()
 export class CajasTurnosService {
   constructor(private readonly prisma: PrismaService) {}
 
   async abrir(createCajaTurnoDto: CreateCajaTurnoDto) {
-    // 1. Validar si ya existe un turno abierto
-    const turnoAbierto = await this.prisma.cajas_turnos.findFirst({
-      where: { estado: 'ABIERTA' },
-    });
-
-    if (turnoAbierto) {
-      throw new ConflictException(
-        'Ya existe un turno de caja abierto. Ciérrelo antes de abrir uno nuevo.',
-      );
-    }
-
-    // 2. Obtener el monto que quedó en la gaveta en el último cierre
-    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
-      where: { estado: 'CERRADA' },
-      orderBy: { fecha_cierre: 'desc' },
-    });
-    const sobranteAnterior = ultimoCierre ? Number(ultimoCierre.efectivo_declarado) : 0;
     const fondoInicial = createCajaTurnoDto.fondo_inicial;
-    
-    // 3. Crear el turno y los movimientos de ajuste en transacción
+
+    // Advisory lock: serializa aperturas de turno concurrentes. Sin esto, dos
+    // requests de apertura simultáneos podrían leer "0 turnos abiertos" ambos
+    // y crear dos turnos ABIERTA (ver docs/decisions/0001-concurrencia-for-update.md).
     return await this.prisma.$transaction(async (tx) => {
+      await acquireAdvisoryLock(tx, 'caja_turno_abrir');
+
+      // 1. Validar si ya existe un turno abierto (re-chequeo ya bajo el lock)
+      const turnoAbierto = await tx.cajas_turnos.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+
+      if (turnoAbierto) {
+        throw new ConflictException(
+          'Ya existe un turno de caja abierto. Ciérrelo antes de abrir uno nuevo.',
+        );
+      }
+
+      // 2. Obtener el monto que quedó en la gaveta en el último cierre
+      const ultimoCierre = await tx.cajas_turnos.findFirst({
+        where: { estado: 'CERRADA' },
+        orderBy: { fecha_cierre: 'desc' },
+      });
+      const sobranteAnterior = ultimoCierre ? Number(ultimoCierre.efectivo_declarado) : 0;
+
+      // 3. Crear el turno y los movimientos de ajuste
       const nuevoTurno = await tx.cajas_turnos.create({
         data: {
           fondo_inicial: fondoInicial,
@@ -100,28 +107,35 @@ export class CajasTurnosService {
   }
 
   async cerrar(id: number, closeCajaTurnoDto: CloseCajaTurnoDto) {
-    // 1. Buscar el turno y validar que exista y esté abierto
-    const turno = await this.prisma.cajas_turnos.findUnique({
-      where: { id },
-    });
-
-    if (!turno) {
-      throw new NotFoundException(`Turno de caja con ID ${id} no encontrado.`);
-    }
-
-    if (turno.estado !== 'ABIERTA') {
-      throw new ConflictException(
-        'Este turno de caja ya se encuentra cerrado.',
-      );
-    }
-
-    // 2. Calcular diferencia
-    const efectivoDeclarado = new Prisma.Decimal(closeCajaTurnoDto.efectivo_declarado);
-    const efectivoEsperado = new Prisma.Decimal(turno.efectivo_esperado ?? 0);
-    const diferencia = efectivoDeclarado.sub(efectivoEsperado);
-
-    // 3. Ejecutar actualización y movimiento financiero en transacción
+    // Todo el método corre en una única transacción con la fila del turno
+    // bloqueada (FOR UPDATE): dos solicitudes de cierre concurrentes sobre el
+    // mismo turno no deben producir doble ajuste financiero
+    // (ver docs/decisions/0001-concurrencia-for-update.md).
     return await this.prisma.$transaction(async (tx) => {
+      // 1. Buscar el turno y validar que exista y esté abierto
+      const [turno] = await tx.$queryRaw<CajaTurnoRow[]>`
+        SELECT id, estado, efectivo_esperado
+        FROM cajas_turnos
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+
+      if (!turno) {
+        throw new NotFoundException(`Turno de caja con ID ${id} no encontrado.`);
+      }
+
+      if (turno.estado !== 'ABIERTA') {
+        throw new ConflictException(
+          'Este turno de caja ya se encuentra cerrado.',
+        );
+      }
+
+      // 2. Calcular diferencia
+      const efectivoDeclarado = new Prisma.Decimal(closeCajaTurnoDto.efectivo_declarado);
+      const efectivoEsperado = new Prisma.Decimal(turno.efectivo_esperado ?? 0);
+      const diferencia = efectivoDeclarado.sub(efectivoEsperado);
+
+      // 3. Ejecutar actualización y movimiento financiero
       const cajaCerrada = await tx.cajas_turnos.update({
         where: { id },
         data: {

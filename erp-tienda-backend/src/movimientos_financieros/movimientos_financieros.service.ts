@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateMovimientosFinancieroDto } from './dto/create-movimientos_financiero.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CajaTurnoRow } from '../common/concurrency';
 
 @Injectable()
 export class MovimientosFinancierosService {
@@ -48,6 +49,20 @@ export class MovimientosFinancierosService {
     // Guarda el movimiento vinculado a la caja activa en una transacción
     // y actualiza el efectivo esperado de la caja.
     return await this.prisma.$transaction(async (tx) => {
+      // Bloquea la fila del turno ANTES de insertar el movimiento (que la
+      // referencia por FK). Si se bloqueara después de insertar, dos requests
+      // concurrentes podrían deadlockearse: ambas retienen el lock compartido
+      // implícito que Postgres toma en el INSERT por la FK (FOR KEY SHARE) y
+      // luego ambas intentan escalarlo a exclusivo al mismo tiempo (error
+      // 40P01). Aprovechamos esta misma lectura bloqueada para validar fondos
+      // en egresos (ver docs/decisions/0001-concurrencia-for-update.md).
+      const [cajaLocked] = await tx.$queryRaw<CajaTurnoRow[]>`
+        SELECT id, efectivo_esperado
+        FROM cajas_turnos
+        WHERE id = ${cajaTurno.id}
+        FOR UPDATE
+      `;
+
       const movimiento = await tx.movimientos_financieros.create({
         data: {
           ...createMovimientosFinancieroDto,
@@ -65,14 +80,7 @@ export class MovimientosFinancierosService {
         });
       } else if (esEgreso) {
         // ── BUG 9: Validar fondos suficientes antes de decrementar ──
-        // La lectura ocurre dentro de la tx → PostgreSQL aplica bloqueo de fila,
-        // previniendo condiciones de carrera entre requests concurrentes.
-        const cajaActual = await tx.cajas_turnos.findUnique({
-          where: { id: cajaTurno.id },
-          select: { efectivo_esperado: true },
-        });
-
-        const esperado = Number(cajaActual?.efectivo_esperado ?? 0);
+        const esperado = Number(cajaLocked?.efectivo_esperado ?? 0);
         if (esperado < createMovimientosFinancieroDto.monto) {
           throw new BadRequestException(
             `Fondos insuficientes en caja. ` +
