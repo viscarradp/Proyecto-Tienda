@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-02.
+> **Última actualización:** 2026-07-02 (Fase 0 mergeada a `master`).
 
 ---
 
@@ -33,7 +33,7 @@ Restricciones operativas específicas (confirmadas con el usuario el 2026-07-02)
 
 ## Fase 0 — Concurrencia y Seguridad — ✅ COMPLETADA (2026-07-02)
 
-**Rama:** `feature/fase0-hardening` (pusheada a `origin`, **no mergeada a `master` todavía** — pendiente de decisión del usuario sobre cuándo mergear).
+**Rama:** `feature/fase0-hardening` — mergeada a `master` con `--no-ff` (commit `9a563a1`) y pusheada a `origin/master` el 2026-07-02.
 
 **Hallazgos de la auditoría que resuelve:** H1, H2, H3, H4, H7, H15, H16 (ver `AUDITORIA-TECNICA.md` sección 3).
 
@@ -91,8 +91,8 @@ Commit: `832e3e0 fix(backend): evitar deadlock por orden de bloqueo vs INSERT co
 - Re-verificado tras el fix: mismos 4 escenarios, cero deadlocks en el log del servidor.
 
 ### Pendiente de Fase 0
-- [ ] **Decidir cuándo mergear `feature/fase0-hardening` a `master`.** No se ha hecho todavía — requiere confirmación del usuario.
-- [ ] Nada más. Todos los hallazgos H1-H4, H7, H15, H16 de la auditoría están resueltos y verificados.
+
+- Nada. Todos los hallazgos H1-H4, H7, H15, H16 de la auditoría están resueltos, verificados y mergeados a `master`. Fase 0 cerrada.
 
 ---
 
@@ -155,10 +155,11 @@ Ningún archivo de código se ha tocado para esta fase todavía.
 
 | # | Decisión | Contexto | Urgencia |
 |---|---|---|---|
-| 1 | ¿Cuándo mergear `feature/fase0-hardening` a `master`? | Fase 0 está completa y verificada, pero no se ha mergeado | Baja — no bloquea seguir trabajando en nuevas ramas sobre esta |
-| 2 | GCP vs. AWS para el backend | El usuario está reconsiderando GCP; Supabase se mantiene para la BD en ambos casos | Baja — el código ya es agnóstico de proveedor |
-| 3 | Método de aplicar índices en Fase 1 | `db push` ahora vs. esperar baseline de migraciones | Media — bloquea el inicio de Fase 1 |
-| 4 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
+| 1 | GCP vs. AWS para el backend | El usuario está reconsiderando GCP; Supabase se mantiene para la BD en ambos casos | Baja — el código ya es agnóstico de proveedor |
+| 2 | Método de aplicar índices en Fase 1 | `db push` ahora vs. esperar baseline de migraciones | Media — bloquea el inicio de Fase 1 |
+| 3 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
+
+**Resueltas:** ¿cuándo mergear `feature/fase0-hardening` a `master`? → Resuelto el 2026-07-02, mergeado con `--no-ff` (commit `9a563a1`).
 
 ---
 
