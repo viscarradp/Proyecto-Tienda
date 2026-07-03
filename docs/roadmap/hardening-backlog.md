@@ -35,15 +35,7 @@ CREATE UNIQUE INDEX ux_cajas_turnos_una_abierta
 
 ## Importante, no bloqueante
 
-### 3. `middleware.ts` en el frontend
-
-**Por qué se difirió:** fuera del alcance de Fase 0 (backend/integridad). La
-autorización real ya la garantiza el backend; hoy el frontend solo pierde
-"defensa en profundidad" de UX (un usuario sin sesión ve el shell de la UI
-antes de ser redirigido).
-**Cuándo:** Fase 2 del plan de auditoría original (frontend).
-
-### 4. Trazabilidad de autor en operaciones financieras (hallazgo H8)
+### 3. Trazabilidad de autor en operaciones financieras (hallazgo H8)
 
 **Por qué se difirió:** requiere agregar `usuario_id` a varias tablas
 (`ventas`, `movimientos_financieros`, `cajas_turnos`, `ajustes_inventario`),
@@ -54,16 +46,22 @@ negocio siga operando con un solo cajero activo.
 **Cuándo:** junto con la adopción de migraciones, o antes si el negocio
 empieza a tener más de un cajero y se vuelve necesario saber quién hizo qué.
 
-### 5. Cookie JWT httpOnly
+### 4. Cookie JWT httpOnly
 
 **Por qué se difirió:** requiere que el backend gestione la cookie (hoy la
 pone el frontend vía `js-cookie`, que no puede marcarla `httpOnly`). Es un
-cambio de contrato cliente-servidor, no un fix aislado.
-**Cuándo:** evaluar junto con el ítem 3, al revisar seguridad del frontend.
+cambio de contrato cliente-servidor, no un fix aislado. Fase 2 sí agregó los
+flags `Secure`/`SameSite=Lax` y alineó la expiración al JWT real (ver ADR
+[`0008-cookie-flags`](../decisions/0008-cookie-flags.md)) — lo que queda
+pendiente aquí es específicamente pasar a una cookie `httpOnly` gestionada
+por el backend, que mitigaría robo del token vía XSS.
+**Cuándo:** cuando se revise el contrato de autenticación cliente-servidor
+de forma más amplia (posiblemente junto con la Fase 3 o al escalar el
+frontend).
 
 ## Escalabilidad (activar solo si se necesita)
 
-### 6. Store compartido (Redis) para el rate-limiter
+### 5. Store compartido (Redis) para el rate-limiter
 
 **Por qué se difirió:** el backend corre en una sola instancia hoy; Redis
 agregaría una dependencia de infraestructura sin beneficio actual —
@@ -81,3 +79,14 @@ el conteo entre instancias.
 - Endpoint `POST /caja-general/inyeccion` usa un tipo inline en vez de un DTO
   — evade el `ValidationPipe` global. Bajo riesgo (ya está tras
   `@Roles('ADMIN')`), pero es una corrección de una sola clase DTO.
+- **H13 — Server Components:** todas las páginas del dashboard son Client
+  Components con fetch en el navegador. Aprovechar RSC requeriría rediseñar
+  el data-fetching de cada página (POS, inventario, movimientos, gastos,
+  stats) — un proyecto propio, no un ajuste puntual. Quedó fuera de Fase 2
+  a propósito (estaba mal listado en el plan original sin un ítem de alcance
+  correspondiente).
+- **H30 — Accesibilidad:** el logout es un `<div onClick>` (no operable por
+  teclado) en vez de `<button>`; los ítems de navegación son `<Link><span>`
+  con el estilo de botón en el `<span>` en vez del `<a>`. Bajo riesgo (no es
+  un bug funcional), corrección pequeña y aislada a
+  `dashboard/layout.tsx` — buen candidato para cuando se retome el frontend.
