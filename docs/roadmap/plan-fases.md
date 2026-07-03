@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-03 (Fase 2 completada, pendiente de merge a `master`).
+> **Última actualización:** 2026-07-03 (Fase 2 mergeada a `master`).
 
 ---
 
