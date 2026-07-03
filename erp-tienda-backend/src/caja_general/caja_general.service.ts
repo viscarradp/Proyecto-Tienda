@@ -9,12 +9,14 @@ export class CajaGeneralService {
 
   async create(createDto: CreateCajaGeneralDto) {
     if (createDto.movimiento_origen_id) {
-       const existe = await this.prisma.caja_general.findUnique({
-         where: { movimiento_origen_id: createDto.movimiento_origen_id }
-       });
-       if (existe) {
-         throw new BadRequestException('El movimiento de origen ya está registrado en caja general');
-       }
+      const existe = await this.prisma.caja_general.findUnique({
+        where: { movimiento_origen_id: createDto.movimiento_origen_id },
+      });
+      if (existe) {
+        throw new BadRequestException(
+          'El movimiento de origen ya está registrado en caja general',
+        );
+      }
     }
 
     return this.prisma.caja_general.create({
@@ -31,22 +33,21 @@ export class CajaGeneralService {
       orderBy: { fecha: 'desc' },
       include: {
         movimientos_financieros: true,
-      }
+      },
     });
   }
 
   async inyectarCapital(monto: number, descripcion?: string) {
     if (!monto || monto <= 0) {
-      throw new BadRequestException(
-        'El monto de inyección debe ser mayor a 0',
-      );
+      throw new BadRequestException('El monto de inyección debe ser mayor a 0');
     }
 
     return this.prisma.caja_general.create({
       data: {
         monto: monto,
         descripcion:
-          descripcion || `Inyección de capital del dueño — $${monto.toFixed(2)}`,
+          descripcion ||
+          `Inyección de capital del dueño — $${monto.toFixed(2)}`,
       },
     });
   }

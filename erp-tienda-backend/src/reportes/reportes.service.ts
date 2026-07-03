@@ -1,6 +1,4 @@
-import {
-  Injectable,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -70,7 +68,9 @@ export class ReportesService {
     );
 
     // ── 4. Utilidad Bruta ──
-    const utilidad_bruta = new Prisma.Decimal(ingreso_bruto).sub(costo_de_ventas);
+    const utilidad_bruta = new Prisma.Decimal(ingreso_bruto).sub(
+      costo_de_ventas,
+    );
 
     // ── 5. Gastos Operativos ──
     const gastosAgg = await this.prisma.movimientos_financieros.aggregate({
@@ -159,8 +159,7 @@ export class ReportesService {
     for (const det of detalles) {
       const prodId = det.presentaciones.producto_id;
       const prodNombre = det.presentaciones.productos.nombre;
-      const unidadesBase =
-        det.cantidad * det.presentaciones.factor_conversion;
+      const unidadesBase = det.cantidad * det.presentaciones.factor_conversion;
 
       const costoDetalles = det.detalle_venta_lotes.reduce(
         (acc, dvl) =>

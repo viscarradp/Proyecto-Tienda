@@ -38,7 +38,9 @@ export class CajasTurnosService {
         where: { estado: 'CERRADA' },
         orderBy: { fecha_cierre: 'desc' },
       });
-      const sobranteAnterior = ultimoCierre ? Number(ultimoCierre.efectivo_declarado) : 0;
+      const sobranteAnterior = ultimoCierre
+        ? Number(ultimoCierre.efectivo_declarado)
+        : 0;
 
       // 3. Crear el turno y los movimientos de ajuste
       const nuevoTurno = await tx.cajas_turnos.create({
@@ -47,7 +49,7 @@ export class CajasTurnosService {
           estado: 'ABIERTA',
           fecha_apertura: new Date(),
           // Lo esperado siempre coincide con lo que reportamos al inicio
-          efectivo_esperado: fondoInicial, 
+          efectivo_esperado: fondoInicial,
         },
       });
 
@@ -60,10 +62,11 @@ export class CajasTurnosService {
             caja_turno_id: nuevoTurno.id,
             tipo_movimiento: 'INGRESO_CAPITAL',
             monto: new Prisma.Decimal(diferencia),
-            descripcion: 'Inyección de capital (Inicio de turno mayor al cierre anterior)',
+            descripcion:
+              'Inyección de capital (Inicio de turno mayor al cierre anterior)',
           },
         });
-      } 
+      }
       // Si inició con MENOS de lo que había, es pérdida/faltante
       else if (diferencia < 0) {
         await tx.movimientos_financieros.create({
@@ -71,7 +74,8 @@ export class CajasTurnosService {
             caja_turno_id: nuevoTurno.id,
             tipo_movimiento: 'AJUSTE_FALTANTE',
             monto: new Prisma.Decimal(Math.abs(diferencia)),
-            descripcion: 'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
+            descripcion:
+              'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
           },
         });
       }
@@ -121,7 +125,9 @@ export class CajasTurnosService {
       `;
 
       if (!turno) {
-        throw new NotFoundException(`Turno de caja con ID ${id} no encontrado.`);
+        throw new NotFoundException(
+          `Turno de caja con ID ${id} no encontrado.`,
+        );
       }
 
       if (turno.estado !== 'ABIERTA') {
@@ -131,7 +137,9 @@ export class CajasTurnosService {
       }
 
       // 2. Calcular diferencia
-      const efectivoDeclarado = new Prisma.Decimal(closeCajaTurnoDto.efectivo_declarado);
+      const efectivoDeclarado = new Prisma.Decimal(
+        closeCajaTurnoDto.efectivo_declarado,
+      );
       const efectivoEsperado = new Prisma.Decimal(turno.efectivo_esperado ?? 0);
       const diferencia = efectivoDeclarado.sub(efectivoEsperado);
 
@@ -153,10 +161,17 @@ export class CajasTurnosService {
         await tx.movimientos_financieros.create({
           data: {
             caja_turno_id: id,
-            tipo_movimiento: diferencia.isNegative() ? 'AJUSTE_FALTANTE' : 'AJUSTE_SOBRANTE',
+            tipo_movimiento: diferencia.isNegative()
+              ? 'AJUSTE_FALTANTE'
+              : 'AJUSTE_SOBRANTE',
             monto: desc_abs,
-            descripcion: (diferencia.isNegative() ? 'Faltante de caja automático' : 'Sobrante de caja automático') + 
-                         (closeCajaTurnoDto.observaciones ? ` - Obs: ${closeCajaTurnoDto.observaciones}` : ''),
+            descripcion:
+              (diferencia.isNegative()
+                ? 'Faltante de caja automático'
+                : 'Sobrante de caja automático') +
+              (closeCajaTurnoDto.observaciones
+                ? ` - Obs: ${closeCajaTurnoDto.observaciones}`
+                : ''),
           },
         });
       }
@@ -171,9 +186,9 @@ export class CajasTurnosService {
       include: {
         movimientos_financieros: true,
         _count: {
-          select: { ventas: true }
-        }
-      }
+          select: { ventas: true },
+        },
+      },
     });
   }
 
@@ -183,9 +198,9 @@ export class CajasTurnosService {
       include: {
         movimientos_financieros: true,
         _count: {
-          select: { ventas: true }
-        }
-      }
+          select: { ventas: true },
+        },
+      },
     });
 
     if (!turno) {
@@ -200,45 +215,61 @@ export class CajasTurnosService {
       where: { id },
       include: {
         movimientos_financieros: true,
-      }
+      },
     });
 
     if (!turno) {
       throw new NotFoundException(`Turno de caja con ID ${id} no encontrado.`);
     }
 
-    const { _sum: sumVentas, _count: countVentas } = await this.prisma.ventas.aggregate({
-      where: { caja_turno_id: id },
-      _sum: { total: true },
-      _count: { id: true },
-    });
+    const { _sum: sumVentas, _count: countVentas } =
+      await this.prisma.ventas.aggregate({
+        where: { caja_turno_id: id },
+        _sum: { total: true },
+        _count: { id: true },
+      });
 
     const total_ventas = sumVentas.total ?? new Prisma.Decimal(0);
-    
+
     // Sum egresos operativos (gastos del negocio, excluye retiros a bóveda)
     const egresos = turno.movimientos_financieros
-      .filter(m => m.tipo_movimiento === 'EGRESO_OPERATIVO')
-      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
-    
+      .filter((m) => m.tipo_movimiento === 'EGRESO_OPERATIVO')
+      .reduce(
+        (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
+        new Prisma.Decimal(0),
+      );
+
     // Sum ingresos de capital
     const ingresos = turno.movimientos_financieros
-      .filter(m => m.tipo_movimiento === 'INGRESO_CAPITAL')
-      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
-    
+      .filter((m) => m.tipo_movimiento === 'INGRESO_CAPITAL')
+      .reduce(
+        (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
+        new Prisma.Decimal(0),
+      );
+
     // Sum retiros a bóveda (traslado a caja general, no gasto operativo)
     const retiros = turno.movimientos_financieros
-      .filter(m => m.tipo_movimiento === 'RETIRO_BOVEDA')
-      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
+      .filter((m) => m.tipo_movimiento === 'RETIRO_BOVEDA')
+      .reduce(
+        (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
+        new Prisma.Decimal(0),
+      );
 
     // BUG 8: Sum pagos a proveedores (egreso real de caja por compras)
     const pagos_proveedores = turno.movimientos_financieros
-      .filter(m => m.tipo_movimiento === 'PAGO_PROVEEDOR')
-      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
+      .filter((m) => m.tipo_movimiento === 'PAGO_PROVEEDOR')
+      .reduce(
+        (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
+        new Prisma.Decimal(0),
+      );
 
     // BUG 4 + BUG 8: Sum mermas de inventario (pérdida patrimonial, no salida de efectivo)
     const mermas_inventario = turno.movimientos_financieros
-      .filter(m => m.tipo_movimiento === 'MERMA_INVENTARIO')
-      .reduce((acc, m) => acc.add(new Prisma.Decimal(m.monto)), new Prisma.Decimal(0));
+      .filter((m) => m.tipo_movimiento === 'MERMA_INVENTARIO')
+      .reduce(
+        (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
+        new Prisma.Decimal(0),
+      );
 
     return {
       turno: turno,

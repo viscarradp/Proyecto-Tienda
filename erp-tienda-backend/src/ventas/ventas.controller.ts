@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Patch, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  BadRequestException,
+} from '@nestjs/common';
 import { VentasService } from './ventas.service';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
