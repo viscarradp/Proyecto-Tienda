@@ -31,10 +31,11 @@ línea por línea (para eso está el código y `architecture/data-model.md`).
   salió, y reduce `efectivo_esperado` del turno — pero **solo si el turno
   sigue `ABIERTA`**. Anular una venta de un turno ya cerrado corrompería su
   cuadre histórico, así que está bloqueado.
-- *Alcance actual*: toda venta se asume pagada en efectivo (no existe todavía
-  el concepto de método de pago). Si el negocio empieza a aceptar
-  transferencia o tarjeta, este supuesto debe revisarse — ver
-  `roadmap/hardening-backlog.md`.
+- **Decisión de producto (2026-07, Fase 3): el sistema es solo efectivo, a
+  propósito.** No existe ni se planea agregar el concepto de método de pago
+  (tarjeta, transferencia). Toda venta incrementa `efectivo_esperado` por el
+  total completo. Esto no es una limitación temporal — es una decisión
+  explícita para no agregar complejidad que el negocio no necesita.
 
 ## Compras y pago
 
