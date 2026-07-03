@@ -4,7 +4,7 @@
 >
 > **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-04 (Fase 3 completada, pendiente de merge a `master`).
+> **Última actualización:** 2026-07-04 (Fase 3 completada y mergeada a `master`. Las 4 fases del plan original están cerradas).
 
 ---
 
@@ -248,7 +248,7 @@ la implementación.
 
 ## Fase 3 — Higiene del Proyecto — ✅ COMPLETADA (2026-07-04)
 
-**Rama:** `feature/fase3-testing-docker-ci`.
+**Rama:** `feature/fase3-testing-docker-ci` — mergeada a `master` con `--no-ff` y pusheada a `origin/master` el 2026-07-04.
 
 ### Alcance original y qué pasó con cada ítem
 
@@ -302,6 +302,21 @@ el ADR 0009.
   agente de IA, exigiendo confirmación humana explícita antes de proceder
   (mecanismo de seguridad correcto — nunca se intentó sortear). El usuario
   confirmó y se procedió. Ver ADR 0009 para el detalle completo.
+
+### Hallazgo colateral #2 (post-merge): 3 errores de lint preexistentes en el frontend
+
+Al verificar `master` después del merge, `npm run lint` del frontend falló
+con 3 errores (`catch (err: any)` en dos archivos, y una violación de
+pureza de React por llamar `Date.now()` durante el render en
+`useBarcodeScanner.ts`) — los tres presentes **desde el primer commit del
+repo** (`git blame` → `d22e4d5`), nunca antes visibles porque el frontend
+no tenía ningún gate de CI. Como `.github/workflows/ci.yml` (agregado en
+esta misma fase) sí corre `npm run lint` en cada push, estos habrían hecho
+fallar CI desde el primer push por deuda ajena a esta fase. Se corrigieron
+con cambios mínimos (manejo de `unknown`/`instanceof Error`; sembrar el ref
+de tiempo en `0` en vez de `Date.now()`, mismo comportamiento) directo en
+`master` (commit `6a2b1d2`), y se re-verificó build + lint + los 7 tests
+e2e completos contra Postgres real, todos en verde.
 
 ### Pendiente de Fase 3
 
