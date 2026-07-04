@@ -21,6 +21,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/src/store/cartStore"
 import { useInventoryStore } from "@/src/store/inventoryStore"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const NAV_ITEMS = [
   { name: 'Vender', icon: Store, href: '/dashboard/pos' },
@@ -80,6 +81,7 @@ function SidebarContent() {
             <h1 className="font-black text-xl tracking-tight text-white uppercase">Tienda Karlita</h1>
             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">Admin Panel</p>
           </div>
+          <ThemeToggle className="ml-auto text-zinc-400 hover:text-white hover:bg-zinc-900" />
         </div>
 
         <nav className="space-y-2">
@@ -143,7 +145,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <span className="font-black text-lg tracking-tight text-white uppercase">ERP TIENDA</span>
           </div>
-          <Sheet>
+          <div className="flex items-center gap-1">
+            <ThemeToggle className="text-zinc-400 hover:text-white hover:bg-zinc-900" />
+            <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl">
                 <Menu className="h-6 w-6" />
@@ -155,7 +159,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </SheetHeader>
               <SidebarContent />
             </SheetContent>
-          </Sheet>
+            </Sheet>
+          </div>
         </header>
 
         {/* Page Content */}
