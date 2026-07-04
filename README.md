@@ -181,6 +181,21 @@ base `erp_tienda_dev`). Útil si no quieres depender de Supabase para
 desarrollar localmente, y es lo que usan los tests e2e — ver
 [`docs/operations/testing.md`](docs/operations/testing.md).
 
+### Stack completo con Docker (Postgres + Backend + Frontend)
+
+Si prefieres no instalar Node/Postgres localmente, el mismo `docker-compose.yml`
+también levanta el backend y el frontend en contenedores, con hot-reload:
+
+```bash
+./scripts/docker-dev.sh start
+# o: docker compose up
+```
+
+Ver [`DOCKER-QUICKSTART.md`](DOCKER-QUICKSTART.md) y
+[`docs/DOCKER-DEVELOPMENT.md`](docs/DOCKER-DEVELOPMENT.md) para el detalle
+(logs, shells, troubleshooting, y por qué el `.env` de la raíz es
+independiente de los `.env` de `erp-tienda-backend/` y `erp-tienda-frontend/`).
+
 ## Notas
 
 - CORS usa una allowlist explícita vía `CORS_ORIGINS` (ver arriba), no está abierto a cualquier origen.

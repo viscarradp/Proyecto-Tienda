@@ -12,17 +12,30 @@ Este documento describe cómo usar Docker y Docker Compose para el desarrollo de
 
 ```
 Proyecto-Tienda/
-├── docker-compose.yml          # Configuración principal
-├── docker-compose.local.yml    # Overrides para desarrollo local
-├── .env.docker                 # Variables de entorno de ejemplo
-├── .dockerignore               # Archivos ignorados en las builds
+├── docker-compose.yml          # Configuración principal (los 3 servicios)
+├── .env.example                # Plantilla de variables SOLO para docker-compose
+├── .dockerignore                # Archivos ignorados en las builds
 ├── erp-tienda-backend/
-│   └── Dockerfile              # Imagen del backend (NestJS)
+│   ├── Dockerfile               # Imagen del backend (NestJS)
+│   └── .env.example              # Plantilla para correr el backend SIN Docker
 ├── erp-tienda-frontend/
-│   └── Dockerfile              # Imagen del frontend (Next.js)
+│   ├── Dockerfile               # Imagen del frontend (Next.js)
+│   └── .env.example              # Plantilla para correr el frontend SIN Docker
 └── scripts/
     └── docker-dev.sh           # Script helper para desarrollo
 ```
+
+### Sobre los tres `.env.example`
+
+Hay tres plantillas de entorno en el repo y **no se mezclan entre sí**:
+
+| Archivo | Para qué sirve | Cuándo se usa |
+|---|---|---|
+| `.env.example` (raíz) | Solo `JWT_SECRET` e `INITIAL_ADMIN_PASSWORD`, que docker-compose inyecta dentro del contenedor `backend` | Solo si usas `docker-compose up` |
+| `erp-tienda-backend/.env.example` | Todas las variables del backend (`DATABASE_URL`, `JWT_SECRET`, etc.) | Solo si corres el backend con `npm run start:dev` **sin Docker** |
+| `erp-tienda-frontend/.env.example` | `NEXT_PUBLIC_API_URL` | Solo si corres el frontend con `npm run dev` **sin Docker** |
+
+Cuando usas docker-compose, `DATABASE_URL`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, etc. ya están fijados directamente en `docker-compose.yml` (apuntan a los nombres de servicio dentro de la red de Docker); no necesitas crear ni copiar los `.env.example` de `erp-tienda-backend/` o `erp-tienda-frontend/` para ese flujo. Solo copia el `.env.example` de la raíz a `.env` si quieres cambiar el JWT secret o la contraseña del admin inicial.
 
 ## Inicio Rápido
 

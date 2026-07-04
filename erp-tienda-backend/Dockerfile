@@ -18,5 +18,7 @@ RUN npm run build
 # Exposer puerto
 EXPOSE 3000
 
-# Script de entrada: sincroniza BD, siembra datos opcionales, y arranca en modo watch
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npm run start:dev"]
+# Script de entrada: sincroniza el esquema con la BD y arranca en modo watch.
+# --accept-data-loss evita que el comando quede esperando confirmación
+# interactiva (el contenedor no tiene TTY) ante cambios de esquema.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run start:dev"]

@@ -1,5 +1,7 @@
-version: '3.8'
-
+# Variables JWT_SECRET / INITIAL_ADMIN_PASSWORD se leen de un ".env" en esta
+# misma carpeta (copia .env.example -> .env para cambiarlas). Ver .env.example
+# para el detalle de por qué este .env es independiente de los .env de
+# erp-tienda-backend/ y erp-tienda-frontend/.
 services:
   # PostgreSQL Database
   postgres:
