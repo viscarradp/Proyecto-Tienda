@@ -1,6 +1,10 @@
+version: '3.8'
+
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
+    container_name: tienda_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -14,6 +18,61 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+    networks:
+      - tienda_network
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ./erp-tienda-backend
+      dockerfile: Dockerfile
+    container_name: tienda_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/erp_tienda_dev
+      JWT_SECRET: ${JWT_SECRET:-tu-secreto-super-seguro-cambia-esto-en-produccion}
+      PORT: 3000
+      NODE_ENV: development
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Admin123!}
+      CORS_ORIGINS: http://localhost:3001
+      ENABLE_SWAGGER: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./erp-tienda-backend/src:/app/src
+      - ./erp-tienda-backend/prisma:/app/prisma
+      - /app/node_modules
+    networks:
+      - tienda_network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./erp-tienda-frontend
+      dockerfile: Dockerfile
+    container_name: tienda_frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./erp-tienda-frontend/app:/app/app
+      - ./erp-tienda-frontend/components:/app/components
+      - ./erp-tienda-frontend/hooks:/app/hooks
+      - ./erp-tienda-frontend/lib:/app/lib
+      - ./erp-tienda-frontend/public:/app/public
+      - ./erp-tienda-frontend/src:/app/src
+      - /app/node_modules
+    networks:
+      - tienda_network
+
+networks:
+  tienda_network:
+    driver: bridge
 
 volumes:
   erp_tienda_pg_data:
