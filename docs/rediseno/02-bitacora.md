@@ -5,12 +5,12 @@
 
 ## Estado global
 
-**Fase actual:** Fase 0 completada; siguiente = Fase 1 (navegación).
+**Fase actual:** Fase 1 completada; siguiente = Fase 2 (POS).
 
 | Fase | Estado | Notas |
 |---|---|---|
 | 0 · Fundaciones | ✅ Completada | Tokens claro/oscuro, `--radius` 2px, ThemeProvider + toggle, MoneyValue. |
-| 1 · Navegación | ⬜ Pendiente | — |
+| 1 · Navegación | ✅ Completada | Bottom-nav + sidebar tokenizados, mapa de permisos por rol, guard + ForbiddenState, BottomSheet base. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -51,6 +51,29 @@
 - **Nota**: las pantallas aún hardcodean dark; se ven "transicionales" hasta su
   fase. Con el default oscuro, la experiencia normal no cambia. La QA visual del
   toggle se hará en Fase 1, cuando el shell ya use tokens.
+
+### 2026-07-04 — Fase 1: Shell de navegación (mobile-first) ✅
+- **Mapa de permisos por rol** (`lib/navigation.ts`, fuente única, R3/D7): define
+  `NAV_ITEMS` con `roles[]` alineados a los `@Roles` reales del backend, más
+  `getNavItems`/`canAccessRoute`/`getHomeRoute`. **Gastos = solo ADMIN** (registrar
+  egreso toca `/caja-general` POST, ADMIN-only → era el 403 del cajero).
+- **Navegación tokenizada, mobile-first**:
+  - `components/nav/bottom-nav.tsx`: barra inferior en móvil (safe-area), oculta en desktop.
+  - `components/nav/sidebar.tsx`: sidebar de escritorio sobrio (bg-sidebar, rectas,
+    sin glows), con usuario + ThemeToggle + logout (preserva reset de cart/inventory).
+  - `app/dashboard/layout.tsx` reescrito: sidebar (desktop) + header slim + bottom-nav
+    (móvil); **elimina el menú hamburguesa** como navegación primaria.
+- **Guard por rol**: `hooks/useCurrentUser.ts` + `canAccessRoute` en el layout →
+  `components/forbidden-state.tsx` ("Sin permiso") si un rol accede directo a una
+  ruta ajena. Complementa al middleware `proxy.ts` (que solo valida token, no roles).
+- **BottomSheet base**: `components/ui/bottom-sheet.tsx` (envuelve Sheet side=bottom
+  con asa y max-height) para POS/Inventario en fases siguientes.
+- **Verificación**: `npm run lint` 0 errores; `npm run build` OK (10 rutas);
+  `npm run dev` sirve `/auth/login` (HTTP 200, contenido correcto) y `/dashboard/pos`
+  responde 307 (middleware). ⚠️ La QA visual con capturas no fue posible: la
+  herramienta de preview no logra ejecutar el dev server del monorepo en su sandbox
+  (el server sí arranca perfecto vía `npm run dev`). Screenshots pendientes de un
+  entorno donde el preview alcance el puerto.
 
 ---
 
