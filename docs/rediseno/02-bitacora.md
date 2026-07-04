@@ -5,11 +5,11 @@
 
 ## Estado global
 
-**Fase actual:** Planificación (Fase 0 aún no iniciada).
+**Fase actual:** Fase 0 completada; siguiente = Fase 1 (navegación).
 
 | Fase | Estado | Notas |
 |---|---|---|
-| 0 · Fundaciones | ⬜ Pendiente | — |
+| 0 · Fundaciones | ✅ Completada | Tokens claro/oscuro, `--radius` 2px, ThemeProvider + toggle, MoneyValue. |
 | 1 · Navegación | ⬜ Pendiente | — |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
@@ -29,15 +29,36 @@
   - **Tema:** claro + oscuro con toggle (reconstruyendo tokens).
   - **Git:** rama `feature/rediseno-ux`, merge a `master` por fase.
 - Creada la rama `feature/rediseno-ux` y la carpeta `docs/rediseno/` con Specs + Plan.
-- **Pendiente:** validación conjunta de Specs/Plan antes de arrancar Fase 0.
+
+### 2026-07-04 — Decisiones resueltas por el usuario
+- R1 = 2px · R2 = tema oscuro por defecto · R3 = mapa de permisos por rol (más
+  escalable) · R4 = Recharts. Detalle en Specs §11.
+
+### 2026-07-04 — Fase 0: Fundaciones del sistema de diseño ✅
+- **`app/globals.css`**: reconstruidos los design tokens (`:root` claro + `.dark`
+  oscuro) con semántica real y nuevos tokens `--success`/`--warning` (+ foregrounds
+  y `--destructive-foreground`). `--radius` bajado a **2px** → reduce el radio de
+  todas las clases `rounded-*` app-wide de inmediato.
+- **Tema conmutable**: `components/theme-provider.tsx` (next-themes,
+  `attribute="class"`, `defaultTheme="dark"`), cableado en `app/layout.tsx`
+  (+ `suppressHydrationWarning`). Nuevo `components/theme-toggle.tsx`, colocado
+  temporalmente en el shell del dashboard (se reubica en Fase 1).
+- **Cifras en mono**: `lib/format.ts` (`formatMoney`, USD) + `components/money-value.tsx`.
+- **Primitivo `badge`**: `rounded-4xl` → `rounded-full` para preservar la píldora
+  con el nuevo `--radius`.
+- **Verificación**: `npm run lint` → 0 errores (solo warnings preexistentes);
+  `npm run build` → OK, las 10 rutas prerenderizan sin error.
+- **Nota**: las pantallas aún hardcodean dark; se ven "transicionales" hasta su
+  fase. Con el default oscuro, la experiencia normal no cambia. La QA visual del
+  toggle se hará en Fase 1, cuando el shell ya use tokens.
 
 ---
 
-## Decisiones abiertas (tracking)
+## Decisiones (tracking)
 
 | ID | Decisión | Estado |
 |---|---|---|
-| R1 | Radio base: 2px / 0px / 1px | 🔲 Por confirmar (Fase 0) |
-| R2 | Tema por defecto: claro u oscuro | 🔲 Por confirmar (Fase 0) |
-| R3 | Gastos + CAJERO: ocultar vs estado "sin permiso" | 🔲 Por confirmar (Fase 1/4) |
-| R4 | Gráficos de Estadísticas: SVG propio vs librería | 🔲 Por confirmar (Fase 5) |
+| R1 | Radio base | ✅ 2px |
+| R2 | Tema por defecto | ✅ Oscuro (con toggle) |
+| R3 | Gastos + CAJERO | ✅ Mapa de permisos por rol (impl. Fase 1/4) |
+| R4 | Gráficos de Estadísticas | ✅ Recharts (impl. Fase 5) |

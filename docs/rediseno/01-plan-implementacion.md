@@ -153,7 +153,7 @@ gráficos) — se consulta antes de añadir dependencias.
 
 | Fase | Descripción | Estado |
 |---|---|---|
-| 0 | Fundaciones del sistema de diseño | ⬜ Pendiente |
+| 0 | Fundaciones del sistema de diseño | ✅ Completada |
 | 1 | Shell de navegación (mobile-first) | ⬜ Pendiente |
 | 2 | POS ⭐ | ⬜ Pendiente |
 | 3 | Inventario (+ diálogos) | ⬜ Pendiente |

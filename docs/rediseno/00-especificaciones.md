@@ -269,12 +269,14 @@ El rediseño se considera correcto cuando:
 
 ---
 
-## 11. Decisiones abiertas (para confirmar durante la ejecución)
+## 11. Decisiones de dirección (resueltas)
 
-- **R1 — Radio base:** 2px (propuesto) vs 0px absoluto vs 1px.
-- **R2 — Tema por defecto:** ¿claro u oscuro al primer arranque? (el toggle existe igual).
-- **R3 — Gastos + CAJERO (D7):** ¿ocultar del nav o mostrar estado "sin permiso"?
-- **R4 — Gráficos de Estadísticas:** SVG propio vs librería (Recharts u otra).
-
-> Estas decisiones no bloquean el arranque (Fase 0 es agnóstica a ellas) y se
-> resolverán al llegar a la fase correspondiente.
+- **R1 — Radio base:** ✅ **2px**. Aplicado en Fase 0 (`--radius: 0.125rem`).
+- **R2 — Tema por defecto:** ✅ **Oscuro** (`defaultTheme="dark"`), con toggle
+  claro/oscuro. Aplicado en Fase 0.
+- **R3 — Gastos + CAJERO (D7):** ✅ **Enfoque más escalable** → un **mapa de
+  permisos por rol** (fuente única) que alimenta la visibilidad del nav y un
+  guard de ruta, con estado "sin permiso" de respaldo si se accede directo. Se
+  implementa en Fase 1 (nav) y Fase 4 (Gastos).
+- **R4 — Gráficos de Estadísticas:** ✅ **Recharts** (buen soporte para React 19,
+  composable). Se integra en Fase 5.
