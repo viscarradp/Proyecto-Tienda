@@ -4,17 +4,17 @@ import { Button } from "@/components/ui/button"
 
 export default function NotFound() {
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-black text-zinc-200 p-8">
-      <div className="h-16 w-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-        <SearchX className="h-8 w-8 text-zinc-500" />
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background p-8 text-foreground">
+      <div className="flex h-14 w-14 items-center justify-center rounded-sm border border-border bg-muted">
+        <SearchX className="h-7 w-7 text-muted-foreground" />
       </div>
-      <div className="text-center space-y-1">
-        <h2 className="text-xl font-black uppercase tracking-tight text-white">Página no encontrada</h2>
-        <p className="text-sm text-zinc-500 max-w-sm">
+      <div className="space-y-1 text-center">
+        <h2 className="text-lg font-semibold">Página no encontrada</h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
           La página que buscas no existe o fue movida.
         </p>
       </div>
-      <Button asChild className="rounded-xl bg-blue-600 hover:bg-blue-500">
+      <Button asChild>
         <Link href="/dashboard/pos">Volver al inicio</Link>
       </Button>
     </div>

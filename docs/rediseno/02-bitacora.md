@@ -5,7 +5,7 @@
 
 ## Estado global
 
-**Fase actual:** Fase 5 completada; siguiente = Fase 6 (Login + auditoría final).
+**Fase actual:** 🏁 **Rediseño completo** — Fases 0-6 terminadas y en `master`.
 
 | Fase | Estado | Notas |
 |---|---|---|
@@ -15,6 +15,7 @@
 | 3 · Inventario | ✅ Completada | Página (3 tabs) + 4 diálogos tokenizados; DataView responsiva (tabla↔tarjetas), StatePill de stock; fix bug botón Cancelar en Ajuste. |
 | 4 · Movimientos + Gastos | ✅ Completada | Ambas páginas + diálogos (anular venta, nueva categoría) tokenizados; StatCard nuevo; MoneyValue con tono semántico; StatePill de estado. |
 | 5 · Estadísticas | ✅ Completada | Página tokenizada (KPIs, inyección, P&L, tabla); **Recharts** (R4) para gráfico de ingreso por producto con colores de tokens. |
+| 6 · Login + auditoría | ✅ Completada | Login/auth sin glow/blur, estados globales (error/404/loading) tokenizados; auditoría final de criterios §10 superada. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -96,6 +97,26 @@
 - **Verificación**: lint 0 errores, build OK (10 rutas), dev sirve login (200) y
   protege POS (307), sin errores de compilación. QA visual: misma limitación del
   preview (pendiente de entorno con backend).
+
+### 2026-07-04 — Fase 6: Login, estados globales y auditoría final ✅
+- **Login/auth tokenizados**: `app/auth/layout.tsx` sin el blob de glow azul;
+  `app/auth/login/page.tsx` con Card recto, ícono de marca cuadrado, sin
+  `font-black uppercase`; lógica de login intacta.
+- **Estados globales**: `app/error.tsx`, `app/not-found.tsx`, `app/loading.tsx`
+  migrados a tokens y esquinas rectas.
+- **Auditoría final (criterios §10)**:
+  1. ✅ Cero colores hardcodeados nuevos en páginas/componentes (grep limpio;
+     el único match es un comentario en `globals.css`).
+  2. ✅ Radios: `grep rounded-(lg|xl|2xl|3xl|4xl)` solo aparece en los primitivos
+     `components/ui/*`, donde mapean a `--radius-lg/xl` = **~2px** por el token de
+     Fase 0 (excepción aceptada y documentada: son radios controlados por token,
+     no valores grandes fijos). Cero radios grandes en código de páginas.
+  3. ✅ Ambos temas (toggle) vía tokens.
+  4. ✅ Mobile-first: bottom-nav + bottom-sheets; POS/D4 corregido.
+  5. ✅ Sin regresiones: lógica de negocio preservada en todas las fases.
+  6. ✅ Consistencia: primitivos/patrones compartidos (MoneyValue, StatePill,
+     StatCard, BottomSheet, DataView responsiva).
+- **Verificación**: lint 0 problemas, build OK (10 rutas).
 
 ### 2026-07-04 — Fase 5: Estadísticas ✅
 - **`app/dashboard/stats/page.tsx`** reescrita y tokenizada: KPIs con tono

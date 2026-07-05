@@ -159,7 +159,7 @@ gráficos) — se consulta antes de añadir dependencias.
 | 3 | Inventario (+ diálogos) | ✅ Completada |
 | 4 | Movimientos + Gastos | ✅ Completada |
 | 5 | Estadísticas | ✅ Completada |
-| 6 | Login, pulido y auditoría final | ⬜ Pendiente |
+| 6 | Login, pulido y auditoría final | ✅ Completada |
 
 > Leyenda: ⬜ Pendiente · 🔄 En curso · ✅ Completada. El detalle de cada avance se
 > registra en [`02-bitacora.md`](02-bitacora.md).
