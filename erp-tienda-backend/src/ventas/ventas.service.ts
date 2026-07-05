@@ -70,14 +70,16 @@ export class VentasService {
           );
         }
 
-        // Calcula unidades_base_requeridas = item.cantidad * presentacion.factor_conversion
-        let unidades_base_requeridas =
-          item.cantidad * presentacion.factor_conversion;
+        // Cantidad fraccionable → Decimal en todo el cálculo (Bloque 1 §5.3).
+        const cantidadItem = new Prisma.Decimal(item.cantidad);
 
-        // Calcula subtotal_venta = item.cantidad * presentacion.precio_venta
-        const subtotal_venta = new Prisma.Decimal(item.cantidad).mul(
-          presentacion.precio_venta,
+        // unidades_base_requeridas = cantidad * factor_conversion
+        let unidades_base_requeridas = cantidadItem.mul(
+          presentacion.factor_conversion,
         );
+
+        // subtotal_venta = cantidad * precio_venta
+        const subtotal_venta = cantidadItem.mul(presentacion.precio_venta);
         total_venta_acumulado = total_venta_acumulado.add(subtotal_venta);
 
         // Crea el tx.detalle_ventas vinculándolo a la venta y la presentación
@@ -85,7 +87,7 @@ export class VentasService {
           data: {
             venta_id: venta.id,
             presentacion_id: presentacion.id,
-            cantidad: item.cantidad,
+            cantidad: cantidadItem,
             subtotal: subtotal_venta,
           },
         });
@@ -105,23 +107,25 @@ export class VentasService {
         `;
 
         let loteIndex = 0;
-        // Inicia un bucle while (unidades_base_requeridas > 0)
-        while (unidades_base_requeridas > 0) {
-          // Si no hay más lotes en el array y unidades_base_requeridas > 0
+        // Bucle FIFO en Decimal: mientras falten unidades base por cubrir
+        while (unidades_base_requeridas.greaterThan(0)) {
+          // Si no hay más lotes y aún faltan unidades → stock insuficiente
           if (loteIndex >= lotes.length) {
             throw new BadRequestException(
-              `Stock insuficiente para el producto ID ${presentacion.producto_id}. Faltan ${unidades_base_requeridas} unidades base.`,
+              `Stock insuficiente para el producto ID ${presentacion.producto_id}. Faltan ${unidades_base_requeridas.toFixed(3)} unidades base.`,
             );
           }
 
           const lote = lotes[loteIndex];
-          // Determina a descontar: cantidad_a_descontar = Math.min(unidades_base_requeridas, lote.cantidad_disponible)
-          const cantidad_a_descontar = Math.min(
+          // $queryRaw puede devolver el Decimal como string → normalizar
+          const disponible = new Prisma.Decimal(lote.cantidad_disponible);
+          // cantidad_a_descontar = min(faltante, disponible en este lote)
+          const cantidad_a_descontar = Prisma.Decimal.min(
             unidades_base_requeridas,
-            lote.cantidad_disponible,
+            disponible,
           );
 
-          // Actualiza el lote en BD: tx.lotes_inventario.update restando la cantidad_a_descontar
+          // Actualiza el lote en BD restando la cantidad descargada
           await tx.lotes_inventario.update({
             where: { id: lote.id },
             data: {
@@ -131,21 +135,21 @@ export class VentasService {
             },
           });
 
-          // Crea el puente contable: tx.detalle_venta_lotes.create
+          // Crea el puente contable congelando el costo del lote
           await tx.detalle_venta_lotes.create({
             data: {
               detalle_venta_id: detalleVenta.id,
               lote_id: lote.id,
               cantidad_descargada: cantidad_a_descontar,
-              // congelando costo_aplicado; $queryRaw puede devolver el Decimal como string
               costo_aplicado: new Prisma.Decimal(
                 lote.costo_unitario_adquisicion,
               ),
             },
           });
 
-          // Actualiza el contador: unidades_base_requeridas -= cantidad_a_descontar
-          unidades_base_requeridas -= cantidad_a_descontar;
+          // Descuenta lo cubierto por este lote y pasa al siguiente
+          unidades_base_requeridas =
+            unidades_base_requeridas.sub(cantidad_a_descontar);
           loteIndex++;
         }
       }

@@ -29,10 +29,15 @@ export class ComprasService {
     }
 
     // ── BUG 3: Calcular monto_total desde los lotes (no confiar en el cliente) ──
+    // En Decimal (cantidad fraccionable × costo) para no mezclar floats con dinero.
     const montoCalculado = detalles_lotes.reduce(
       (sum, lote) =>
-        sum + lote.cantidad_inicial * lote.costo_unitario_adquisicion,
-      0,
+        sum.add(
+          new Prisma.Decimal(lote.cantidad_inicial).mul(
+            lote.costo_unitario_adquisicion,
+          ),
+        ),
+      new Prisma.Decimal(0),
     );
 
     return await this.prisma.$transaction(async (tx) => {
@@ -95,8 +100,10 @@ export class ComprasService {
         }
 
         // ── BUG 9: Validar fondos suficientes antes de decrementar ──
-        const efectivoDisponible = Number(cajaActiva.efectivo_esperado ?? 0);
-        if (efectivoDisponible < montoCalculado) {
+        const efectivoDisponible = new Prisma.Decimal(
+          cajaActiva.efectivo_esperado ?? 0,
+        );
+        if (efectivoDisponible.lessThan(montoCalculado)) {
           throw new BadRequestException(
             `Fondos insuficientes en caja POS. ` +
               `Disponible: $${efectivoDisponible.toFixed(2)}, ` +
@@ -131,9 +138,9 @@ export class ComprasService {
         const saldoAgg = await tx.caja_general.aggregate({
           _sum: { monto: true },
         });
-        const saldoDisponible = Number(saldoAgg._sum.monto ?? 0);
+        const saldoDisponible = new Prisma.Decimal(saldoAgg._sum.monto ?? 0);
 
-        if (saldoDisponible < montoCalculado) {
+        if (saldoDisponible.lessThan(montoCalculado)) {
           throw new BadRequestException(
             `Fondos insuficientes en caja general. ` +
               `Disponible: $${saldoDisponible.toFixed(2)}, ` +
@@ -141,7 +148,7 @@ export class ComprasService {
           );
         }
 
-        const montoDecimal = new Prisma.Decimal(-montoCalculado);
+        const montoDecimal = montoCalculado.negated();
         await tx.caja_general.create({
           data: {
             monto: montoDecimal,

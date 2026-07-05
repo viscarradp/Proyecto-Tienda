@@ -159,7 +159,10 @@ export class ReportesService {
     for (const det of detalles) {
       const prodId = det.presentaciones.producto_id;
       const prodNombre = det.presentaciones.productos.nombre;
-      const unidadesBase = det.cantidad * det.presentaciones.factor_conversion;
+      // cantidad y factor_conversion son Decimal desde 1.B; a number para el reporte
+      const unidadesBase = new Prisma.Decimal(det.cantidad)
+        .mul(det.presentaciones.factor_conversion)
+        .toNumber();
 
       const costoDetalles = det.detalle_venta_lotes.reduce(
         (acc, dvl) =>

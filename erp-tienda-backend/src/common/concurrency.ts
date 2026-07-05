@@ -17,7 +17,9 @@ export interface CajaTurnoRow {
 export interface LoteInventarioRow {
   id: number;
   producto_id: number;
-  cantidad_disponible: number;
+  // Decimal desde 1.B (cantidades fraccionadas); $queryRaw lo devuelve como
+  // Prisma.Decimal o string según el driver.
+  cantidad_disponible: Prisma.Decimal | string;
   costo_unitario_adquisicion: Prisma.Decimal | string;
 }
 

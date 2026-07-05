@@ -13,7 +13,8 @@ interface WithId {
 interface ProductoResponseBody {
   id: number;
   presentaciones: WithId[];
-  lotes_inventario: { cantidad_disponible: number }[];
+  // cantidad_disponible es Decimal desde 1.B → JSON lo serializa como string.
+  lotes_inventario: { cantidad_disponible: number | string }[];
 }
 
 interface VentaResponseBody {
@@ -101,7 +102,7 @@ describe('Ventas — motor FIFO (e2e)', () => {
       p.presentaciones.some((pres) => pres.id === presentacionId),
     );
     return (producto?.lotes_inventario ?? []).reduce(
-      (sum, l) => sum + l.cantidad_disponible,
+      (sum, l) => sum + Number(l.cantidad_disponible),
       0,
     );
   }
@@ -162,5 +163,67 @@ describe('Ventas — motor FIFO (e2e)', () => {
     const despues = await stockDisponible();
     expect(despues).toBeGreaterThanOrEqual(0); // nunca negativo
     expect(despues).toBe(antes - exitosas.length * CANTIDAD_POR_VENTA); // aritmética exacta
+  });
+
+  it('vende cantidades fraccionadas (media libra) y descuenta el lote en decimales (1.B)', async () => {
+    // Producto propio con stock fraccionable, independiente del de arriba.
+    const cat = await request(app.getHttpServer())
+      .post('/categorias')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'Granel-E2E' });
+    const catId = (cat.body as WithId).id;
+
+    const prod = await request(app.getHttpServer())
+      .post('/productos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'Queso-E2E', categoria_id: catId });
+    const prodId = (prod.body as WithId).id;
+
+    const pres = await request(app.getHttpServer())
+      .post('/presentaciones')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        producto_id: prodId,
+        descripcion: 'Libra',
+        factor_conversion: 1,
+        precio_venta: 4,
+      });
+    const presId = (pres.body as WithId).id;
+
+    await request(app.getHttpServer())
+      .post('/compras')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        proveedor: 'Granel-E2E',
+        estado_pago: 'PAGADO',
+        origen_fondos: 'CAPITAL_DUEÑOS',
+        detalles_lotes: [
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 2,
+            cantidad_inicial: 3,
+          },
+        ],
+      });
+
+    // Vende media libra (0.5).
+    const venta = await request(app.getHttpServer())
+      .post('/ventas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ detalles: [{ presentacion_id: presId, cantidad: 0.5 }] });
+    expect(venta.status).toBe(201);
+    expect(Number((venta.body as VentaResponseBody).total)).toBeCloseTo(2); // 0.5 × 4
+
+    // El lote de 3 quedó en 2.5.
+    const res = await request(app.getHttpServer())
+      .get('/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const productos = res.body as ProductoResponseBody[];
+    const p = productos.find((x) => x.id === prodId);
+    const stock = (p?.lotes_inventario ?? []).reduce(
+      (sum, l) => sum + Number(l.cantidad_disponible),
+      0,
+    );
+    expect(stock).toBeCloseTo(2.5);
   });
 });

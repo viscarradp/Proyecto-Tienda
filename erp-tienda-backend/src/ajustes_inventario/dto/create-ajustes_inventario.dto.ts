@@ -1,5 +1,6 @@
 import {
   IsInt,
+  IsNumber,
   IsString,
   Min,
   IsIn,
@@ -12,9 +13,10 @@ export class CreateAjusteInventarioDto {
   @IsNotEmpty()
   lote_id: number;
 
-  @IsInt()
+  // Decimal: se puede mermar fracción (media libra dañada) — Bloque 1 §5.3.
+  @IsNumber({ maxDecimalPlaces: 3 })
   @IsNotEmpty()
-  @Min(1)
+  @Min(0.001)
   cantidad_ajustada: number;
 
   @IsString()

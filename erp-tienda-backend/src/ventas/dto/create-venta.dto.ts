@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsNumber,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -11,8 +12,9 @@ export class DetalleVentaInputDto {
   @IsInt()
   presentacion_id: number;
 
-  @IsInt()
-  @Min(1)
+  // Decimal para ventas fraccionadas (media libra, granel) — Bloque 1 §5.3.
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   cantidad: number;
 }
 
