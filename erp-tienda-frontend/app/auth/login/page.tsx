@@ -71,31 +71,27 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="bg-zinc-950/80 backdrop-blur-xl border-zinc-800 shadow-2xl overflow-hidden">
-      <CardHeader className="space-y-4 pt-8">
-        <div className="flex justify-center">
-          <div className="bg-blue-600/20 p-3.5 rounded-2xl border border-blue-600/30 shadow-[0_0_30px_rgba(37,99,235,0.2)]">
-            <Store className="h-8 w-8 text-blue-500" />
-          </div>
+    <Card className="overflow-hidden">
+      <CardHeader className="items-center gap-3 pt-8 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-primary text-primary-foreground">
+          <Store className="h-6 w-6" />
         </div>
-        <div className="text-center space-y-1.5">
-          <CardTitle className="text-2xl font-black tracking-tight text-white uppercase">Tienda Karlita</CardTitle>
-          <CardDescription className="text-zinc-400 text-sm font-medium">
-            Ingresa tus credenciales para acceder al ERP
-          </CardDescription>
+        <div className="space-y-1">
+          <CardTitle className="text-xl font-semibold tracking-tight">Tienda Karlita</CardTitle>
+          <CardDescription>Ingresa tus credenciales para acceder al ERP</CardDescription>
         </div>
       </CardHeader>
 
-      <CardContent className="px-8 pb-8">
-        <form onSubmit={handleLogin} className="space-y-5">
+      <CardContent className="px-6 pb-6">
+        <form onSubmit={handleLogin} className="flex flex-col gap-5">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm p-3 rounded-xl text-center font-medium animate-in fade-in slide-in-from-top-1">
+            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
               {error}
             </div>
           )}
 
-          <div className="space-y-2.5">
-            <Label htmlFor="nombre" className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Nombre de Usuario</Label>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="nombre" className="text-xs font-medium text-muted-foreground">Nombre de usuario</Label>
             <Input
               id="nombre"
               type="text"
@@ -104,12 +100,12 @@ export default function LoginPage() {
               onChange={(e) => setNombre(e.target.value)}
               required
               autoComplete="username"
-              className="bg-black/50 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-blue-500 focus-visible:border-blue-500/50 h-12 rounded-xl"
+              className="h-11"
             />
           </div>
 
-          <div className="space-y-2.5">
-            <Label htmlFor="password" className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Contraseña</Label>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">Contraseña</Label>
             <Input
               id="password"
               type="password"
@@ -118,31 +114,26 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="bg-black/50 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-blue-500 focus-visible:border-blue-500/50 h-12 rounded-xl"
+              className="h-11"
             />
           </div>
 
-          <Button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold tracking-wide transition-all duration-300 disabled:opacity-50 disabled:hover:bg-blue-600 h-12 rounded-xl shadow-lg shadow-blue-900/20 mt-4"
-            disabled={loading}
-          >
+          <Button type="submit" className="mt-1 h-11 w-full gap-2" disabled={loading}>
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Verificando acceso...
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Verificando acceso…
               </>
             ) : (
-              "Iniciar Sesión"
+              "Iniciar sesión"
             )}
           </Button>
         </form>
       </CardContent>
 
-      <CardFooter className="justify-center border-t border-zinc-900/50 pt-6 pb-6 bg-black/20">
-        <p className="text-[11px] text-zinc-500 text-center font-medium tracking-wider">
-          SISTEMA DE CONTROL TRANSACCIONAL &bull; V1.0 <br />
-          <span className="text-zinc-600">TIENDA KARLITA</span>
+      <CardFooter className="justify-center border-t border-border py-4">
+        <p className="text-center text-xs text-muted-foreground">
+          Sistema de control transaccional · v1.0
         </p>
       </CardFooter>
     </Card>
