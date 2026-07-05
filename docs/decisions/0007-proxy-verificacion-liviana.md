@@ -44,7 +44,7 @@ una plataforma tipo Vercel), lo cual:
   (`JwtAuthGuard` + `RolesGuard`, seguros por defecto desde antes de este
   proyecto) vuelve a validar la firma en cada request. El proxy es una capa
   de UX (evita el "flash" de contenido protegido y una navegación en vano),
-  no la autoridad de seguridad — ver `docs/security.md`.
+  no la autoridad de seguridad — ver `docs/architecture/security.md`.
 
 ## Alternativas consideradas
 
@@ -81,5 +81,5 @@ el proxy no lo valida):
   auto-firmado y `exp` futuro **sí pasaría el proxy**, pero **no obtendría
   ningún dato real** — el backend rechazaría cada request con 401. El
   "daño" máximo es ver el shell de la UI del dashboard sin datos, igual que
-  ya se documentó como aceptable en `docs/security.md` para el estado
+  ya se documentó como aceptable en `docs/architecture/security.md` para el estado
   anterior a esta fase.

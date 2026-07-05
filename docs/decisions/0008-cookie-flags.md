@@ -65,4 +65,4 @@ funcionan correctamente con las cookies así configuradas.
   "más larga" de lo que realmente es.
 - Sigue sin ser `httpOnly` — un XSS exitoso en el frontend aún podría leer
   el token (limitación conocida y documentada, ver
-  [`../security.md`](../security.md) y el backlog).
+  [`../architecture/security.md`](../architecture/security.md) y el backlog).

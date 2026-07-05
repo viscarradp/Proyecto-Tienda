@@ -192,7 +192,7 @@ también levanta el backend y el frontend en contenedores, con hot-reload:
 ```
 
 Ver [`DOCKER-QUICKSTART.md`](DOCKER-QUICKSTART.md) y
-[`docs/DOCKER-DEVELOPMENT.md`](docs/DOCKER-DEVELOPMENT.md) para el detalle
+[`docs/operations/docker-development.md`](docs/operations/docker-development.md) para el detalle
 (logs, shells, troubleshooting, y por qué el `.env` de la raíz es
 independiente de los `.env` de `erp-tienda-backend/` y `erp-tienda-frontend/`).
 
