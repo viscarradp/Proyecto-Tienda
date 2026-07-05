@@ -32,10 +32,10 @@ export class CreatePresentacionDto {
 
   @ApiProperty({
     description: 'Factor de conversión (no puede ser 0 ni negativo)',
-    minimum: 1,
+    minimum: 0.001,
   })
-  @IsInt()
-  @Min(1, { message: 'El factor de conversión debe ser al menos 1' })
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001, { message: 'El factor de conversión debe ser mayor a 0' })
   @IsNotEmpty()
   factor_conversion: number;
 

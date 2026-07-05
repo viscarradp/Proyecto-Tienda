@@ -25,9 +25,9 @@ export class CreateLoteDto {
   @Min(0)
   costo_unitario_adquisicion: number;
 
-  @ApiProperty({ description: 'Cantidad inicial comprada', minimum: 1 })
-  @IsInt()
-  @Min(1)
+  @ApiProperty({ description: 'Cantidad inicial comprada', minimum: 0.001 })
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   cantidad_inicial: number;
 
   @ApiPropertyOptional({ description: 'Fecha de vencimiento del lote' })

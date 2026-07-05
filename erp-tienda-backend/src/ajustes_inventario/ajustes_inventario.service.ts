@@ -25,8 +25,8 @@ export class AjustesInventarioService {
         throw new NotFoundException(`Lote con ID ${lote_id} no encontrado`);
       }
 
-      // 2. Validar Cantidad
-      if (lote.cantidad_disponible < cantidad_ajustada) {
+      // 2. Validar Cantidad (Decimal desde 1.B)
+      if (lote.cantidad_disponible.lessThan(cantidad_ajustada)) {
         throw new BadRequestException(
           'La cantidad a ajustar supera la disponibilidad del lote',
         );

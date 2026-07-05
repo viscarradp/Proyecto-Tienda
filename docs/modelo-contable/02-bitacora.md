@@ -5,12 +5,12 @@
 
 ## Estado global
 
-**Sub-fase actual:** 1.A completada; siguiente = 1.B (Decimal).
+**Sub-fase actual:** 1.B completada; siguiente = 1.C (origen→destino).
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
 | 1.A · `usuario_id` | ✅ Completada | 4 tablas + `@CurrentUser()`; e2e 7/7 verdes. |
-| 1.B · Decimal (fraccionados) | ⬜ Pendiente | — |
+| 1.B · Decimal (fraccionados) | ✅ Completada | Cantidades a `Decimal(12,3)`; FIFO en Decimal; e2e 8/8 (nuevo test de media libra). |
 | 1.C · origen→destino + bóveda derivada | ⬜ Pendiente | — |
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
 | 1.E · traslados cierre/apertura | ⬜ Pendiente | — |
@@ -42,6 +42,20 @@
 - **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
   7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
   usuario, patrón Fase 3).
+
+### 2026-07-05 — Sub-fase 1.B: cantidades a `Decimal` (fraccionados) ✅
+- **Schema**: `Int → Decimal(12,3)` en `presentaciones.factor_conversion`,
+  `lotes_inventario.cantidad_inicial`/`cantidad_disponible`, `detalle_ventas.cantidad`,
+  `detalle_venta_lotes.cantidad_descargada`, `ajustes_inventario.cantidad_ajustada`.
+- **Motor FIFO** (`ventas.service.ts`) reescrito con `Prisma.Decimal` (`.mul`, `.sub`,
+  `Prisma.Decimal.min`, `.greaterThan`) — antes usaba `number`/`Math.min`.
+- **DTOs**: `@IsInt`→`@IsNumber({maxDecimalPlaces:3})` en venta, ajuste, compra (lote) y
+  presentación. `common/concurrency.ts`: `cantidad_disponible` del row FIFO → Decimal|string.
+- **compras.service** (`montoCalculado` y validaciones de fondos) y **reportes.service**
+  (`unidadesBase`) migrados a Decimal.
+- **Tests**: helper del FIFO parsea Decimales (JSON los serializa como string); **nuevo
+  test de venta fraccionada** (media libra → lote 3 queda en 2.5).
+- **Verificación**: `prisma validate` OK, build limpio, `lint:check` 0 errores, **e2e 8/8**.
 
 ---
 
