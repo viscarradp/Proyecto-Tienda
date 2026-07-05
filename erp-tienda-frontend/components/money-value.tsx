@@ -3,11 +3,12 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { formatMoney } from "@/lib/format"
 
-type MoneyTone = "default" | "success" | "destructive" | "muted"
+type MoneyTone = "default" | "success" | "warning" | "destructive" | "muted"
 
 const toneClass: Record<MoneyTone, string> = {
   default: "text-foreground",
   success: "text-success",
+  warning: "text-warning",
   destructive: "text-destructive",
   muted: "text-muted-foreground",
 }

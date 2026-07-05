@@ -5,7 +5,7 @@
 
 ## Estado global
 
-**Fase actual:** Fase 3 completada; siguiente = Fase 4 (Movimientos + Gastos).
+**Fase actual:** Fase 4 completada; siguiente = Fase 5 (Estadísticas).
 
 | Fase | Estado | Notas |
 |---|---|---|
@@ -13,6 +13,7 @@
 | 1 · Navegación | ✅ Completada | Bottom-nav + sidebar tokenizados, mapa de permisos por rol, guard + ForbiddenState, BottomSheet base. |
 | 2 · POS ⭐ | ✅ Completada | Rewrite mobile-first: catálogo full + ticket en bottom-sheet (móvil) / split (desktop); D4 corregido; tokens + mono; caja en diálogos tokenizados. |
 | 3 · Inventario | ✅ Completada | Página (3 tabs) + 4 diálogos tokenizados; DataView responsiva (tabla↔tarjetas), StatePill de stock; fix bug botón Cancelar en Ajuste. |
+| 4 · Movimientos + Gastos | ✅ Completada | Ambas páginas + diálogos (anular venta, nueva categoría) tokenizados; StatCard nuevo; MoneyValue con tono semántico; StatePill de estado. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -94,6 +95,19 @@
 - **Verificación**: lint 0 errores, build OK (10 rutas), dev sirve login (200) y
   protege POS (307), sin errores de compilación. QA visual: misma limitación del
   preview (pendiente de entorno con backend).
+
+### 2026-07-04 — Fase 4: Movimientos + Gastos ✅
+- **`app/dashboard/movimientos/page.tsx`** reescrita: stat cards (estado de caja,
+  ingresos, turnos/descuadre), lista de turnos expandible con ventas anidadas y
+  desglose de artículos, todo tokenizado y responsivo (columnas ocultas en móvil).
+  `MoneyValue`/`StatePill` en montos y estados; diálogo de anular venta tokenizado.
+- **`app/dashboard/gastos/page.tsx`** reescrita: `StatCard` de saldos (POS + bóveda),
+  formulario de egreso (validación de fondos intacta), historial reciente y diálogo
+  de nueva categoría, tokenizados. Cifras con `MoneyValue`.
+- **Nuevo**: `components/stat-card.tsx` (métrica sobria reutilizable, también para Fase 5).
+- **MoneyValue**: se añadió el tono `warning`.
+- **Limpieza**: eliminados imports muertos preexistentes → lint 100% limpio (0 problemas).
+- **Verificación**: lint 0 problemas, build OK (10 rutas).
 
 ### 2026-07-04 — Fase 3: Inventario (+ diálogos) ✅
 - **Página `app/dashboard/inventario/page.tsx`** reescrita: 3 pestañas (Catálogo,
