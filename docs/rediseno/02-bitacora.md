@@ -5,7 +5,7 @@
 
 ## Estado global
 
-**Fase actual:** Fase 4 completada; siguiente = Fase 5 (Estadísticas).
+**Fase actual:** Fase 5 completada; siguiente = Fase 6 (Login + auditoría final).
 
 | Fase | Estado | Notas |
 |---|---|---|
@@ -14,6 +14,7 @@
 | 2 · POS ⭐ | ✅ Completada | Rewrite mobile-first: catálogo full + ticket en bottom-sheet (móvil) / split (desktop); D4 corregido; tokens + mono; caja en diálogos tokenizados. |
 | 3 · Inventario | ✅ Completada | Página (3 tabs) + 4 diálogos tokenizados; DataView responsiva (tabla↔tarjetas), StatePill de stock; fix bug botón Cancelar en Ajuste. |
 | 4 · Movimientos + Gastos | ✅ Completada | Ambas páginas + diálogos (anular venta, nueva categoría) tokenizados; StatCard nuevo; MoneyValue con tono semántico; StatePill de estado. |
+| 5 · Estadísticas | ✅ Completada | Página tokenizada (KPIs, inyección, P&L, tabla); **Recharts** (R4) para gráfico de ingreso por producto con colores de tokens. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -96,6 +97,18 @@
   protege POS (307), sin errores de compilación. QA visual: misma limitación del
   preview (pendiente de entorno con backend).
 
+### 2026-07-04 — Fase 5: Estadísticas ✅
+- **`app/dashboard/stats/page.tsx`** reescrita y tokenizada: KPIs con tono
+  semántico (utilidad/margen/caja), formulario de inyección de capital, estado de
+  resultados (P&L) y tabla de rentabilidad FIFO con `StatePill` de margen y `MoneyValue`.
+- **R4 resuelto**: instalado **Recharts 3.9.2** (v3, compatible con React 19). Nuevo
+  gráfico de barras horizontal "ingreso por producto (top 8)", con colores desde los
+  tokens (`--success`/`--warning`/`--destructive` según el margen) y tooltip/ejes
+  tokenizados. El gráfico solo renderiza tras cargar datos (cliente), así el prerender
+  del build no ejecuta Recharts.
+- **Verificación**: lint 0 problemas, build OK (10 rutas, prerender sin errores),
+  dev sirve login (200) y protege stats (307).
+
 ### 2026-07-04 — Fase 4: Movimientos + Gastos ✅
 - **`app/dashboard/movimientos/page.tsx`** reescrita: stat cards (estado de caja,
   ingresos, turnos/descuadre), lista de turnos expandible con ventas anidadas y
@@ -133,4 +146,4 @@
 | R1 | Radio base | ✅ 2px |
 | R2 | Tema por defecto | ✅ Oscuro (con toggle) |
 | R3 | Gastos + CAJERO | ✅ Mapa de permisos por rol (impl. Fase 1/4) |
-| R4 | Gráficos de Estadísticas | ✅ Recharts (impl. Fase 5) |
+| R4 | Gráficos de Estadísticas | ✅ Recharts 3.9.2 (implementado en Fase 5) |
