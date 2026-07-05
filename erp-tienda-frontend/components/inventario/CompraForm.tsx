@@ -4,6 +4,7 @@ import * as React from "react"
 import { Plus, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 
@@ -28,14 +30,14 @@ interface Producto {
 }
 
 // ─── Custom Searchable Select ───
-function ProductSearchableSelect({ 
-  productos, 
-  value, 
-  onChange 
-}: { 
+function ProductSearchableSelect({
+  productos,
+  value,
+  onChange
+}: {
   productos: Producto[]
   value: string
-  onChange: (v: string) => void 
+  onChange: (v: string) => void
 }) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
@@ -52,37 +54,44 @@ function ProductSearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const filtered = productos.filter(p => 
-    p.nombre.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = productos.filter(p =>
+    p.nombre.toLowerCase().includes(search.toLowerCase()) ||
     p.presentaciones.some(pres => pres.codigo_barras === search)
   )
   const selectedProduct = productos.find(p => String(p.id) === value)
 
   return (
     <div className="relative" ref={ref}>
-      <div 
-        className="flex items-center justify-between bg-black/50 border border-zinc-800 text-white h-9 rounded-lg text-sm px-3 shadow-none focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+      <div
+        className="flex h-9 cursor-pointer items-center justify-between rounded-sm border border-input bg-transparent px-3 text-sm outline-none focus:border-ring"
         onClick={() => setOpen(!open)}
       >
-        <span className="truncate">{selectedProduct ? selectedProduct.nombre : "Seleccionar..."}</span>
+        <span className={cn("truncate", !selectedProduct && "text-muted-foreground")}>
+          {selectedProduct ? selectedProduct.nombre : "Seleccionar…"}
+        </span>
       </div>
       {open && (
-        <div className="absolute top-10 left-0 w-full z-50 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl overflow-hidden mt-1">
-          <div className="p-2 border-b border-zinc-900 bg-black/50">
-            <input 
+        <div className="absolute left-0 top-10 z-50 mt-1 w-full overflow-hidden rounded-sm border border-border bg-popover shadow-lg">
+          <div className="border-b border-border p-2">
+            <input
               autoFocus
-              className="w-full h-8 px-2 text-xs bg-zinc-900 border border-zinc-800 rounded text-white focus:outline-none focus:border-blue-500" 
-              placeholder="Buscar por nombre o código..." 
-              value={search} 
-              onChange={e => setSearch(e.target.value)} 
+              className="h-8 w-full rounded-sm border border-input bg-transparent px-2 text-xs outline-none focus:border-ring"
+              placeholder="Buscar por nombre o código…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div className="max-h-48 overflow-y-auto p-1 text-zinc-300">
-            {filtered.length === 0 && <div className="p-2 text-xs text-zinc-500 text-center">No encontrado</div>}
+          <div className="max-h-48 overflow-y-auto p-1">
+            {filtered.length === 0 && <div className="p-2 text-center text-xs text-muted-foreground">No encontrado</div>}
             {filtered.map(p => (
-              <div 
-                key={p.id} 
-                className={`p-2 text-sm rounded cursor-pointer ${value === String(p.id) ? 'bg-blue-600 font-bold text-white' : 'hover:bg-zinc-800 hover:text-white'}`}
+              <div
+                key={p.id}
+                className={cn(
+                  "cursor-pointer rounded-sm p-2 text-sm",
+                  value === String(p.id)
+                    ? "bg-primary font-medium text-primary-foreground"
+                    : "hover:bg-muted",
+                )}
                 onClick={() => { onChange(String(p.id)); setOpen(false); setSearch("") }}
               >
                 {p.nombre}
@@ -140,7 +149,7 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
     enabled: true,
     onScan: (barcode) => {
       const targetProd = productos.find(p => p.presentaciones.some(pres => pres.codigo_barras === barcode))
-      
+
       if (targetProd) {
         setLineas(prev => [...prev, {
           key: crypto.randomUUID(),
@@ -212,53 +221,52 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+    <form onSubmit={handleSubmit} className="flex max-w-4xl flex-col gap-6">
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl font-medium">
+        <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm p-3 rounded-xl font-medium">
+        <div className="rounded-sm border border-success/20 bg-success/10 p-3 text-sm font-medium text-success">
           {success}
         </div>
       )}
 
       {/* Cabecera de la compra */}
-      <div className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-6 space-y-4">
-        <h3 className="text-sm font-black text-zinc-300 uppercase tracking-wider">Datos de la Compra</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Proveedor</Label>
+      <div className="flex flex-col gap-4 rounded-sm border border-border bg-card p-5">
+        <h3 className="text-sm font-semibold">Datos de la compra</h3>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Proveedor</Label>
             <Input value={proveedor} onChange={(e) => setProveedor(e.target.value)} required
-              placeholder="Nombre del proveedor"
-              className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500" />
+              placeholder="Nombre del proveedor" className="h-11" />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Estado de Pago</Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
             <Select value={estadoPago} onValueChange={setEstadoPago}>
-              <SelectTrigger className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl">
+              <SelectTrigger className="h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-950 border-zinc-800">
-                <SelectItem value="PAGADO" className="text-zinc-200 focus:bg-zinc-800 focus:text-white">Pagado</SelectItem>
-                <SelectItem value="AL_CREDITO" className="text-zinc-200 focus:bg-zinc-800 focus:text-white">Al Crédito</SelectItem>
+              <SelectContent>
+                <SelectItem value="PAGADO">Pagado</SelectItem>
+                <SelectItem value="AL_CREDITO">Al crédito</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Origen de Fondos</Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Origen de fondos</Label>
             <Select value={origenFondos} onValueChange={setOrigenFondos}>
-              <SelectTrigger className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl">
+              <SelectTrigger className="h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-950 border-zinc-800">
-                <SelectItem value="CAPITAL_DUEÑOS" className="text-zinc-200 focus:bg-zinc-800 focus:text-white">Capital Dueños</SelectItem>
-                <SelectItem value="CAJA_GENERAL" className="text-zinc-200 focus:bg-zinc-800 focus:text-white">Caja General</SelectItem>
-                <SelectItem value="CAJA_POS" className="text-zinc-200 focus:bg-zinc-800 focus:text-white">Caja POS (requiere turno abierto)</SelectItem>
+              <SelectContent>
+                <SelectItem value="CAPITAL_DUEÑOS">Capital dueños</SelectItem>
+                <SelectItem value="CAJA_GENERAL">Caja general</SelectItem>
+                <SelectItem value="CAJA_POS">Caja POS (requiere turno abierto)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -266,69 +274,69 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
       </div>
 
       {/* Líneas de lotes */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-black text-zinc-300 uppercase tracking-wider">Lotes de Inventario</h3>
-          <Button type="button" variant="outline" size="sm" onClick={addLinea}
-            className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-white rounded-xl gap-1.5 h-9 text-xs font-bold">
-            <Plus className="h-3.5 w-3.5" /> Agregar Lote
+          <h3 className="text-sm font-semibold">Lotes de inventario</h3>
+          <Button type="button" variant="outline" size="sm" onClick={addLinea} className="h-9 gap-1.5 text-xs">
+            <Plus className="h-3.5 w-3.5" /> Agregar lote
           </Button>
         </div>
 
         {lineas.length === 0 && (
-          <div className="border border-dashed border-zinc-800 rounded-2xl p-10 text-center">
-            <p className="text-zinc-600 text-sm font-medium">No hay lotes. Haz clic en &quot;Agregar Lote&quot; para añadir productos a esta compra.</p>
+          <div className="rounded-sm border border-dashed border-border p-10 text-center">
+            <p className="text-sm text-muted-foreground">No hay lotes. Haz clic en &quot;Agregar lote&quot; para añadir productos a esta compra.</p>
           </div>
         )}
 
         {lineas.map((linea, idx) => (
-          <div key={linea.key} className="bg-zinc-950/50 border border-zinc-800/50 rounded-xl p-4 relative">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Lote #{idx + 1}</span>
+          <div key={linea.key} className="rounded-sm border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lote #{idx + 1}</span>
               <Button type="button" variant="ghost" size="icon"
-                className="h-6 w-6 text-zinc-600 hover:text-red-400"
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
                 onClick={() => removeLinea(linea.key)}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <div className="col-span-2">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Producto</Label>
-                <ProductSearchableSelect 
-                  productos={productos} 
-                  value={linea.producto_id} 
-                  onChange={(v) => updateLinea(linea.key, "producto_id", v)} 
+                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Producto</Label>
+                <ProductSearchableSelect
+                  productos={productos}
+                  value={linea.producto_id}
+                  onChange={(v) => updateLinea(linea.key, "producto_id", v)}
                 />
               </div>
 
               <div>
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Cantidad</Label>
+                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
                 <Input type="number" min={1} value={linea.cantidad_inicial}
                   onChange={(e) => updateLinea(linea.key, "cantidad_inicial", e.target.value)}
-                  className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                  className="h-9 font-mono text-sm" />
               </div>
 
               <div>
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Costo Unit. ($)</Label>
+                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Costo unit. ($)</Label>
                 <Input type="number" min={0} step="0.01" value={linea.costo_unitario_adquisicion}
                   onChange={(e) => updateLinea(linea.key, "costo_unitario_adquisicion", e.target.value)}
-                  className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                  className="h-9 font-mono text-sm" />
               </div>
 
               <div className="col-span-2">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Vencimiento (Opcional)</Label>
+                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Vencimiento (opcional)</Label>
                 <Input type="date" value={linea.fecha_vencimiento}
                   onChange={(e) => updateLinea(linea.key, "fecha_vencimiento", e.target.value)}
-                  className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                  className="h-9 text-sm" />
               </div>
 
-              <div className="col-span-2 flex items-end">
-                <div className="text-right w-full">
-                  <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Subtotal: </span>
-                  <span className="text-sm font-black text-white">
-                    ${((parseFloat(linea.cantidad_inicial) || 0) * (parseFloat(linea.costo_unitario_adquisicion) || 0)).toFixed(2)}
-                  </span>
+              <div className="col-span-2 flex items-end justify-end">
+                <div className="text-right">
+                  <span className="text-xs text-muted-foreground">Subtotal: </span>
+                  <MoneyValue
+                    value={(parseFloat(linea.cantidad_inicial) || 0) * (parseFloat(linea.costo_unitario_adquisicion) || 0)}
+                    className="text-sm font-semibold"
+                  />
                 </div>
               </div>
             </div>
@@ -337,21 +345,20 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
       </div>
 
       {/* Footer con total y botón */}
-      <div className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-5 md:flex-row">
         <div>
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-0.5">Monto Total Calculado</p>
-          <p className="text-3xl font-black text-white tracking-tighter">${montoTotal.toFixed(2)}</p>
+          <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Monto total calculado</p>
+          <MoneyValue value={montoTotal} className="text-3xl font-bold tracking-tight" />
         </div>
 
-        <Button type="submit" disabled={loading || lineas.length === 0}
-          className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-blue-900/20 gap-2">
+        <Button type="submit" disabled={loading || lineas.length === 0} className="h-12 gap-2 px-8">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Registrando...
+              Registrando…
             </>
           ) : (
-            "Registrar Compra"
+            "Registrar compra"
           )}
         </Button>
       </div>

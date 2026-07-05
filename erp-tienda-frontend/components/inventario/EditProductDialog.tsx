@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Loader2, Plus, Trash2, ShieldAlert } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import {
   Dialog,
@@ -33,13 +33,13 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
   // compuesta ya evita re-renders cuando cambian otros campos del store,
   // ej. productos, cada vez que se refresca el inventario en otra vista).
   const categorias = useInventoryStore((state) => state.categorias)
-  
+
   const [nombre, setNombre] = React.useState("")
   const [categoriaId, setCategoriaId] = React.useState("")
-  
+
   // Local state for presentaciones to allow multiple edits
   const [presentaciones, setPresentaciones] = React.useState<Presentacion[]>([])
-  
+
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
 
@@ -112,42 +112,40 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-[80vw] w-[95vw] bg-zinc-950 border-zinc-900 border text-white p-0 shadow-2xl">
-        <DialogHeader className="px-6 py-4 border-b border-zinc-900">
-          <DialogTitle className="font-black text-lg flex items-center gap-2">
-            Edición de Producto
-          </DialogTitle>
-          <DialogDescription className="text-zinc-400">
+      <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-3xl" showCloseButton>
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="text-lg font-semibold">Edición de producto</DialogTitle>
+          <DialogDescription>
             Modifica nombres, categorías, códigos de barras y precios de venta. El stock sigue bloqueado por seguridad.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex max-h-[75vh] flex-col gap-6 overflow-y-auto p-6">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm p-3 rounded-xl font-bold">
+            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Datos Generales</h3>
-            <div className="grid grid-cols-[2fr_1fr] gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-zinc-400">Nombre del Producto</Label>
+          <div className="flex flex-col gap-4">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos generales</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
                 <Input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="bg-black/50 border-zinc-800 focus-visible:ring-indigo-500"
+                  className="h-11"
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-zinc-400">Categoría</Label>
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
                 <Select value={categoriaId} onValueChange={setCategoriaId}>
-                  <SelectTrigger className="bg-black/50 border-zinc-800">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-950 border-zinc-800 text-white">
+                  <SelectContent>
                     {categorias.map(cat => (
                       <SelectItem key={cat.id} value={cat.id.toString()}>{cat.nombre}</SelectItem>
                     ))}
@@ -157,52 +155,50 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Presentaciones Configuradas</h3>
-            </div>
-            
-            <div className="space-y-3">
+          <div className="flex flex-col gap-4">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Presentaciones configuradas</h3>
+
+            <div className="flex flex-col gap-3">
               {presentaciones.length === 0 ? (
-                <p className="text-xs text-zinc-600 block">Este producto aún no tiene presentaciones creadas.</p>
+                <p className="text-xs text-muted-foreground">Este producto aún no tiene presentaciones creadas.</p>
               ) : presentaciones.map((pres, idx) => (
-                <div key={pres.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-zinc-500 uppercase">Descripción</Label>
+                <div key={pres.id} className="grid grid-cols-2 gap-3 rounded-sm border border-border bg-muted/30 p-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
                     <Input
                       value={pres.descripcion}
                       onChange={(e) => handleUpdatePresentacion(idx, "descripcion", e.target.value)}
-                      className="h-8 text-xs bg-black/50 border-zinc-800 focus-visible:ring-indigo-500"
+                      className="h-8 text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-zinc-500 uppercase">Cód. Barras</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
                     <Input
                       value={pres.codigo_barras || ""}
                       onChange={(e) => handleUpdatePresentacion(idx, "codigo_barras", e.target.value)}
                       placeholder="Sin código"
-                      className="h-8 text-xs font-mono bg-black/50 border-zinc-800 focus-visible:ring-indigo-500 placeholder:text-zinc-700"
+                      className="h-8 font-mono text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-zinc-500 uppercase">Múltiplo</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
                     <Input
                       type="number"
                       min="1"
                       value={pres.factor_conversion}
                       onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", parseInt(e.target.value) || 1)}
-                      className="h-8 text-xs font-mono bg-black/50 border-zinc-800 focus-visible:ring-indigo-500"
+                      className="h-8 font-mono text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-zinc-500 uppercase">Precio ($)</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground">Precio ($)</Label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
                       value={pres.precio_venta}
                       onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
-                      className="h-8 text-xs font-mono font-bold text-emerald-400 bg-black/50 border-zinc-800 focus-visible:ring-emerald-500"
+                      className="h-8 font-mono text-xs font-semibold text-success"
                     />
                   </div>
                 </div>
@@ -210,21 +206,12 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end gap-3 border-t border-zinc-900">
-            <Button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl h-11 px-6 font-bold"
-            >
+          <div className="flex justify-end gap-3 border-t border-border pt-4">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-indigo-900/20"
-            >
-              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Guardar Cambios Seguros"}
+            <Button type="submit" disabled={loading} className="gap-2">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar cambios"}
             </Button>
           </div>
         </form>

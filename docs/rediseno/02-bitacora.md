@@ -5,13 +5,14 @@
 
 ## Estado global
 
-**Fase actual:** Fase 2 completada; siguiente = Fase 3 (Inventario).
+**Fase actual:** Fase 3 completada; siguiente = Fase 4 (Movimientos + Gastos).
 
 | Fase | Estado | Notas |
 |---|---|---|
 | 0 · Fundaciones | ✅ Completada | Tokens claro/oscuro, `--radius` 2px, ThemeProvider + toggle, MoneyValue. |
 | 1 · Navegación | ✅ Completada | Bottom-nav + sidebar tokenizados, mapa de permisos por rol, guard + ForbiddenState, BottomSheet base. |
 | 2 · POS ⭐ | ✅ Completada | Rewrite mobile-first: catálogo full + ticket en bottom-sheet (móvil) / split (desktop); D4 corregido; tokens + mono; caja en diálogos tokenizados. |
+| 3 · Inventario | ✅ Completada | Página (3 tabs) + 4 diálogos tokenizados; DataView responsiva (tabla↔tarjetas), StatePill de stock; fix bug botón Cancelar en Ajuste. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -93,6 +94,21 @@
 - **Verificación**: lint 0 errores, build OK (10 rutas), dev sirve login (200) y
   protege POS (307), sin errores de compilación. QA visual: misma limitación del
   preview (pendiente de entorno con backend).
+
+### 2026-07-04 — Fase 3: Inventario (+ diálogos) ✅
+- **Página `app/dashboard/inventario/page.tsx`** reescrita: 3 pestañas (Catálogo,
+  Categorías, Historial) tokenizadas y responsivas. **DataView responsiva**: tabla
+  con columnas en desktop, tarjetas condensadas en móvil (oculta ID/categoría/fecha
+  según ancho). `StatePill` para stock (verde/rojo) y estado de pago. Cifras con
+  `MoneyValue`. Filas expandibles (presentaciones + lotes) tokenizadas. Rol vía
+  `useCurrentUser` (reemplaza lectura inline de cookie).
+- **4 diálogos migrados** quitando los overrides hardcodeados (los primitivos ya
+  son tokenizados): `ProductDialog` (+ `AddPresentacionDialog`), `EditProductDialog`,
+  `AjusteInventarioDialog`, `CompraForm` (incluye su select buscable custom).
+- **Bug corregido**: el botón "Cancelar" de `AjusteInventarioDialog` no tenía
+  `onClick={onClose}` (no cerraba) — ahora sí.
+- **Nuevo**: `components/state-pill.tsx` (píldora de estado reutilizable).
+- **Verificación**: lint 0 errores, build OK (10 rutas).
 
 ---
 

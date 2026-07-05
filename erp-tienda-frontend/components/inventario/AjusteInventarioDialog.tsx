@@ -39,7 +39,7 @@ export function AjusteInventarioDialog({
   const [cantidad, setCantidad] = React.useState("1")
   const [tipoAjuste, setTipoAjuste] = React.useState("QUEBRADO")
   const [justificacion, setJustificacion] = React.useState("")
-  
+
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
 
@@ -57,7 +57,7 @@ export function AjusteInventarioDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cantNum = parseInt(cantidad, 10)
-    
+
     if (isNaN(cantNum) || cantNum < 1 || cantNum > lote.cantidad_disponible) {
       setError("Cantidad inválida. No puede ser mayor al stock disponible de este lote.")
       return
@@ -87,40 +87,38 @@ export function AjusteInventarioDialog({
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-md bg-black border-zinc-800 text-white shadow-2xl">
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="font-black text-xl flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            Registrar Merma / Ajuste
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-warning" />
+            Registrar merma / ajuste
           </DialogTitle>
-          <DialogDescription className="text-zinc-400 font-medium">
+          <DialogDescription>
             Descontar unidades de forma permanente del inventario debido a pérdidas, daños o vencimientos.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 pt-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6 pt-2">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm p-3 rounded-xl flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-5 w-5 shrink-0" />
-              <p className="font-bold">{error}</p>
+              <p className="font-medium">{error}</p>
             </div>
           )}
 
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
-            <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Producto Afectado</p>
-            <p className="font-black text-white">{productoNombre}</p>
-            <div className="flex gap-4 mt-2 text-xs font-mono text-zinc-400">
+          <div className="rounded-sm border border-border bg-muted/40 p-4">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Producto afectado</p>
+            <p className="font-semibold text-foreground">{productoNombre}</p>
+            <div className="mt-2 flex gap-4 font-mono text-xs text-muted-foreground">
               <span>Lote ID: #{lote.id}</span>
-              <span>•</span>
-              <span>Stock Actual Lote: {lote.cantidad_disponible} uds</span>
+              <span>·</span>
+              <span>Stock actual lote: {lote.cantidad_disponible} uds</span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                Cantidad a Descontar
-              </Label>
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Cantidad a descontar</Label>
               <Input
                 type="number"
                 min="1"
@@ -128,52 +126,41 @@ export function AjusteInventarioDialog({
                 value={cantidad}
                 onChange={(e) => setCantidad(e.target.value)}
                 required
-                className="bg-black/50 border-zinc-800 text-white font-mono text-lg h-12 rounded-xl focus-visible:ring-amber-500"
+                className="h-12 font-mono text-lg"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                Motivo / Concepto
-              </Label>
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Motivo / concepto</Label>
               <Select value={tipoAjuste} onValueChange={setTipoAjuste}>
-                <SelectTrigger className="bg-black/50 border-zinc-800 text-white h-12 rounded-xl focus:ring-amber-500 font-bold">
+                <SelectTrigger className="h-12 w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-950 border-zinc-800 text-white font-bold">
-                  <SelectItem value="QUEBRADO">Quebrado / Roto</SelectItem>
+                <SelectContent>
+                  <SelectItem value="QUEBRADO">Quebrado / roto</SelectItem>
                   <SelectItem value="VENCIDO">Vencido</SelectItem>
-                  <SelectItem value="ROBO">Robo / Pérdida</SelectItem>
-                  <SelectItem value="CONTEO">Ajuste de Conteo</SelectItem>
+                  <SelectItem value="ROBO">Robo / pérdida</SelectItem>
+                  <SelectItem value="CONTEO">Ajuste de conteo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-              Justificación Adicional (Opcional)
-            </Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Justificación adicional (opcional)</Label>
             <Input
               value={justificacion}
               onChange={(e) => setJustificacion(e.target.value)}
-              placeholder="Ej: Se cayó de la estantería..."
-              className="bg-black/50 border-zinc-800 text-white h-12 rounded-xl focus-visible:ring-amber-500 placeholder:text-zinc-600"
+              placeholder="Ej: Se cayó de la estantería…"
+              className="h-12"
             />
           </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <Button
-              type="button"
-              className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl h-11 px-6 font-bold"
-            >
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-amber-900/20"
-            >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin mx-8" /> : "Confirmar e Inhabilitar Stock"}
+            <Button type="submit" disabled={loading} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar e inhabilitar stock"}
             </Button>
           </div>
         </form>

@@ -169,40 +169,40 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200 sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-xl font-black text-white uppercase tracking-tight">Nuevo Producto</DialogTitle>
-          <DialogDescription className="text-zinc-500">Agrega un producto al catálogo con sus presentaciones de venta.</DialogDescription>
+          <DialogTitle className="text-lg font-semibold">Nuevo producto</DialogTitle>
+          <DialogDescription>Agrega un producto al catálogo con sus presentaciones de venta.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-2">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl text-center font-medium">
+            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
               {error}
             </div>
           )}
 
           {/* Nombre del producto */}
-          <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase tracking-wider text-zinc-400">Nombre del Producto</Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
             <Input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Ej: Arroz Blanco Precocido"
               required
-              className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500"
+              className="h-11"
             />
           </div>
 
           {/* Categoría */}
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold uppercase tracking-wider text-zinc-400">Categoría</Label>
+              <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-blue-500 hover:text-blue-400 text-xs font-bold h-6 px-2"
+                className="h-6 px-2 text-xs text-primary hover:text-primary"
                 onClick={() => setShowNewCat(!showNewCat)}
               >
                 {showNewCat ? "Seleccionar existente" : "+ Crear nueva"}
@@ -213,16 +213,16 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="Nombre de la nueva categoría"
-                className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500"
+                className="h-11"
               />
             ) : (
               <Select value={categoriaId} onValueChange={setCategoriaId}>
-                <SelectTrigger className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus:ring-blue-500">
+                <SelectTrigger className="h-11 w-full">
                   <SelectValue placeholder="Selecciona una categoría" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-950 border-zinc-800">
+                <SelectContent>
                   {categorias.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)} className="text-zinc-200 focus:bg-zinc-800 focus:text-white">
+                    <SelectItem key={c.id} value={String(c.id)}>
                       {c.nombre}
                     </SelectItem>
                   ))}
@@ -232,70 +232,67 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
           </div>
 
           {/* Presentaciones */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold uppercase tracking-wider text-zinc-400">Presentaciones de Venta</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addPresentacion}
-                className="border-zinc-800 text-black hover:bg-zinc-900 hover:text-white rounded-lg gap-1 h-7 text-xs">
+              <Label className="text-xs font-medium text-muted-foreground">Presentaciones de venta</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addPresentacion} className="h-7 gap-1 text-xs">
                 <Plus className="h-3 w-3" /> Agregar
               </Button>
             </div>
 
             {presentaciones.length === 0 && (
-              <p className="text-xs text-zinc-600 italic">Puedes agregar presentaciones ahora o después.</p>
+              <p className="text-xs italic text-muted-foreground">Puedes agregar presentaciones ahora o después.</p>
             )}
 
             {presentaciones.map((pres) => (
-              <div key={pres.key} className="bg-black/40 border border-zinc-800/50 rounded-xl p-4 space-y-3 relative">
+              <div key={pres.key} className="relative flex flex-col gap-3 rounded-sm border border-border bg-muted/30 p-4">
                 <Button type="button" variant="ghost" size="icon"
-                  className="absolute top-2 right-2 h-6 w-6 text-zinc-600 hover:text-red-400"
+                  className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:text-destructive"
                   onClick={() => removePresentacion(pres.key)}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Descripción</Label>
+                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</Label>
                     <Input value={pres.descripcion} onChange={(e) => updatePresentacion(pres.key, "descripcion", e.target.value)}
-                      placeholder='Ej: "Unidad", "Fardo de 12"' className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                      placeholder='Ej: "Unidad", "Fardo de 12"' className="h-9 text-sm" />
                   </div>
                   <div>
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Código de Barras</Label>
+                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
                     <Input value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                      placeholder="Opcional" className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                      placeholder="Opcional" className="h-9 font-mono text-sm" />
                   </div>
                   <div>
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Factor Conversión</Label>
+                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Factor conversión</Label>
                     <Input type="number" min={1} value={pres.factor_conversion}
                       onChange={(e) => updatePresentacion(pres.key, "factor_conversion", e.target.value)}
-                      className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                      className="h-9 font-mono text-sm" />
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1 block">Precio de Venta ($)</Label>
+                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
                     <Input type="number" min={0} step="0.01" value={pres.precio_venta}
                       onChange={(e) => updatePresentacion(pres.key, "precio_venta", e.target.value)}
-                      className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                      className="h-9 font-mono text-sm" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Footer — botones con fondo consistente */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/50">
-            <Button type="button" variant="outline" onClick={handleClose}
-              className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl">
+          {/* Footer */}
+          <div className="flex justify-end gap-3 border-t border-border pt-4">
+            <Button type="button" variant="secondary" onClick={handleClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 gap-2">
+            <Button type="submit" disabled={loading} className="gap-2">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Guardando...
+                  Guardando…
                 </>
-              ) : "Crear Producto"}
+              ) : "Crear producto"}
             </Button>
           </div>
         </form>
@@ -363,55 +360,53 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200 sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-lg font-black text-white uppercase tracking-tight">Nueva Presentación</DialogTitle>
-          <DialogDescription className="text-zinc-500">
-            Agregar presentación a <span className="text-zinc-300 font-bold">{productoNombre}</span>
+          <DialogTitle className="text-lg font-semibold">Nueva presentación</DialogTitle>
+          <DialogDescription>
+            Agregar presentación a <span className="font-medium text-foreground">{productoNombre}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl text-center font-medium">{error}</div>
+            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">{error}</div>
           )}
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Descripción</Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
             <Input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required
-              placeholder='Ej: "Unidad", "Fardo de 12"' className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500" />
+              placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Código de Barras</Label>
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Código de barras</Label>
               <Input value={codigoBarras} onChange={(e) => setCodigoBarras(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                placeholder="Opcional" className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                placeholder="Opcional" className="h-9 font-mono text-sm" />
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Factor Conversión</Label>
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Factor conversión</Label>
               <Input type="number" min={1} value={factorConversion}
                 onChange={(e) => setFactorConversion(e.target.value)}
-                className="bg-black/50 border-zinc-800 text-white h-9 rounded-lg text-sm focus-visible:ring-blue-500" />
+                className="h-9 font-mono text-sm" />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Precio de Venta ($)</Label>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
             <Input type="number" min={0} step="0.01" value={precioVenta}
               onChange={(e) => setPrecioVenta(e.target.value)}
-              className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500" />
+              className="h-11 font-mono" />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/50">
-            <Button type="button" variant="outline" onClick={handleClose}
-              className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl">
+          <div className="flex justify-end gap-3 border-t border-border pt-4">
+            <Button type="button" variant="secondary" onClick={handleClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 gap-2">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</> : "Agregar Presentación"}
+            <Button type="submit" disabled={loading} className="gap-2">
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</> : "Agregar presentación"}
             </Button>
           </div>
         </form>
