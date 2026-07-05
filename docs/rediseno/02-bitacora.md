@@ -5,12 +5,13 @@
 
 ## Estado global
 
-**Fase actual:** Fase 1 completada; siguiente = Fase 2 (POS).
+**Fase actual:** Fase 2 completada; siguiente = Fase 3 (Inventario).
 
 | Fase | Estado | Notas |
 |---|---|---|
 | 0 · Fundaciones | ✅ Completada | Tokens claro/oscuro, `--radius` 2px, ThemeProvider + toggle, MoneyValue. |
 | 1 · Navegación | ✅ Completada | Bottom-nav + sidebar tokenizados, mapa de permisos por rol, guard + ForbiddenState, BottomSheet base. |
+| 2 · POS ⭐ | ✅ Completada | Rewrite mobile-first: catálogo full + ticket en bottom-sheet (móvil) / split (desktop); D4 corregido; tokens + mono; caja en diálogos tokenizados. |
 | 2 · POS | ⬜ Pendiente | — |
 | 3 · Inventario | ⬜ Pendiente | — |
 | 4 · Movimientos + Gastos | ⬜ Pendiente | — |
@@ -74,6 +75,24 @@
   herramienta de preview no logra ejecutar el dev server del monorepo en su sandbox
   (el server sí arranca perfecto vía `npm run dev`). Screenshots pendientes de un
   entorno donde el preview alcance el puerto.
+
+### 2026-07-04 — Fase 2: POS (pantalla estrella) ⭐ ✅
+- **Rewrite completo de `app/dashboard/pos/page.tsx`** preservando TODA la lógica
+  (carrito, caja abrir/cerrar, ventas, escaneo global, selectores useShallow);
+  solo cambió la presentación.
+- **Layout responsivo (corrige D4)**: en móvil el catálogo va full y el ticket es
+  un **bottom-sheet** disparado por una barra de carrito fija sobre el bottom-nav
+  (contador + total en mono); en escritorio se mantiene el split catálogo / ticket,
+  ahora tokenizado y recto. Se elimina el bug `h-full`/`h-screen`.
+- **Piezas reutilizables**: `components/pos/CartLines.tsx` (líneas + control de
+  cantidad, targets 44px) y `components/pos/CheckoutSection.tsx` (total, "paga con",
+  cambio, botón procesar pago), compartidas entre panel desktop y sheet móvil.
+- **Estética**: fuera glows/blur, `bg-black`/zinc/blue hardcodeados y `font-black
+  uppercase`; todo por tokens, cifras con `MoneyValue` (mono), esquinas rectas.
+  Diálogos de caja sin overrides `bg-zinc` → `bg-popover` tokenizado.
+- **Verificación**: lint 0 errores, build OK (10 rutas), dev sirve login (200) y
+  protege POS (307), sin errores de compilación. QA visual: misma limitación del
+  preview (pendiente de entorno con backend).
 
 ---
 

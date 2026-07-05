@@ -155,7 +155,7 @@ gráficos) — se consulta antes de añadir dependencias.
 |---|---|---|
 | 0 | Fundaciones del sistema de diseño | ✅ Completada |
 | 1 | Shell de navegación (mobile-first) | ✅ Completada |
-| 2 | POS ⭐ | ⬜ Pendiente |
+| 2 | POS ⭐ | ✅ Completada |
 | 3 | Inventario (+ diálogos) | ⬜ Pendiente |
 | 4 | Movimientos + Gastos | ⬜ Pendiente |
 | 5 | Estadísticas | ⬜ Pendiente |
