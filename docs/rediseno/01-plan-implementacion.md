@@ -158,7 +158,7 @@ gráficos) — se consulta antes de añadir dependencias.
 | 2 | POS ⭐ | ✅ Completada |
 | 3 | Inventario (+ diálogos) | ✅ Completada |
 | 4 | Movimientos + Gastos | ✅ Completada |
-| 5 | Estadísticas | ⬜ Pendiente |
+| 5 | Estadísticas | ✅ Completada |
 | 6 | Login, pulido y auditoría final | ⬜ Pendiente |
 
 > Leyenda: ⬜ Pendiente · 🔄 En curso · ✅ Completada. El detalle de cada avance se

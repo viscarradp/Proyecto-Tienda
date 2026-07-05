@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { apiFetch } from "@/lib/api"
 import {
   DollarSign,
   TrendingUp,
@@ -9,7 +8,6 @@ import {
   ShoppingCart,
   AlertTriangle,
   Package,
-  BarChart3,
   Calendar,
   RefreshCw,
   ArrowUpRight,
@@ -19,7 +17,27 @@ import {
   Plus,
   X,
   Check,
+  type LucideIcon,
 } from "lucide-react"
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+  CartesianGrid,
+} from "recharts"
+
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { MoneyValue } from "@/components/money-value"
+import { StatePill } from "@/components/state-pill"
+import { formatMoney } from "@/lib/format"
+import { apiFetch } from "@/lib/api"
 
 /* ─────────────── Types ─────────────── */
 interface EstadoResultados {
@@ -52,14 +70,30 @@ interface CajaGeneralSaldo {
 }
 
 /* ─────────────── Helpers ─────────────── */
-const fmt = (v: string | number) => {
-  const n = typeof v === "string" ? parseFloat(v) : v
-  return `$${n.toFixed(2)}`
-}
-
 const pct = (v: string | number) => {
   const n = typeof v === "string" ? parseFloat(v) : v
   return `${n.toFixed(1)}%`
+}
+
+type Tone = "success" | "destructive" | "warning" | "primary" | "muted"
+type MarginTone = "success" | "warning" | "destructive"
+
+const marginTone = (margenPct: number): MarginTone =>
+  margenPct >= 25 ? "success" : margenPct >= 10 ? "warning" : "destructive"
+
+const toneText: Record<Tone, string> = {
+  success: "text-success",
+  destructive: "text-destructive",
+  warning: "text-warning",
+  primary: "text-primary",
+  muted: "text-foreground",
+}
+const toneChartVar: Record<Tone, string> = {
+  success: "var(--success)",
+  destructive: "var(--destructive)",
+  warning: "var(--warning)",
+  primary: "var(--primary)",
+  muted: "var(--muted-foreground)",
 }
 
 type Periodo = "hoy" | "semana" | "mes" | "todo"
@@ -132,316 +166,281 @@ export default function StatsPage() {
 
   const periodoLabels: Record<Periodo, string> = {
     hoy: "Hoy",
-    semana: "Últimos 7 días",
-    mes: "Este Mes",
-    todo: "Todo el Historial",
+    semana: "7 días",
+    mes: "Este mes",
+    todo: "Historial",
+  }
+
+  const chartData = productos.slice(0, 8).map(p => ({
+    nombre: p.nombre.length > 16 ? p.nombre.slice(0, 15) + "…" : p.nombre,
+    ingreso: parseFloat(p.ingreso),
+    tone: marginTone(parseFloat(p.margen_porcentaje)),
+  }))
+
+  const handleInyeccion = async () => {
+    setInyeccionLoading(true)
+    setInyeccionMsg(null)
+    try {
+      await apiFetch("/caja-general/inyeccion", {
+        method: "POST",
+        body: JSON.stringify({
+          monto: parseFloat(inyeccionMonto),
+          descripcion: inyeccionDesc || undefined,
+        }),
+      })
+      setInyeccionMsg(`✅ ${formatMoney(parseFloat(inyeccionMonto))} depositados`)
+      setInyeccionMonto("")
+      setInyeccionDesc("")
+      fetchData()
+      setTimeout(() => {
+        setShowInyeccion(false)
+        setInyeccionMsg(null)
+      }, 2000)
+    } catch (err) {
+      setInyeccionMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
+    } finally {
+      setInyeccionLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-black p-4 md:p-6 space-y-6 animate-in fade-in duration-500">
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-cyan-400" />
-            Estado de Resultados
-          </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Control financiero con costeo FIFO en tiempo real
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Period selector */}
-          <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
-            {(["hoy", "semana", "mes", "todo"] as Periodo[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriodo(p)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  periodo === p
-                    ? "bg-white text-black shadow"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                {periodoLabels[p]}
-              </button>
-            ))}
+    <div className="flex min-h-full flex-col bg-background text-foreground">
+      {/* Header */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Estado de resultados</h1>
+            <p className="text-xs text-muted-foreground">Control financiero con costeo FIFO en tiempo real</p>
           </div>
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
-          <AlertTriangle className="w-4 h-4 inline mr-2" />
-          {error}
-        </div>
-      )}
-
-      {/* ── Loading ── */}
-      {loading && !estado && (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
-        </div>
-      )}
-
-      {estado && (
-        <>
-          {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* Utilidad Neta (hero card) */}
-            <KPICard
-              label="Utilidad Neta"
-              value={fmt(estado.utilidad_neta)}
-              icon={parseFloat(estado.utilidad_neta) >= 0 ? TrendingUp : TrendingDown}
-              accent={parseFloat(estado.utilidad_neta) >= 0 ? "emerald" : "red"}
-              hero
-            />
-            <KPICard
-              label="Ingreso Bruto"
-              value={fmt(estado.ingreso_bruto_ventas)}
-              icon={DollarSign}
-              accent="cyan"
-            />
-            <KPICard
-              label="Costo FIFO"
-              value={fmt(estado.costo_de_ventas_fifo)}
-              icon={Package}
-              accent="amber"
-            />
-            <KPICard
-              label="Margen Bruto"
-              value={pct(estado.margen_bruto_porcentaje)}
-              icon={parseFloat(estado.margen_bruto_porcentaje) >= 0 ? ArrowUpRight : ArrowDownRight}
-              accent={parseFloat(estado.margen_bruto_porcentaje) >= 15 ? "emerald" : "red"}
-            />
-            <KPICard
-              label="Ticket Promedio"
-              value={fmt(estado.ticket_promedio)}
-              icon={ShoppingCart}
-              accent="violet"
-            />
-            {saldoBoveda && (
-              <div className="relative">
-                <KPICard
-                  label="Caja General"
-                  value={fmt(saldoBoveda.saldo_actual)}
-                  icon={Vault}
-                  accent={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "emerald" : "red"}
-                />
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 rounded-sm border border-border bg-muted/50 p-1">
+              {(["hoy", "semana", "mes", "todo"] as Periodo[]).map((p) => (
                 <button
-                  onClick={() => { setShowInyeccion(!showInyeccion); setInyeccionMsg(null) }}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
-                  title="Inyectar capital"
+                  key={p}
+                  onClick={() => setPeriodo(p)}
+                  className={cn(
+                    "rounded-sm px-3 py-1.5 text-xs font-medium transition-colors",
+                    periodo === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
-                  {showInyeccion ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {periodoLabels[p]}
                 </button>
-              </div>
-            )}
+              ))}
+            </div>
+            <Button variant="outline" size="icon" onClick={fetchData} disabled={loading} className="h-9 w-9 shrink-0">
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </Button>
           </div>
+        </div>
+      </header>
 
-          {/* ── Modal Inyección de Capital ── */}
-          {showInyeccion && (
-            <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-5 animate-in slide-in-from-top-2 duration-300">
-              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Vault className="w-4 h-4" />
-                Inyectar Capital a Caja General
-              </h3>
-              <p className="text-zinc-500 text-xs mb-4">
-                Registra dinero que el dueño deposita directamente en la bóveda.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <label className="text-zinc-500 text-xs mb-1 block">Monto ($)</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="500.00"
-                    value={inyeccionMonto}
-                    onChange={(e) => setInyeccionMonto(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white font-mono text-lg focus:outline-none focus:border-emerald-500 transition-colors"
+      <div className="flex flex-1 flex-col gap-6 p-4 lg:px-8 lg:py-6">
+        {error && (
+          <div className="flex items-center gap-2 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )}
+
+        {loading && !estado && (
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+
+        {estado && (
+          <>
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              <KPICard
+                label="Utilidad neta"
+                value={formatMoney(estado.utilidad_neta)}
+                icon={parseFloat(estado.utilidad_neta) >= 0 ? TrendingUp : TrendingDown}
+                tone={parseFloat(estado.utilidad_neta) >= 0 ? "success" : "destructive"}
+              />
+              <KPICard label="Ingreso bruto" value={formatMoney(estado.ingreso_bruto_ventas)} icon={DollarSign} tone="primary" />
+              <KPICard label="Costo FIFO" value={formatMoney(estado.costo_de_ventas_fifo)} icon={Package} tone="warning" />
+              <KPICard
+                label="Margen bruto"
+                value={pct(estado.margen_bruto_porcentaje)}
+                icon={parseFloat(estado.margen_bruto_porcentaje) >= 0 ? ArrowUpRight : ArrowDownRight}
+                tone={parseFloat(estado.margen_bruto_porcentaje) >= 15 ? "success" : "destructive"}
+              />
+              <KPICard label="Ticket promedio" value={formatMoney(estado.ticket_promedio)} icon={ShoppingCart} tone="primary" />
+              {saldoBoveda && (
+                <div className="relative">
+                  <KPICard
+                    label="Caja general"
+                    value={formatMoney(saldoBoveda.saldo_actual)}
+                    icon={Vault}
+                    tone={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "success" : "destructive"}
                   />
-                </div>
-                <div className="flex-[2]">
-                  <label className="text-zinc-500 text-xs mb-1 block">Descripción (opcional)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Capital inicial del dueño"
-                    value={inyeccionDesc}
-                    onChange={(e) => setInyeccionDesc(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                  />
-                </div>
-                <div className="flex items-end">
                   <button
-                    disabled={inyeccionLoading || !inyeccionMonto || parseFloat(inyeccionMonto) <= 0}
-                    onClick={async () => {
-                      setInyeccionLoading(true)
-                      setInyeccionMsg(null)
-                      try {
-                        await apiFetch("/caja-general/inyeccion", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            monto: parseFloat(inyeccionMonto),
-                            descripcion: inyeccionDesc || undefined,
-                          }),
-                        })
-                        setInyeccionMsg(`✅ $${parseFloat(inyeccionMonto).toFixed(2)} depositados`)
-                        setInyeccionMonto("")
-                        setInyeccionDesc("")
-                        fetchData()
-                        setTimeout(() => {
-                          setShowInyeccion(false)
-                          setInyeccionMsg(null)
-                        }, 2000)
-                      } catch (err) {
-                        setInyeccionMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
-                      } finally {
-                        setInyeccionLoading(false)
-                      }
-                    }}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-bold rounded-xl transition-all flex items-center gap-2"
+                    onClick={() => { setShowInyeccion(!showInyeccion); setInyeccionMsg(null) }}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    title="Inyectar capital"
                   >
-                    {inyeccionLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                    Depositar
+                    {showInyeccion ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                   </button>
                 </div>
-              </div>
-              {inyeccionMsg && (
-                <p className={`mt-3 text-sm font-medium ${inyeccionMsg.startsWith("✅") ? "text-emerald-400" : "text-red-400"}`}>
-                  {inyeccionMsg}
-                </p>
               )}
             </div>
-          )}
 
-          {/* ── Estado de Resultados Detallado ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left: P&L Statement */}
-            <div className="lg:col-span-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                {periodoLabels[periodo]}
-              </h2>
+            {/* Inyección de capital */}
+            {showInyeccion && (
+              <div className="rounded-sm border border-success/30 bg-card p-5">
+                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-success">
+                  <Vault className="h-4 w-4" /> Inyectar capital a caja general
+                </h3>
+                <p className="mb-4 text-xs text-muted-foreground">Registra dinero que el dueño deposita directamente en la bóveda.</p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Monto ($)</Label>
+                    <Input type="number" min="0.01" step="0.01" placeholder="500.00"
+                      value={inyeccionMonto} onChange={(e) => setInyeccionMonto(e.target.value)}
+                      className="h-11 font-mono text-lg" />
+                  </div>
+                  <div className="flex flex-[2] flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Descripción (opcional)</Label>
+                    <Input type="text" placeholder="Ej: Capital inicial del dueño"
+                      value={inyeccionDesc} onChange={(e) => setInyeccionDesc(e.target.value)}
+                      className="h-11" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      disabled={inyeccionLoading || !inyeccionMonto || parseFloat(inyeccionMonto) <= 0}
+                      onClick={handleInyeccion}
+                      className="h-11 gap-2 bg-success text-success-foreground hover:bg-success/90"
+                    >
+                      {inyeccionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Depositar
+                    </Button>
+                  </div>
+                </div>
+                {inyeccionMsg && (
+                  <p className={cn("mt-3 text-sm font-medium", inyeccionMsg.startsWith("✅") ? "text-success" : "text-destructive")}>
+                    {inyeccionMsg}
+                  </p>
+                )}
+              </div>
+            )}
 
-              <div className="space-y-3">
-                <PLRow label="Ingreso Bruto por Ventas" value={estado.ingreso_bruto_ventas} type="income" />
-                <PLRow label="Costo de Ventas (FIFO)" value={estado.costo_de_ventas_fifo} type="expense" />
-                <PLDivider />
-                <PLRow label="UTILIDAD BRUTA" value={estado.utilidad_bruta} type="subtotal" />
-                <PLRow label={`Margen Bruto`} value={`${estado.margen_bruto_porcentaje}%`} type="pct" />
-                <PLDivider />
-                <PLRow label="Gastos Operativos" value={estado.gastos_operativos} type="expense" />
-                <PLRow label="Pérdidas por Mermas" value={estado.mermas_inventario} type="expense" />
-                <PLDivider />
-                <PLRow label="UTILIDAD NETA" value={estado.utilidad_neta} type="total" />
+            {/* Gráfico: ingreso por producto */}
+            {chartData.length > 0 && (
+              <div className="rounded-sm border border-border bg-card p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+                  <Package className="h-4 w-4 text-muted-foreground" /> Ingreso por producto (top {chartData.length})
+                </h2>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+                      <CartesianGrid horizontal={false} stroke="var(--border)" />
+                      <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                        tickFormatter={(v) => formatMoney(v)} stroke="var(--border)" />
+                      <YAxis type="category" dataKey="nombre" width={110}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} stroke="var(--border)" />
+                      <Tooltip
+                        cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+                        contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "2px", color: "var(--popover-foreground)", fontSize: 12 }}
+                        formatter={(v) => [formatMoney(Number(v)), "Ingreso"]}
+                      />
+                      <Bar dataKey="ingreso" radius={[0, 2, 2, 0]}>
+                        {chartData.map((entry, i) => (
+                          <Cell key={i} fill={toneChartVar[entry.tone]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Estado de resultados + tabla */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {/* P&L Statement */}
+              <div className="rounded-sm border border-border bg-card p-5 lg:col-span-1">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <Calendar className="h-4 w-4" /> {periodoLabels[periodo]}
+                </h2>
+
+                <div className="flex flex-col gap-3">
+                  <PLRow label="Ingreso bruto por ventas" value={estado.ingreso_bruto_ventas} type="income" />
+                  <PLRow label="Costo de ventas (FIFO)" value={estado.costo_de_ventas_fifo} type="expense" />
+                  <PLDivider />
+                  <PLRow label="Utilidad bruta" value={estado.utilidad_bruta} type="subtotal" />
+                  <PLRow label="Margen bruto" value={`${estado.margen_bruto_porcentaje}%`} type="pct" />
+                  <PLDivider />
+                  <PLRow label="Gastos operativos" value={estado.gastos_operativos} type="expense" />
+                  <PLRow label="Pérdidas por mermas" value={estado.mermas_inventario} type="expense" />
+                  <PLDivider />
+                  <PLRow label="Utilidad neta" value={estado.utilidad_neta} type="total" />
+                </div>
+
+                <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Ventas completadas</span>
+                    <span className="font-mono tabular-nums">{estado.total_ventas_completadas}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Ventas anuladas</span>
+                    <span className="font-mono tabular-nums text-destructive">{estado.total_ventas_anuladas}</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-zinc-800 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-zinc-500">Ventas completadas</span>
-                  <span className="text-zinc-300 font-mono">{estado.total_ventas_completadas}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-zinc-500">Ventas anuladas</span>
-                  <span className="text-red-400 font-mono">{estado.total_ventas_anuladas}</span>
-                </div>
+              {/* Tabla productos */}
+              <div className="rounded-sm border border-border bg-card p-5 lg:col-span-2">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <Package className="h-4 w-4" /> Productos — rentabilidad FIFO
+                </h2>
+
+                {productos.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground">
+                    <Package className="mx-auto mb-3 h-12 w-12 opacity-30" />
+                    <p className="text-sm">No hay ventas en este período</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="pb-3 text-left font-medium">Producto</th>
+                          <th className="pb-3 text-right font-medium">Uds.</th>
+                          <th className="pb-3 text-right font-medium">Ingreso</th>
+                          <th className="pb-3 text-right font-medium">Costo</th>
+                          <th className="pb-3 text-right font-medium">Margen</th>
+                          <th className="pb-3 text-right font-medium">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {productos.map((p, i) => {
+                          const margenN = parseFloat(p.margen_porcentaje)
+                          const tone = marginTone(margenN)
+                          return (
+                            <tr key={p.producto_id} className="border-b border-border/60 transition-colors hover:bg-muted/40">
+                              <td className="py-3 font-medium">
+                                <span className="mr-2 text-xs text-muted-foreground">{i + 1}.</span>
+                                {p.nombre}
+                              </td>
+                              <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{p.unidades_vendidas}</td>
+                              <td className="py-3 text-right"><MoneyValue value={p.ingreso} className="text-sm" /></td>
+                              <td className="py-3 text-right"><MoneyValue value={p.costo_fifo} tone="warning" className="text-sm" /></td>
+                              <td className="py-3 text-right"><MoneyValue value={p.margen} tone={tone} className="text-sm font-semibold" /></td>
+                              <td className="py-3 text-right">
+                                <StatePill tone={tone}>{pct(p.margen_porcentaje)}</StatePill>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Right: Tabla productos */}
-            <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Productos — Rentabilidad FIFO
-              </h2>
-
-              {productos.length === 0 ? (
-                <div className="text-center py-12 text-zinc-600">
-                  <Package className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                  <p>No hay ventas en este período</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-zinc-500 text-xs uppercase tracking-wider border-b border-zinc-800">
-                        <th className="text-left pb-3 font-medium">Producto</th>
-                        <th className="text-right pb-3 font-medium">Uds.</th>
-                        <th className="text-right pb-3 font-medium">Ingreso</th>
-                        <th className="text-right pb-3 font-medium">Costo</th>
-                        <th className="text-right pb-3 font-medium">Margen</th>
-                        <th className="text-right pb-3 font-medium">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {productos.map((p, i) => {
-                        const margenN = parseFloat(p.margen_porcentaje)
-                        const margenColor =
-                          margenN >= 25
-                            ? "text-emerald-400"
-                            : margenN >= 10
-                            ? "text-amber-400"
-                            : "text-red-400"
-
-                        return (
-                          <tr
-                            key={p.producto_id}
-                            className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
-                          >
-                            <td className="py-3 text-white font-medium">
-                              <span className="text-zinc-600 mr-2 text-xs">{i + 1}.</span>
-                              {p.nombre}
-                            </td>
-                            <td className="py-3 text-right text-zinc-300 font-mono">
-                              {p.unidades_vendidas}
-                            </td>
-                            <td className="py-3 text-right text-cyan-400 font-mono">
-                              {fmt(p.ingreso)}
-                            </td>
-                            <td className="py-3 text-right text-amber-400 font-mono">
-                              {fmt(p.costo_fifo)}
-                            </td>
-                            <td className="py-3 text-right font-mono font-semibold">
-                              <span className={margenColor}>{fmt(p.margen)}</span>
-                            </td>
-                            <td className="py-3 text-right">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                                  margenN >= 25
-                                    ? "bg-emerald-500/15 text-emerald-400"
-                                    : margenN >= 10
-                                    ? "bg-amber-500/15 text-amber-400"
-                                    : "bg-red-500/15 text-red-400"
-                                }`}
-                              >
-                                {pct(p.margen_porcentaje)}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -452,34 +451,20 @@ function KPICard({
   label,
   value,
   icon: Icon,
-  accent,
-  hero,
+  tone,
 }: {
   label: string
   value: string
-  icon: typeof DollarSign
-  accent: "emerald" | "red" | "cyan" | "amber" | "violet"
-  hero?: boolean
+  icon: LucideIcon
+  tone: Tone
 }) {
-  const accentStyles = {
-    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-400", glow: "shadow-emerald-500/10" },
-    red:     { bg: "bg-red-500/10",     text: "text-red-400",     glow: "shadow-red-500/10"     },
-    cyan:    { bg: "bg-cyan-500/10",    text: "text-cyan-400",    glow: "shadow-cyan-500/10"    },
-    amber:   { bg: "bg-amber-500/10",   text: "text-amber-400",   glow: "shadow-amber-500/10"   },
-    violet:  { bg: "bg-violet-500/10",  text: "text-violet-400",  glow: "shadow-violet-500/10"  },
-  }
-
-  const s = accentStyles[accent]
-
   return (
-    <div
-      className={`${s.bg} border border-zinc-800 rounded-2xl p-4 ${hero ? "col-span-2 md:col-span-1" : ""} ${s.glow} shadow-lg`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider">{label}</span>
-        <Icon className={`w-4 h-4 ${s.text}`} />
+    <div className="flex flex-col rounded-sm border border-border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+        <Icon className={cn("h-4 w-4 shrink-0", toneText[tone])} />
       </div>
-      <p className={`text-xl md:text-2xl font-black ${s.text} font-mono tracking-tight`}>{value}</p>
+      <p className={cn("mt-2 font-mono text-xl font-bold tracking-tight tabular-nums", toneText[tone])}>{value}</p>
     </div>
   )
 }
@@ -494,35 +479,33 @@ function PLRow({
   type: "income" | "expense" | "subtotal" | "total" | "pct"
 }) {
   const numVal = parseFloat(value)
-  const styles = {
-    income: "text-zinc-300",
-    expense: "text-zinc-400",
-    subtotal: "text-white font-bold",
-    total: numVal >= 0 ? "text-emerald-400 font-black text-lg" : "text-red-400 font-black text-lg",
-    pct: numVal >= 15 ? "text-emerald-400" : numVal >= 0 ? "text-amber-400" : "text-red-400",
-  }
+  const valueClass = {
+    income: "text-foreground",
+    expense: "text-muted-foreground",
+    subtotal: "font-semibold text-foreground",
+    total: numVal >= 0 ? "text-lg font-bold text-success" : "text-lg font-bold text-destructive",
+    pct: numVal >= 15 ? "text-success" : numVal >= 0 ? "text-warning" : "text-destructive",
+  }[type]
 
-  const labelStyles = {
-    income: "text-zinc-400",
-    expense: "text-zinc-500",
-    subtotal: "text-zinc-300 font-semibold",
-    total: "text-white font-bold",
-    pct: "text-zinc-500 text-xs",
-  }
+  const labelClass = {
+    income: "text-muted-foreground",
+    expense: "text-muted-foreground",
+    subtotal: "font-medium text-foreground",
+    total: "font-semibold text-foreground",
+    pct: "text-xs text-muted-foreground",
+  }[type]
 
-  const prefix = type === "expense" ? "- " : type === "pct" ? "" : ""
-  const displayValue = type === "pct" ? value : fmt(value)
+  const prefix = type === "expense" ? "- " : ""
+  const displayValue = type === "pct" ? value : formatMoney(value)
 
   return (
-    <div className="flex justify-between items-center">
-      <span className={`text-sm ${labelStyles[type]}`}>
-        {prefix}{label}
-      </span>
-      <span className={`font-mono ${styles[type]}`}>{displayValue}</span>
+    <div className="flex items-center justify-between">
+      <span className={cn("text-sm", labelClass)}>{prefix}{label}</span>
+      <span className={cn("font-mono tabular-nums", valueClass)}>{displayValue}</span>
     </div>
   )
 }
 
 function PLDivider() {
-  return <div className="border-t border-zinc-800 border-dashed" />
+  return <div className="border-t border-dashed border-border" />
 }
