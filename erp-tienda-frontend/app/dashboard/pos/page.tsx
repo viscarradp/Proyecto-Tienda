@@ -6,24 +6,21 @@ import {
   ScanBarcode,
   Plus,
   Minus,
-  Trash2,
   ShoppingCart,
   ChevronRight,
-  Store,
   Loader2,
   AlertTriangle,
   RefreshCw,
   DoorOpen,
   DoorClosed,
   CheckCircle2,
-  XCircle,
 } from "lucide-react"
 import { toast } from "sonner"
+
+import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -31,9 +28,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetHeader,
+  BottomSheetTitle,
+} from "@/components/ui/bottom-sheet"
+import { MoneyValue } from "@/components/money-value"
+import { CartLines } from "@/components/pos/CartLines"
+import { CheckoutSection } from "@/components/pos/CheckoutSection"
 import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
-import { useInventoryStore, type Producto, type Categoria } from "../../../src/store/inventoryStore"
+import { useInventoryStore } from "../../../src/store/inventoryStore"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 
@@ -70,6 +76,7 @@ export default function POSPage() {
     }))
   )
   const [mounted, setMounted] = React.useState(false)
+  const [cartOpen, setCartOpen] = React.useState(false)
 
   // ─── Datos del backend ───
   const { productos, categorias, loading, error, fetchInventory } = useInventoryStore(
@@ -198,7 +205,7 @@ export default function POSPage() {
       // 2. Cerrar el turno declarando SOLO el fondo restante
       await apiFetch(`/cajas-turnos/${cajaActiva.id}/cerrar`, {
         method: "PATCH",
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           efectivo_declarado: fondoSiguiente,
           observaciones: observacionesCierre.trim() || undefined
         }),
@@ -246,6 +253,7 @@ export default function POSPage() {
 
       clearCart()
       setPagoCliente("")
+      setCartOpen(false)
       setCheckoutSuccess(true)
       // Recargar datos para actualizar stock
       loadData()
@@ -313,351 +321,310 @@ export default function POSPage() {
 
   if (!mounted) return null
 
+  const total = getTotal()
+  const itemCount = items.reduce((acc, i) => acc + i.cantidad, 0)
+
+  const emptyTicket = (
+    <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
+      <ShoppingCart className="h-10 w-10 opacity-30" />
+      <p className="text-sm font-medium text-foreground">Ticket vacío</p>
+      <p className="text-xs">Escanea o toca un producto para empezar</p>
+    </div>
+  )
+
   return (
-    <div className="flex flex-col lg:grid lg:grid-cols-12 h-screen bg-black overflow-hidden text-slate-200">
-
-      {/* ════════ PANEL IZQUIERDO: CATÁLOGO ════════ */}
-      <div className="lg:col-span-8 flex flex-col h-full overflow-hidden border-r border-zinc-900 bg-black">
-        <header className="sticky top-0 z-20 bg-black/60 backdrop-blur-xl border-b border-zinc-900 p-4 lg:px-8 lg:py-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-1.5 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
-              <div>
-                <h1 className="text-2xl font-black tracking-tight text-white uppercase">Nueva venta</h1>
-                <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] mt-0.5">TERMINAL 01 • POS</p>
-              </div>
+    <div className="flex min-h-full flex-col bg-background text-foreground lg:h-full lg:min-h-0 lg:flex-row">
+      {/* ════════ CATÁLOGO ════════ */}
+      <section className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
+        {/* Encabezado (pegajoso) */}
+        <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-6">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Nueva venta</h1>
+              <p className="text-xs text-muted-foreground">Terminal 01 · POS</p>
             </div>
 
-            <div className="flex items-center gap-4 flex-1 max-w-2xl">
-              <div className="relative flex-1 group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-600 group-focus-within:text-blue-500 transition-colors" />
-                <Input
-                  className="pl-12 pr-12 h-14 bg-zinc-950 border-zinc-800 rounded-2xl focus-visible:ring-blue-600 focus-visible:bg-black transition-all text-base font-medium text-white placeholder:text-zinc-700 shadow-inner"
-                  placeholder="Buscar producto o código de barras..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                  <ScanBarcode className="h-5 w-5" />
-                </div>
+            {cajaLoading ? (
+              <div className="flex h-10 items-center px-3 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
               </div>
+            ) : cajaActiva ? (
+              <Button
+                variant="outline"
+                onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
+                className="h-10 gap-2 border-success/40 text-success hover:bg-success/10 hover:text-success"
+              >
+                <DoorClosed className="h-4 w-4" />
+                <span className="hidden sm:inline">Caja abierta</span>
+                <span className="sm:hidden">Caja</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
+                className="h-10 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
+              >
+                <DoorOpen className="h-4 w-4" /> Abrir caja
+              </Button>
+            )}
+          </div>
 
-              {/* Botón de estado de caja */}
-              {cajaLoading ? (
-                <div className="h-14 px-5 flex items-center gap-2 text-zinc-600">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              ) : cajaActiva ? (
-                <Button variant="outline" onClick={() => { loadCaja(); setCloseCajaDialog(true); }}
-                  className="h-14 px-5 rounded-2xl border-emerald-800/50 bg-emerald-950/30 font-bold gap-3 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 hidden md:flex transition-all">
-                  <Store className="h-5 w-5 text-emerald-500" />
-                  Caja Abierta
-                  <DoorClosed className="h-4 w-4 opacity-50" />
-                </Button>
-              ) : (
-                <Button onClick={() => { loadCaja(); setOpenCajaDialog(true); }}
-                  className="h-14 px-5 rounded-2xl bg-amber-600 hover:bg-amber-500 font-bold gap-3 text-white hidden md:flex transition-all shadow-lg shadow-amber-900/20">
-                  <DoorOpen className="h-5 w-5" />
-                  Abrir Caja
-                </Button>
-              )}
+          {/* Búsqueda + escaneo */}
+          <div className="px-4 pb-3 lg:px-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-12 pl-10 pr-10 text-base"
+                placeholder="Buscar producto o código…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <ScanBarcode className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             </div>
+          </div>
+
+          {/* Chips de categoría */}
+          <div className="flex gap-2 overflow-x-auto px-4 pb-3 lg:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {categoryNames.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoriaActiva(cat)}
+                className={cn(
+                  "shrink-0 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors",
+                  categoriaActiva === cat
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
 
           {/* Banner: caja cerrada */}
           {!cajaLoading && !cajaActiva && (
-            <div className="mt-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm p-3 rounded-xl font-medium text-center flex items-center justify-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Debes abrir un turno de caja antes de realizar ventas
+            <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Debes abrir un turno de caja antes de vender
+            </div>
+          )}
+        </div>
+
+        {/* Lista de presentaciones */}
+        <div className="lg:flex-1 lg:overflow-y-auto">
+          {loading && (
+            <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-sm font-medium">Cargando catálogo…</span>
             </div>
           )}
 
-          {/* Tabs de categoría */}
-          <div className="mt-6">
-            <Tabs value={categoriaActiva} onValueChange={setCategoriaActiva} className="w-full">
-              <ScrollArea className="w-full whitespace-nowrap pb-2">
-                <TabsList className="bg-zinc-950/50 p-1.5 rounded-[20px] h-auto gap-1.5 border border-zinc-900">
-                  {categoryNames.map((cat) => (
-                    <TabsTrigger key={cat} value={cat}
-                      className="px-6 py-2.5 rounded-[16px] font-black text-[11px] uppercase tracking-widest text-zinc-600 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300">
-                      {cat}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </ScrollArea>
-            </Tabs>
-          </div>
-        </header>
-
-        {/* Tabla de presentaciones */}
-        <ScrollArea className="flex-1">
-          <div className="min-w-full">
-            <div className="sticky top-0 bg-black/95 backdrop-blur z-10 border-b border-zinc-900 px-8 py-3 flex text-[10px] font-black uppercase tracking-widest text-zinc-600">
-              <div className="w-24">Código</div>
-              <div className="flex-1">Producto / Presentación</div>
-              <div className="w-20 text-right">Stock</div>
-              <div className="w-32 text-right">Precio</div>
-              <div className="w-20 text-center">Vender</div>
+          {error && (
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+              <AlertTriangle className="h-9 w-9 text-destructive/70" />
+              <p className="text-sm font-medium text-destructive">{error}</p>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => { loadData(); loadCaja() }}>
+                <RefreshCw className="h-4 w-4" /> Reintentar
+              </Button>
             </div>
+          )}
 
-            {loading && (
-              <div className="flex items-center justify-center py-24 gap-3 text-zinc-500">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="font-bold text-sm">Cargando catálogo...</span>
+          {!loading && !error && (
+            filteredRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-24 text-center text-muted-foreground">
+                <Search className="h-8 w-8 opacity-30" />
+                <p className="text-sm font-medium text-foreground">No se encontraron productos</p>
+                <p className="text-xs">Verifica que los productos tengan presentaciones creadas</p>
               </div>
-            )}
-
-            {error && (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 text-zinc-400">
-                <AlertTriangle className="h-10 w-10 text-red-500/60" />
-                <p className="text-sm font-bold text-red-400">{error}</p>
-                <Button variant="outline" size="sm" className="rounded-xl border-zinc-800 gap-2" onClick={() => { loadData(); loadCaja() }}>
-                  <RefreshCw className="h-4 w-4" /> Reintentar
-                </Button>
-              </div>
-            )}
-
-            {!loading && !error && (
-              <div className="pb-24 lg:pb-12">
-                {filteredRows.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-24 text-zinc-500 gap-2">
-                    <Search className="h-8 w-8 opacity-30" />
-                    <p className="font-bold text-sm">No se encontraron productos</p>
-                    <p className="text-[11px] text-zinc-600">Verifica que los productos tengan presentaciones creadas</p>
-                  </div>
-                ) : (
-                  filteredRows.map((row) => (
-                    <div key={row.presentacion_id}
-                      className="group border-b border-zinc-900/50 hover:bg-zinc-900/40 transition-colors cursor-pointer px-8 py-4 flex items-center"
-                      onClick={() => handleAddToCart(row)}>
-                      <div className="w-24 text-xs font-mono text-zinc-600 group-hover:text-blue-500 transition-colors truncate pr-2">
+            ) : (
+              <ul className="divide-y divide-border pb-36 lg:pb-6">
+                {filteredRows.map((row) => (
+                  <li key={row.presentacion_id}>
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCart(row)}
+                      className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 lg:px-6"
+                    >
+                      <div className="hidden w-24 shrink-0 truncate font-mono text-xs text-muted-foreground sm:block">
                         {row.codigo_barras || `P${String(row.presentacion_id).padStart(4, '0')}`}
                       </div>
-                      <div className="flex-1 truncate pr-4">
-                        <span className="font-bold text-sm text-zinc-300 group-hover:text-white transition-colors">{row.producto_nombre}</span>
-                        {row.factor_conversion !== 1 && (
-                          <span className="text-xs text-blue-500/70 ml-2 font-bold">{row.presentacion_desc}</span>
-                        )}
-                        {row.factor_conversion === 1 && (
-                          <span className="text-xs text-zinc-600 ml-2 font-medium">{row.presentacion_desc}</span>
-                        )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{row.producto_nombre}</p>
+                        <p className="truncate text-xs text-muted-foreground">{row.presentacion_desc}</p>
                       </div>
-                      <div className="w-20 text-right">
-                        <span className={`text-xs font-bold ${row.stock > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{row.stock}</span>
+                      <div className="w-14 shrink-0 text-right">
+                        <span className={cn(
+                          "font-mono text-sm font-medium tabular-nums",
+                          row.stock > 0 ? "text-success" : "text-destructive",
+                        )}>
+                          {row.stock}
+                        </span>
+                        <p className="text-[10px] text-muted-foreground">stock</p>
                       </div>
-                      <div className="w-32 text-right font-black text-white text-lg tracking-tight group-hover:text-blue-400 transition-colors">
-                        ${row.precio_venta.toFixed(2)}
+                      <div className="w-20 shrink-0 text-right">
+                        <MoneyValue value={row.precio_venta} className="text-base font-semibold" />
                       </div>
-                      <div className="w-20 flex justify-end pl-4">
-                        <div className="h-8 w-8 rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner border border-zinc-800 group-hover:border-blue-500">
-                          <Plus className="h-4 w-4" />
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* ════════ PANEL DERECHO: CARRITO + CHECKOUT ════════ */}
-      <div className="lg:col-span-4 flex flex-col h-full bg-[#0A0A0A] relative border-l border-zinc-900">
-        <div className="p-6 border-b border-zinc-900 flex items-center justify-between bg-black/50 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-              <ShoppingCart className="h-5 w-5 text-blue-500" />
-            </div>
-            <h3 className="text-lg font-black text-white tracking-tight">Ticket de Compra</h3>
-          </div>
-          <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-red-400 hover:bg-red-400/10 font-bold rounded-xl" onClick={clearCart}>
-            Anular Todo
-          </Button>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                        <Plus className="h-4 w-4" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
         </div>
+      </section>
 
-        {/* Items */}
-        <ScrollArea className="flex-1 px-4 py-4">
-          <div className="space-y-2 pb-4">
-            {items.length === 0 ? (
-              <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-center p-8 space-y-4 opacity-20">
-                <div className="h-24 w-24 bg-zinc-900 rounded-full flex items-center justify-center border border-zinc-800">
-                  <ShoppingCart className="h-10 w-10 text-white" />
-                </div>
-                <div>
-                  <p className="text-lg font-black text-white uppercase tracking-widest">TICKET VACÍO</p>
-                  <p className="text-sm font-bold mt-1 text-zinc-500">Escanea códigos para iniciar venta</p>
-                </div>
-              </div>
-            ) : (
-              items.map((item) => (
-                <div key={item.id} className="p-4 border border-zinc-900 bg-zinc-950/50 shadow-sm hover:border-zinc-800 hover:bg-zinc-900 transition-all rounded-2xl group flex flex-col gap-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="flex-1 space-y-1">
-                      <h4 className="text-sm font-black text-white leading-tight uppercase tracking-tight">
-                        {item.producto_nombre || item.nombre}
-                      </h4>
-                      <p className="text-[11px] font-bold text-blue-500 uppercase flex items-center gap-1.5">
-                        <Store className="h-3 w-3" /> {item.presentacion_nombre || "Unidad"}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-600 hover:text-red-400 rounded-md hover:bg-red-400/10 flex-shrink-0" onClick={() => removeItem(item.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center bg-black rounded-lg p-0.5 border border-zinc-800">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md hover:bg-zinc-800 hover:text-white text-zinc-400" onClick={() => updateQuantity(item.id, item.cantidad - 1)}>
-                        <Minus className="h-3.5 w-3.5" />
-                      </Button>
-                      <input type="number" className="w-10 bg-transparent text-center text-sm font-black text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={item.cantidad} readOnly />
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md hover:bg-zinc-800 text-blue-400 hover:text-blue-300" onClick={() => updateQuantity(item.id, item.cantidad + 1)}>
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className="text-xs font-medium text-zinc-500">${item.precio.toFixed(2)} c/u</span>
-                        <span className="text-lg font-black text-white">${(item.precio * item.cantidad).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
+      {/* ════════ TICKET (panel de escritorio) ════════ */}
+      <aside className="hidden w-[380px] flex-col border-l border-border bg-card lg:flex lg:h-full">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <ShoppingCart className="h-5 w-5 text-primary" /> Ticket
+          </h2>
+          {items.length > 0 && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={clearCart}>
+              Anular
+            </Button>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-4">
+          {items.length === 0 ? emptyTicket : (
+            <CartLines items={items} updateQuantity={updateQuantity} removeItem={removeItem} />
+          )}
+        </div>
+        <div className="border-t border-border p-4">
+          <CheckoutSection
+            total={total}
+            itemCount={itemCount}
+            pagoCliente={pagoCliente}
+            setPagoCliente={setPagoCliente}
+            onCheckout={handleCheckout}
+            checkoutLoading={checkoutLoading}
+            hasCaja={!!cajaActiva}
+            checkoutSuccess={checkoutSuccess}
+            checkoutError={checkoutError}
+          />
+        </div>
+      </aside>
+
+      {/* ════════ BARRA DE CARRITO (móvil) ════════ */}
+      <button
+        type="button"
+        onClick={() => setCartOpen(true)}
+        aria-label="Ver ticket"
+        className="fixed inset-x-0 z-40 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 text-left lg:hidden"
+        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="relative flex h-9 w-9 items-center justify-center rounded-sm bg-primary/10 text-primary">
+            <ShoppingCart className="h-5 w-5" />
+            {itemCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {itemCount}
+              </span>
             )}
-          </div>
-        </ScrollArea>
+          </span>
+          <span className="text-sm font-medium">
+            {itemCount > 0 ? `${itemCount} ${itemCount === 1 ? "artículo" : "artículos"}` : "Ticket vacío"}
+          </span>
+        </span>
+        <span className="flex items-center gap-2">
+          <MoneyValue value={total} className="text-base font-semibold" />
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </span>
+      </button>
 
-        {/* ─── Footer: Total + Procesar Pago ─── */}
-        <div className="p-6 bg-black border-t border-zinc-900 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative z-10">
-          {/* Mensajes de éxito/error */}
-          {checkoutSuccess && (
-            <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm p-3 rounded-xl font-bold flex items-center gap-2 animate-in fade-in">
-              <CheckCircle2 className="h-5 w-5" /> ¡Venta registrada exitosamente!
+      {/* ════════ BOTTOM SHEET: TICKET (móvil) ════════ */}
+      <BottomSheet open={cartOpen} onOpenChange={setCartOpen}>
+        <BottomSheetContent className="lg:hidden">
+          <BottomSheetHeader className="flex-row items-center justify-between p-0 pb-1">
+            <BottomSheetTitle>Ticket de compra</BottomSheetTitle>
+            {items.length > 0 && (
+              <Button variant="ghost" size="sm" className="mr-8 text-muted-foreground hover:text-destructive" onClick={clearCart}>
+                Anular todo
+              </Button>
+            )}
+          </BottomSheetHeader>
+          {items.length === 0 ? emptyTicket : (
+            <div className="flex flex-col gap-4">
+              <CartLines items={items} updateQuantity={updateQuantity} removeItem={removeItem} />
+              <CheckoutSection
+                total={total}
+                itemCount={itemCount}
+                pagoCliente={pagoCliente}
+                setPagoCliente={setPagoCliente}
+                onCheckout={handleCheckout}
+                checkoutLoading={checkoutLoading}
+                hasCaja={!!cajaActiva}
+                checkoutSuccess={checkoutSuccess}
+                checkoutError={checkoutError}
+              />
             </div>
           )}
-          {checkoutError && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl font-bold flex items-center gap-2">
-              <XCircle className="h-5 w-5" /> {checkoutError}
-            </div>
-          )}
-
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">Total a cobrar</p>
-              <h2 className="text-5xl font-black text-white tracking-tighter leading-none">${getTotal().toFixed(2)}</h2>
-            </div>
-            <div className="text-right flex flex-col items-end">
-              <p className="text-sm font-bold text-blue-500 mb-2">{items.reduce((acc, i) => acc + i.cantidad, 0)} Artículos</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Paga con: $</span>
-                <Input 
-                  type="number" 
-                  min={0} 
-                  step="0.01" 
-                  value={pagoCliente}
-                  onChange={(e) => setPagoCliente(e.target.value)}
-                  className="w-24 h-8 bg-zinc-900 border-zinc-800 text-white text-right font-bold focus-visible:ring-blue-500 px-2"
-                  placeholder="0.00"
-                />
-              </div>
-              {parseFloat(pagoCliente) >= getTotal() && getTotal() > 0 && (
-                <div className="mt-2 text-sm font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded inline-block">
-                  Cambio: ${(parseFloat(pagoCliente) - getTotal()).toFixed(2)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <Button
-            className="w-full h-16 rounded-[20px] bg-blue-600 hover:bg-blue-500 text-white text-xl font-black shadow-[0_0_30px_rgba(37,99,235,0.2)] group flex items-center justify-center gap-3 transition-all active:scale-[0.98] border-t border-blue-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
-            disabled={items.length === 0 || !cajaActiva || checkoutLoading}
-            onClick={handleCheckout}
-          >
-            {checkoutLoading ? (
-              <>
-                <Loader2 className="h-6 w-6 animate-spin" />
-                PROCESANDO...
-              </>
-            ) : !cajaActiva ? (
-              <>
-                <DoorOpen className="h-6 w-6" />
-                ABRE LA CAJA PRIMERO
-              </>
-            ) : (
-              <>
-                <span>PROCESAR PAGO</span>
-                <ChevronRight className="h-6 w-6 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+        </BottomSheetContent>
+      </BottomSheet>
 
       {/* ════════ DIALOG: ABRIR CAJA ════════ */}
       <Dialog open={openCajaDialog} onOpenChange={setOpenCajaDialog}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200 sm:max-w-md" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-              <DoorOpen className="h-5 w-5 text-emerald-500" /> Abrir Turno de Caja
+            <DialogTitle className="flex items-center gap-2">
+              <DoorOpen className="h-5 w-5 text-success" /> Abrir turno de caja
             </DialogTitle>
-            <DialogDescription className="text-zinc-500">
+            <DialogDescription>
               Ingresa el monto de efectivo con el que inicias el turno.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAbrirCaja} className="space-y-4 mt-2">
-            
+          <form onSubmit={handleAbrirCaja} className="flex flex-col gap-4">
             {ultimoCierreFondo !== null && (
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-400">Total dejado en turno anterior:</span>
-                  <span className="font-black text-white text-sm">${Number(ultimoCierreFondo).toFixed(2)}</span>
+              <div className="flex flex-col gap-2 rounded-sm border border-border bg-muted/50 p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Total dejado en turno anterior</span>
+                  <MoneyValue value={ultimoCierreFondo} className="text-sm font-semibold" />
                 </div>
-                
-                {ultimoCierreFondo !== null && fondoInicial !== "" && (
-                  (() => {
-                    const diff = parseFloat(fondoInicial) - Number(ultimoCierreFondo);
-                    if (diff > 0) {
-                      return (
-                        <div className="bg-blue-500/10 text-blue-400 p-2 rounded-lg mt-2 flex items-start gap-2">
-                          <Plus className="w-4 h-4 shrink-0 mt-0.5" />
-                          <p>Iniciando con <strong>${Math.abs(diff).toFixed(2)}</strong> extra. Se registrará como inyección de capital.</p>
-                        </div>
-                      )
-                    } else if (diff < 0) {
-                      return (
-                        <div className="bg-red-500/10 text-red-400 p-2 rounded-lg mt-2 flex items-start gap-2">
-                          <Minus className="w-4 h-4 shrink-0 mt-0.5" />
-                          <p>Iniciando con <strong>${Math.abs(diff).toFixed(2)}</strong> menos. Se registrará como faltante.</p>
-                        </div>
-                      )
-                    } else {
-                      return (
-                        <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg mt-2 flex items-start gap-2">
-                          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                          <p>Iniciando con el mismo monto exacto que se dejó ayer.</p>
-                        </div>
-                      )
-                    }
-                  })()
-                )}
+
+                {fondoInicial !== "" && (() => {
+                  const diff = parseFloat(fondoInicial) - Number(ultimoCierreFondo)
+                  if (diff > 0) {
+                    return (
+                      <div className="flex items-start gap-2 rounded-sm bg-primary/10 p-2 text-primary">
+                        <Plus className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>Iniciando con <strong><MoneyValue value={Math.abs(diff)} tone="default" className="text-primary" /></strong> extra. Se registrará como inyección de capital.</p>
+                      </div>
+                    )
+                  } else if (diff < 0) {
+                    return (
+                      <div className="flex items-start gap-2 rounded-sm bg-destructive/10 p-2 text-destructive">
+                        <Minus className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>Iniciando con <strong><MoneyValue value={Math.abs(diff)} tone="destructive" /></strong> menos. Se registrará como faltante.</p>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="flex items-start gap-2 rounded-sm bg-success/10 p-2 text-success">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>Iniciando con el mismo monto exacto que se dejó ayer.</p>
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Fondo Inicial Físico ($)</Label>
-              <Input type="number" min={0} step="0.01" value={fondoInicial}
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Fondo inicial físico ($)</Label>
+              <Input
+                type="number" min={0} step="0.01" inputMode="decimal" value={fondoInicial}
                 onChange={(e) => setFondoInicial(e.target.value)}
-                className="bg-black/50 border-zinc-800 text-white h-14 rounded-xl text-2xl font-black text-center focus-visible:ring-emerald-500"
-                autoFocus />
+                className="h-14 text-center font-mono text-2xl font-bold tabular-nums"
+                autoFocus
+              />
             </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" onClick={() => setOpenCajaDialog(false)}
-                className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl">Cancelar</Button>
-              <Button type="submit" disabled={cajaActionLoading}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg gap-2">
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setOpenCajaDialog(false)}>Cancelar</Button>
+              <Button type="submit" disabled={cajaActionLoading} className="gap-2 bg-success text-success-foreground hover:bg-success/90">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorOpen className="h-4 w-4" />}
-                Abrir Caja
+                Abrir caja
               </Button>
             </div>
           </form>
@@ -666,66 +633,76 @@ export default function POSPage() {
 
       {/* ════════ DIALOG: CERRAR CAJA ════════ */}
       <Dialog open={closeCajaDialog} onOpenChange={setCloseCajaDialog}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200 sm:max-w-md" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-              <DoorClosed className="h-5 w-5 text-amber-500" /> Cerrar Turno de Caja
+            <DialogTitle className="flex items-center gap-2">
+              <DoorClosed className="h-5 w-5 text-warning" /> Cerrar turno de caja
             </DialogTitle>
-            <DialogDescription className="text-zinc-500">
-              Ingresa el total físico y cuánto enviarás a la Bóveda.
+            <DialogDescription>
+              Ingresa el total físico y cuánto enviarás a la bóveda.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCerrarCaja} className="space-y-4 mt-2">
+          <form onSubmit={handleCerrarCaja} className="flex flex-col gap-4">
             {cajaActiva && (
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs space-y-1">
-                <div className="flex justify-between"><span className="text-zinc-500">Efectivo Esperado (Sistema):</span><span className="font-black text-indigo-400 text-sm">${parseFloat(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial).toFixed(2)}</span></div>
+              <div className="flex items-center justify-between rounded-sm border border-border bg-muted/50 p-3 text-xs">
+                <span className="text-muted-foreground">Efectivo esperado (sistema)</span>
+                <MoneyValue value={cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial} className="text-sm font-semibold" />
               </div>
             )}
-            
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Físico en Gaveta ($)</Label>
-              <Input type="number" min={0} step="0.01" value={efectivoDeclarado}
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Total físico en gaveta ($)</Label>
+              <Input
+                type="number" min={0} step="0.01" inputMode="decimal" value={efectivoDeclarado}
                 onChange={(e) => setEfectivoDeclarado(e.target.value)}
-                className="bg-black/50 border-zinc-800 text-white h-12 rounded-xl text-xl font-black text-center focus-visible:ring-amber-500"
-                autoFocus />
+                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                autoFocus
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Trasladar a Bóveda ($)</Label>
-              <Input type="number" min={0} step="0.01" value={montoBoveda}
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-success">Trasladar a bóveda ($)</Label>
+              <Input
+                type="number" min={0} step="0.01" inputMode="decimal" value={montoBoveda}
                 onChange={(e) => setMontoBoveda(e.target.value)}
                 placeholder="0.00"
-                className="bg-emerald-950/20 border-emerald-900/50 text-emerald-400 h-12 rounded-xl text-xl font-black text-center focus-visible:ring-emerald-500" />
+                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+              />
             </div>
 
-            <div className="bg-black/40 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Fondo Siguiente Turno</Label>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="autoOpen" checked={autoOpenNext} onChange={e => setAutoOpenNext(e.target.checked)} className="rounded border-zinc-800 bg-black text-amber-500 focus:ring-amber-500" />
-                  <Label htmlFor="autoOpen" className="text-xs text-zinc-400 cursor-pointer">Reabrir automáticamente</Label>
-                </div>
+            <div className="flex items-center justify-between rounded-sm border border-border p-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs font-medium text-muted-foreground">Fondo siguiente turno</Label>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox" checked={autoOpenNext}
+                    onChange={e => setAutoOpenNext(e.target.checked)}
+                    className="h-4 w-4 rounded-sm accent-primary"
+                  />
+                  Reabrir automáticamente
+                </label>
               </div>
-              <span className="text-xl font-black text-white">
-                ${Math.max(0, (parseFloat(efectivoDeclarado) || 0) - (parseFloat(montoBoveda) || 0)).toFixed(2)}
-              </span>
+              <MoneyValue
+                value={Math.max(0, (parseFloat(efectivoDeclarado) || 0) - (parseFloat(montoBoveda) || 0))}
+                className="text-xl font-bold"
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Observaciones (Opcional)</Label>
-              <Input type="text" value={observacionesCierre}
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Observaciones (opcional)</Label>
+              <Input
+                type="text" value={observacionesCierre}
                 onChange={(e) => setObservacionesCierre(e.target.value)}
-                placeholder="Razón de descuadre o nota..."
-                className="bg-black/50 border-zinc-800 text-white h-10 rounded-xl focus-visible:ring-amber-500" />
+                placeholder="Razón de descuadre o nota…"
+                className="h-10"
+              />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" onClick={() => setCloseCajaDialog(false)}
-                className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl">Cancelar</Button>
-              <Button type="submit" disabled={cajaActionLoading}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg gap-2">
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
+              <Button type="submit" disabled={cajaActionLoading} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
-                Confirmar Cierre
+                Confirmar cierre
               </Button>
             </div>
           </form>
