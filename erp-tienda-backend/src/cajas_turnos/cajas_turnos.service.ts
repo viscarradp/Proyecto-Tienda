@@ -13,7 +13,7 @@ import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
 export class CajasTurnosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async abrir(createCajaTurnoDto: CreateCajaTurnoDto) {
+  async abrir(createCajaTurnoDto: CreateCajaTurnoDto, userId?: number) {
     const fondoInicial = createCajaTurnoDto.fondo_inicial;
 
     // Advisory lock: serializa aperturas de turno concurrentes. Sin esto, dos
@@ -50,6 +50,7 @@ export class CajasTurnosService {
           fecha_apertura: new Date(),
           // Lo esperado siempre coincide con lo que reportamos al inicio
           efectivo_esperado: fondoInicial,
+          usuario_id: userId,
         },
       });
 
@@ -64,6 +65,7 @@ export class CajasTurnosService {
             monto: new Prisma.Decimal(diferencia),
             descripcion:
               'Inyección de capital (Inicio de turno mayor al cierre anterior)',
+            usuario_id: userId,
           },
         });
       }
@@ -76,6 +78,7 @@ export class CajasTurnosService {
             monto: new Prisma.Decimal(Math.abs(diferencia)),
             descripcion:
               'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
+            usuario_id: userId,
           },
         });
       }
@@ -110,7 +113,11 @@ export class CajasTurnosService {
     };
   }
 
-  async cerrar(id: number, closeCajaTurnoDto: CloseCajaTurnoDto) {
+  async cerrar(
+    id: number,
+    closeCajaTurnoDto: CloseCajaTurnoDto,
+    userId?: number,
+  ) {
     // Todo el método corre en una única transacción con la fila del turno
     // bloqueada (FOR UPDATE): dos solicitudes de cierre concurrentes sobre el
     // mismo turno no deben producir doble ajuste financiero
@@ -172,6 +179,7 @@ export class CajasTurnosService {
               (closeCajaTurnoDto.observaciones
                 ? ` - Obs: ${closeCajaTurnoDto.observaciones}`
                 : ''),
+            usuario_id: userId,
           },
         });
       }

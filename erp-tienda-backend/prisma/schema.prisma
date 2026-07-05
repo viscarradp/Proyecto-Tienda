@@ -26,9 +26,12 @@ model ajustes_inventario {
   costo_asumido     Decimal          @db.Decimal(10, 2)
   fecha             DateTime?        @default(now()) @db.Timestamptz(6)
   justificacion     String?
+  usuario_id        Int?
   lotes_inventario  lotes_inventario @relation(fields: [lote_id], references: [id], onUpdate: NoAction, map: "fk_lote_ajuste")
+  usuarios          usuarios?        @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_ajuste")
 
   @@index([lote_id])
+  @@index([usuario_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -43,14 +46,17 @@ model cajas_turnos {
   efectivo_declarado      Decimal?                  @db.Decimal(10, 2)
   diferencia              Decimal?                  @db.Decimal(10, 2)
   observaciones           String?
+  usuario_id              Int?
   movimientos_financieros movimientos_financieros[]
   ventas                  ventas[]
+  usuarios                usuarios?                 @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_caja_turno")
 
   // Casi toda operación de escritura (ventas, compras, egresos, ajustes,
   // abrir/cerrar turno) busca "el turno ABIERTA"; abrir() y getUltimoCierre()
   // buscan además el CERRADA más reciente por fecha_cierre. Este índice
   // compuesto sirve ambas consultas (ver docs/decisions/0005-indices-bd.md).
   @@index([estado, fecha_cierre])
+  @@index([usuario_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -160,8 +166,10 @@ model movimientos_financieros {
   categoria_gasto_id Int?
   descripcion        String
   fecha              DateTime?          @default(now()) @db.Timestamptz(6)
+  usuario_id         Int?
   cajas_turnos       cajas_turnos?      @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
   categorias_gastos  categorias_gastos? @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
+  usuarios           usuarios?          @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_movimiento")
   caja_general       caja_general?
 
   // reportes.service.ts filtra siempre tipo_movimiento + fecha juntos
@@ -169,6 +177,7 @@ model movimientos_financieros {
   @@index([tipo_movimiento, fecha])
   @@index([caja_turno_id])
   @@index([categoria_gasto_id])
+  @@index([usuario_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -206,6 +215,12 @@ model usuarios {
   rol           String    @db.VarChar(20)
   password_hash String    @db.VarChar(255)
   created_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  // Trazabilidad de autor (Bloque 1, §5.2). Back-relations de usuario_id.
+  cajas_turnos            cajas_turnos[]
+  ventas                  ventas[]
+  movimientos_financieros movimientos_financieros[]
+  ajustes_inventario      ajustes_inventario[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -218,13 +233,16 @@ model ventas {
   estado             String           @default("COMPLETADA") @db.VarChar(20)
   justificacion_nula String?          @db.Text
   fecha_anulacion    DateTime?        @db.Timestamptz(6)
+  usuario_id         Int?
   detalle_ventas     detalle_ventas[]
   cajas_turnos       cajas_turnos     @relation(fields: [caja_turno_id], references: [id], onUpdate: NoAction, map: "fk_caja_venta")
+  usuarios           usuarios?        @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_venta")
 
   // reportes.service.ts filtra siempre estado + fecha juntos (estado de
   // resultados, productos top, margen por producto).
   @@index([estado, fecha])
   @@index([caja_turno_id])
+  @@index([usuario_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

@@ -5,11 +5,11 @@
 
 ## Estado global
 
-**Sub-fase actual:** Planificación (1.A aún no iniciada).
+**Sub-fase actual:** 1.A completada; siguiente = 1.B (Decimal).
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
-| 1.A · `usuario_id` | ⬜ Pendiente | — |
+| 1.A · `usuario_id` | ✅ Completada | 4 tablas + `@CurrentUser()`; e2e 7/7 verdes. |
 | 1.B · Decimal (fraccionados) | ⬜ Pendiente | — |
 | 1.C · origen→destino + bóveda derivada | ⬜ Pendiente | — |
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
@@ -30,6 +30,18 @@
   truth); se elimina la tabla `caja_general` como fuente y se arrastran las fugas C/D al
   Bloque 1 por estar acopladas al ítem 4.
 - Creada la rama `feature/bloque1-modelo-contable` y `docs/modelo-contable/` con Specs + Plan.
+
+### 2026-07-05 — Sub-fase 1.A: trazabilidad `usuario_id` ✅
+- **Schema**: `usuario_id Int?` (FK a `usuarios`, `onDelete: SetNull`) + índice en
+  `cajas_turnos`, `ventas`, `movimientos_financieros`, `ajustes_inventario`; back-relations
+  en `usuarios`.
+- **`@CurrentUser()`** (`src/auth/decorators/current-user.decorator.ts`) extrae `request.user`.
+- Los controllers de ventas, cajas-turnos, movimientos y ajustes inyectan `userId` y lo
+  pasan al service; se persiste en cada create (incluidos los movimientos automáticos de
+  apertura/cierre y la merma). `userId` opcional para no romper llamadas internas/tests.
+- **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
+  7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
+  usuario, patrón Fase 3).
 
 ---
 

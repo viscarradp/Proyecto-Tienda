@@ -11,7 +11,10 @@ import { CajaTurnoRow } from '../common/concurrency';
 export class MovimientosFinancierosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createMovimientosFinancieroDto: CreateMovimientosFinancieroDto) {
+  async create(
+    createMovimientosFinancieroDto: CreateMovimientosFinancieroDto,
+    userId?: number,
+  ) {
     const { tipo_movimiento, categoria_gasto_id } =
       createMovimientosFinancieroDto;
 
@@ -67,6 +70,7 @@ export class MovimientosFinancierosService {
         data: {
           ...createMovimientosFinancieroDto,
           caja_turno_id: cajaTurno.id,
+          usuario_id: userId,
         },
       });
 

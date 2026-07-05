@@ -105,7 +105,7 @@
 
 | Sub-fase | Descripción | Estado |
 |---|---|---|
-| 1.A | Trazabilidad `usuario_id` | ⬜ Pendiente |
+| 1.A | Trazabilidad `usuario_id` | ✅ Completada |
 | 1.B | Cantidades a Decimal | ⬜ Pendiente |
 | 1.C | Modelo origen→destino + bóveda derivada | ⬜ Pendiente |
 | 1.D | Retiro personal + Sacar dinero + gastos bóveda | ⬜ Pendiente |

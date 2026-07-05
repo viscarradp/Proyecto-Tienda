@@ -11,7 +11,7 @@ import { Prisma } from '@prisma/client';
 export class AjustesInventarioService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createAjusteDto: CreateAjusteInventarioDto) {
+  async create(createAjusteDto: CreateAjusteInventarioDto, userId?: number) {
     const { lote_id, cantidad_ajustada, tipo_ajuste, justificacion } =
       createAjusteDto;
 
@@ -55,6 +55,7 @@ export class AjustesInventarioService {
           tipo_ajuste,
           justificacion,
           costo_asumido,
+          usuario_id: userId,
         },
         include: {
           lotes_inventario: {
@@ -83,6 +84,7 @@ export class AjustesInventarioService {
               `Merma: ${tipo_ajuste}` +
               (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
               ` (Lote #${lote_id})`,
+            usuario_id: userId,
           },
         });
         // NOTA: NO se hace decrement de efectivo_esperado porque la merma
