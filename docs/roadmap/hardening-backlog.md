@@ -2,7 +2,7 @@
 
 Este documento existe para que lo diferido no se olvide. Cada ítem indica
 **por qué** se dejó fuera de la Fase 0 y **cuándo** retomarlo. Referencias a
-hallazgos: ver `AUDITORIA-TECNICA.md` en la raíz del repo.
+hallazgos: ver [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md).
 
 ## Antes de entrar a producción (bloqueante)
 

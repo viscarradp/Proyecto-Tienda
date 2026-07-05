@@ -157,7 +157,7 @@ gráficos) — se consulta antes de añadir dependencias.
 | 1 | Shell de navegación (mobile-first) | ✅ Completada |
 | 2 | POS ⭐ | ✅ Completada |
 | 3 | Inventario (+ diálogos) | ✅ Completada |
-| 4 | Movimientos + Gastos | ⬜ Pendiente |
+| 4 | Movimientos + Gastos | ✅ Completada |
 | 5 | Estadísticas | ⬜ Pendiente |
 | 6 | Login, pulido y auditoría final | ⬜ Pendiente |
 

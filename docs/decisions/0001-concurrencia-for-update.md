@@ -4,7 +4,7 @@
 
 ## Contexto
 
-La auditoría técnica (`AUDITORIA-TECNICA.md`, hallazgos H1/H2/H7) encontró que
+La auditoría técnica (`auditorias/2026-07-02-auditoria-tecnica.md`, hallazgos H1/H2/H7) encontró que
 varias operaciones financieras/de inventario seguían el patrón "leer, decidir,
 escribir" sin ningún bloqueo:
 

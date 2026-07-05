@@ -2,34 +2,32 @@
 
 import * as React from "react"
 import {
-  Banknote,
   Calendar,
   ChevronDown,
   ChevronRight,
   Clock,
-  Coins,
   DoorClosed,
   DoorOpen,
   Filter,
   Package,
-  PiggyBank,
   RefreshCw,
   Search,
   ShoppingCart,
-  Store,
-  TerminalSquare,
   TrendingDown,
   TrendingUp,
   XCircle,
 } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { MoneyValue } from "@/components/money-value"
+import { formatMoney } from "@/lib/format"
+import { StatePill } from "@/components/state-pill"
+import { StatCard } from "@/components/stat-card"
 import { apiFetch } from "@/lib/api"
 import { format, differenceInDays } from "date-fns"
 import { es } from "date-fns/locale"
@@ -101,7 +99,7 @@ export default function MovimientosPage() {
       ])
       setTurnos(turnosData)
       setVentas(ventasData)
-      
+
       // Expand primary active turno if any
       const activo = turnosData.find(t => t.estado === 'ABIERTA')
       if (activo) setExpandedTurno(activo.id)
@@ -149,7 +147,7 @@ export default function MovimientosPage() {
   const ingresosPeriodo = ventasFiltradas
     .filter(v => v.estado === 'COMPLETADA')
     .reduce((acc, v) => acc + parseFloat(v.total), 0)
-  
+
   const turnosCerradosPeriodo = filteredTurnos.filter(t => t.estado === 'CERRADA')
   const descuadreTotal = turnosCerradosPeriodo.reduce((acc, t) => acc + parseFloat(t.diferencia || "0"), 0)
   const cajaActiva = turnos.find(t => t.estado === 'ABIERTA')
@@ -182,314 +180,268 @@ export default function MovimientosPage() {
     }
   }
 
-  // Helper de colores financieros
-  const getDiferenciaColor = (diferencia: string | null) => {
-    if (!diferencia) return "text-zinc-500"
+  // Tono semántico para el descuadre
+  const getDiferenciaTone = (diferencia: string | null): "success" | "destructive" | "muted" => {
+    if (!diferencia) return "muted"
     const val = parseFloat(diferencia)
-    if (val > 0) return "text-emerald-400"
-    if (val < 0) return "text-red-400"
-    return "text-zinc-200"
+    if (val > 0) return "success"
+    if (val < 0) return "destructive"
+    return "muted"
   }
 
   if (!mounted) return null
 
   return (
-    <div className="flex flex-col h-full bg-black text-slate-200">
+    <div className="flex min-h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-black/60 backdrop-blur-xl border-b border-zinc-900 px-6 py-5 lg:px-8 lg:py-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-1.5 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-white uppercase flex items-center gap-3">
-                <Store className="h-7 w-7 text-indigo-400" />
-                Ventas y Turnos
-              </h1>
-              <p className="text-xs font-bold text-zinc-500 tracking-[0.1em] mt-1">
-                HISTORIAL DE CAJAS, VENTAS Y CUADRES
-              </p>
-            </div>
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Ventas y turnos</h1>
+            <p className="text-xs text-muted-foreground">Historial de cajas, ventas y cuadres</p>
           </div>
 
-          <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2">
             <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="w-40 h-11 bg-zinc-950/50 border-zinc-800 text-sm font-bold text-zinc-300 rounded-xl focus:ring-indigo-500">
+              <SelectTrigger className="h-11 w-40 shrink-0">
                 <SelectValue placeholder="Periodo" />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-950 border-zinc-800">
-                <SelectItem value="ultimos_7" className="text-zinc-200 focus:bg-zinc-800 font-medium">Últimos 7 turnos</SelectItem>
-                <SelectItem value="ultima_semana" className="text-zinc-200 focus:bg-zinc-800 font-medium">Última semana</SelectItem>
-                <SelectItem value="ultimos_15" className="text-zinc-200 focus:bg-zinc-800 font-medium">Últimos 15 días</SelectItem>
-                <SelectItem value="ultimo_mes" className="text-zinc-200 focus:bg-zinc-800 font-medium">Último mes</SelectItem>
-                <SelectItem value="todos" className="text-zinc-200 focus:bg-zinc-800 font-medium">Todos los turnos</SelectItem>
+              <SelectContent>
+                <SelectItem value="ultimos_7">Últimos 7 turnos</SelectItem>
+                <SelectItem value="ultima_semana">Última semana</SelectItem>
+                <SelectItem value="ultimos_15">Últimos 15 días</SelectItem>
+                <SelectItem value="ultimo_mes">Último mes</SelectItem>
+                <SelectItem value="todos">Todos los turnos</SelectItem>
               </SelectContent>
             </Select>
 
-            <div className="relative flex-1 md:w-72">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar ID, fecha, estado..."
+                placeholder="Buscar ID, fecha, estado…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="pl-10 h-11 bg-zinc-950/50 border-zinc-800 focus-visible:ring-indigo-500 rounded-xl"
+                className="h-11 pl-9"
               />
             </div>
-            <Button variant="outline" size="icon" onClick={loadData} disabled={loading}
-              className="h-11 w-11 shrink-0 rounded-xl border-zinc-800 bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <Button variant="outline" size="icon" onClick={loadData} disabled={loading} className="h-11 w-11 shrink-0">
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
           </div>
         </div>
       </header>
 
       {/* Content */}
-      <ScrollArea className="flex-1 px-4 py-6 md:px-8">
-        <div className="max-w-6xl mx-auto space-y-6">
-          
-          {/* Dashboard Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className={`border rounded-2xl p-5 relative overflow-hidden group transition-colors ${cajaActiva ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-950/40 border-zinc-900'}`}>
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                {cajaActiva ? <DoorOpen className="h-20 w-20 text-emerald-500" /> : <DoorClosed className="h-20 w-20 text-zinc-500" />}
-              </div>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Estado de Caja (Hoy)</p>
-              <div className="flex items-center gap-2 mt-1">
-                <div className={`h-2 w-2 rounded-full ${cajaActiva ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                <p className={`text-xl font-black ${cajaActiva ? 'text-emerald-400' : 'text-zinc-400'}`}>
-                  {cajaActiva ? "EN OPERACIÓN" : "CERRADA"}
-                </p>
-              </div>
-              {cajaActiva && (
-                <p className="text-xs font-medium text-emerald-500/70 mt-1">
-                  Fondo Inicial: ${parseFloat(cajaActiva.fondo_inicial).toFixed(2)}
-                </p>
-              )}
-            </div>
-            
-            <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group col-span-1 md:col-span-2">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                <Banknote className="h-24 w-24 text-indigo-500" />
-              </div>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Ingresos del Período</p>
-              <div className="flex items-end gap-3">
-                <p className="text-4xl font-black text-white tracking-tight">
-                  ${ingresosPeriodo.toFixed(2)}
-                </p>
-                <p className="text-xs font-bold text-zinc-500 mb-1">en {ventasFiltradas.length} ventas</p>
-              </div>
-            </div>
+      <div className="flex-1 px-4 py-6 md:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6">
 
-            <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                <TerminalSquare className="h-24 w-24 text-amber-500" />
-              </div>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Turnos Visibles</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-black text-white">{filteredTurnos.length}</p>
-                <p className="text-xs text-zinc-500 font-bold">turnos</p>
-              </div>
-              <div className="mt-1 flex items-center gap-1.5 object-contain">
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${descuadreTotal >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>
-                  Dev. $: {descuadreTotal >= 0 ? '+' : ''}{descuadreTotal.toFixed(2)}
+          {/* Stat cards */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <StatCard
+              label="Estado de caja (hoy)"
+              icon={cajaActiva ? DoorOpen : DoorClosed}
+              footer={cajaActiva ? <>Fondo inicial: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
+              className={cajaActiva ? "border-success/30" : undefined}
+            >
+              <div className="flex items-center gap-2">
+                <span className={cn("h-2 w-2 rounded-full", cajaActiva ? "bg-success" : "bg-destructive")} />
+                <p className={cn("text-lg font-semibold", cajaActiva ? "text-success" : "text-muted-foreground")}>
+                  {cajaActiva ? "En operación" : "Cerrada"}
                 </p>
               </div>
-            </div>
+            </StatCard>
+
+            <StatCard label="Ingresos del período" className="md:col-span-2" footer={`en ${ventasFiltradas.length} ventas`}>
+              <MoneyValue value={ingresosPeriodo} className="text-3xl font-bold tracking-tight" />
+            </StatCard>
+
+            <StatCard label="Turnos visibles">
+              <div className="flex items-baseline gap-2">
+                <p className="font-mono text-2xl font-bold tabular-nums">{filteredTurnos.length}</p>
+                <p className="text-xs text-muted-foreground">turnos</p>
+              </div>
+              <p className={cn("mt-1 text-xs font-medium", descuadreTotal >= 0 ? "text-success" : "text-destructive")}>
+                Desc.: {descuadreTotal >= 0 ? '+' : ''}{descuadreTotal.toFixed(2)}
+              </p>
+            </StatCard>
           </div>
 
           {/* Lista de Turnos */}
           {error ? (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-3">
-              <XCircle className="h-10 w-10 text-red-500/60" />
-              <p className="font-bold">{error}</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-6 text-center text-destructive">
+              <XCircle className="h-9 w-9 text-destructive/70" />
+              <p className="font-medium">{error}</p>
             </div>
           ) : loading && turnos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-4">
-              <RefreshCw className="h-8 w-8 animate-spin text-indigo-500" />
-              <p className="font-bold text-sm tracking-widest uppercase">Cargando historial...</p>
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-muted-foreground">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm">Cargando historial…</p>
             </div>
           ) : filteredTurnos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-zinc-500 gap-4 border border-dashed border-zinc-800 rounded-3xl">
+            <div className="flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border py-24 text-muted-foreground">
               <Filter className="h-10 w-10 opacity-20" />
-              <p className="font-bold">No se encontraron turnos de caja</p>
+              <p className="text-sm font-medium text-foreground">No se encontraron turnos de caja</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-3">
               {filteredTurnos.map(turno => {
                 const isExpanded = expandedTurno === turno.id
                 const ventasDelTurno = getVentasDelTurno(turno.id)
                 const isAbierta = turno.estado === 'ABIERTA'
 
                 return (
-                  <div key={turno.id} className={`bg-zinc-950/60 border rounded-2xl overflow-hidden transition-all duration-300 ${isExpanded ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.1)]' : 'border-zinc-900 hover:border-zinc-800'}`}>
-                    
+                  <div key={turno.id} className={cn("overflow-hidden rounded-sm border bg-card transition-colors", isExpanded ? "border-primary/40" : "border-border")}>
                     {/* Header del Turno */}
-                    <div 
-                      className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-zinc-900/40 transition-colors ${isExpanded ? 'bg-zinc-900/30' : ''}`}
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-4 p-4 text-left transition-colors hover:bg-muted/40 md:flex-row md:items-center md:justify-between"
                       onClick={() => setExpandedTurno(isExpanded ? null : turno.id)}
                     >
-                      <div className="flex items-center gap-4 min-w-[300px]">
-                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center border shadow-inner ${isAbierta ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}>
-                          {isAbierta ? <DoorOpen className="h-6 w-6" /> : <DoorClosed className="h-6 w-6" />}
+                      <div className="flex min-w-0 items-center gap-3 md:w-72">
+                        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border", isAbierta ? "border-success/30 bg-success/10 text-success" : "border-border bg-muted text-muted-foreground")}>
+                          {isAbierta ? <DoorOpen className="h-5 w-5" /> : <DoorClosed className="h-5 w-5" />}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-black text-white text-lg tracking-tight">Turno #{turno.id}</h3>
-                            <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-widest py-0.5 ${isAbierta ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-zinc-900 text-zinc-400 border-zinc-700'}`}>
-                              {turno.estado}
-                            </Badge>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">Turno #{turno.id}</h3>
+                            <StatePill tone={isAbierta ? "success" : "muted"}>{turno.estado}</StatePill>
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 mt-1">
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Calendar className="h-3.5 w-3.5" />
                             {format(new Date(turno.fecha_apertura), "dd MMM yyyy", { locale: es })}
-                            <span className="text-zinc-700">•</span>
-                            <Clock className="h-3.5 w-3.5" />
+                            <Clock className="ml-1 h-3.5 w-3.5" />
                             {format(new Date(turno.fecha_apertura), "HH:mm")}
-                            {turno.fecha_cierre && (
-                              <>
-                                <span className="text-zinc-700">→</span>
-                                {format(new Date(turno.fecha_cierre), "HH:mm")}
-                              </>
-                            )}
+                            {turno.fecha_cierre && <>→ {format(new Date(turno.fecha_cierre), "HH:mm")}</>}
                           </div>
                         </div>
                       </div>
 
-                      {/* Resumen de totales (Desktop) */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 flex-1">
+                      {/* Resumen de totales */}
+                      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Fondo Inicial</p>
-                          <p className="font-mono text-sm text-zinc-300">${parseFloat(turno.fondo_inicial).toFixed(2)}</p>
+                          <p className="text-xs text-muted-foreground">Fondo inicial</p>
+                          <MoneyValue value={turno.fondo_inicial} className="text-sm" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Ventas</p>
-                          <p className="font-mono text-sm text-emerald-400 font-bold">{ventasDelTurno.length} op.</p>
+                          <p className="text-xs text-muted-foreground">Ventas</p>
+                          <p className="font-mono text-sm font-medium text-success tabular-nums">{ventasDelTurno.length} op.</p>
                         </div>
                         {turno.estado === 'CERRADA' ? (
                           <>
                             <div>
-                              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Cierre Declarado</p>
-                              <p className="font-mono text-sm text-amber-400">${parseFloat(turno.efectivo_declarado || "0").toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground">Cierre declarado</p>
+                              <MoneyValue value={turno.efectivo_declarado || "0"} tone="warning" className="text-sm" />
                             </div>
                             <div>
-                              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Descuadre</p>
-                              <div className={`font-mono font-black text-sm flex items-center gap-1 ${getDiferenciaColor(turno.diferencia)}`}>
+                              <p className="text-xs text-muted-foreground">Descuadre</p>
+                              <div className={cn("flex items-center gap-1 font-mono text-sm font-semibold tabular-nums",
+                                getDiferenciaTone(turno.diferencia) === "success" ? "text-success" : getDiferenciaTone(turno.diferencia) === "destructive" ? "text-destructive" : "text-muted-foreground")}>
                                 {parseFloat(turno.diferencia || "0") > 0 ? <TrendingUp className="h-3.5 w-3.5" /> : parseFloat(turno.diferencia || "0") < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : null}
-                                ${Math.abs(parseFloat(turno.diferencia || "0")).toFixed(2)}
+                                {formatMoney(Math.abs(parseFloat(turno.diferencia || "0")))}
                               </div>
                             </div>
                           </>
                         ) : (
-                          <div className="col-span-2 flex items-center justify-end pr-2 text-zinc-600">
-                            (Turno en curso)
+                          <div className="col-span-2 flex items-center text-sm text-muted-foreground md:justify-end">
+                            Turno en curso
                           </div>
                         )}
                       </div>
 
-                      <div className="shrink-0 pl-2">
-                        {isExpanded ? <ChevronDown className="h-5 w-5 text-indigo-500" /> : <ChevronRight className="h-5 w-5 text-zinc-600" />}
+                      <div className="hidden shrink-0 md:block">
+                        {isExpanded ? <ChevronDown className="h-5 w-5 text-primary" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
                       </div>
-                    </div>
+                    </button>
 
                     {/* Ventas Expanded */}
-                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                      <div className="overflow-hidden bg-black/40">
-                        {/* Cabecera de la tabla de ventas */}
-                        <div className="border-t border-b border-zinc-900 bg-zinc-950/80 px-8 py-3 flex text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                          <div className="w-8" />
+                    {isExpanded && (
+                      <div className="border-t border-border bg-muted/20">
+                        {/* Cabecera de la tabla de ventas (desktop) */}
+                        <div className="hidden items-center border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+                          <div className="w-6" />
                           <div className="w-24">Venta ID</div>
-                          <div className="w-32">Hora</div>
+                          <div className="w-28">Hora</div>
                           <div className="w-24 text-right">Artículos</div>
-                          <div className="flex-1 text-right">Total Cobrado</div>
+                          <div className="flex-1 text-right">Total</div>
                         </div>
 
                         {ventasDelTurno.length === 0 ? (
-                          <div className="px-8 py-10 flex flex-col items-center justify-center text-zinc-600 gap-2">
+                          <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
                             <ShoppingCart className="h-6 w-6 opacity-30" />
-                            <p className="text-sm font-medium">No se registraron ventas en este turno.</p>
+                            <p className="text-sm">No se registraron ventas en este turno.</p>
                           </div>
                         ) : (
-                          <div className="pb-2">
+                          <div>
                             {ventasDelTurno.map(venta => {
                               const isVentaExpanded = expandedVenta === venta.id
                               const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + d.cantidad, 0)
-                              
+                              const anulada = venta.estado === 'ANULADA'
+
                               return (
-                                <div key={venta.id} className="border-b border-zinc-900/50 last:border-0">
-                                  <div 
-                                    className="px-8 py-3.5 flex items-center hover:bg-zinc-900/50 cursor-pointer transition-colors"
+                                <div key={venta.id} className="border-b border-border last:border-0">
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                                     onClick={() => setExpandedVenta(isVentaExpanded ? null : venta.id)}
                                   >
-                                    <div className="w-8 shrink-0">
-                                      {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-indigo-400" /> : <ChevronRight className="h-4 w-4 text-zinc-600" />}
+                                    <div className="w-6 shrink-0">
+                                      {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                     </div>
-                                    <div className="w-24 text-sm font-mono text-zinc-400 group-hover:text-indigo-400">
-                                      #{String(venta.id).padStart(5, '0')}
-                                    </div>
-                                    <div className="w-32 text-xs font-medium text-zinc-500 flex items-center gap-2">
-                                      <Clock className="h-3.5 w-3.5 opacity-50" />
+                                    <div className="w-24 font-mono text-sm text-muted-foreground">#{String(venta.id).padStart(5, '0')}</div>
+                                    <div className="hidden w-28 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                                      <Clock className="h-3.5 w-3.5 opacity-60" />
                                       {format(new Date(venta.fecha), "HH:mm:ss")}
                                     </div>
-                                    <div className="w-24 text-right">
-                                      <Badge variant="outline" className="text-[10px] border-zinc-800 text-zinc-400">{totalArticulos} uds</Badge>
+                                    <div className="hidden w-24 text-right sm:block">
+                                      <StatePill tone="muted">{totalArticulos} uds</StatePill>
                                     </div>
-                                    <div className="flex-1 text-right text-sm font-black text-emerald-400 tracking-tight flex items-center justify-end gap-2">
-                                      {venta.estado === 'ANULADA' && (
-                                        <Badge variant="outline" className="text-[9px] bg-red-500/10 text-red-500 border-red-500/20">ANULADA</Badge>
-                                      )}
-                                      <span className={venta.estado === 'ANULADA' ? 'line-through text-zinc-500' : ''}>
-                                        ${parseFloat(venta.total).toFixed(2)}
-                                      </span>
+                                    <div className="flex flex-1 items-center justify-end gap-2">
+                                      {anulada && <StatePill tone="destructive">Anulada</StatePill>}
+                                      <MoneyValue value={venta.total} tone={anulada ? "muted" : "success"} className={cn("text-sm font-semibold", anulada && "line-through")} />
                                     </div>
-                                  </div>
+                                  </button>
 
-                                  {/* Detalle de Artículos de la Venta */}
+                                  {/* Detalle de Artículos */}
                                   {isVentaExpanded && (
-                                    <div className="bg-zinc-950 px-8 py-4 ml-8 border-l-2 border-indigo-500/30">
-                                      <div className="space-y-3">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500/60 mb-2">Desglose de Artículos</p>
+                                    <div className="border-l-2 border-primary/30 bg-background/40 px-4 py-3 sm:ml-6">
+                                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Desglose de artículos</p>
+                                      <div className="flex flex-col gap-2">
                                         {venta.detalle_ventas.map(detalle => (
-                                          <div key={detalle.id} className="flex items-center justify-between bg-black border border-zinc-900 rounded-xl p-3 text-sm">
+                                          <div key={detalle.id} className="flex items-center justify-between gap-3 rounded-sm border border-border bg-card p-3 text-sm">
                                             <div className="flex items-center gap-3">
-                                              <div className="h-8 w-8 rounded-lg bg-zinc-900 flex items-center justify-center border border-zinc-800">
-                                                <Package className="h-4 w-4 text-zinc-500" />
+                                              <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-border bg-muted text-muted-foreground">
+                                                <Package className="h-4 w-4" />
                                               </div>
                                               <div>
-                                                <p className="font-bold text-zinc-200">
-                                                  {detalle.presentaciones?.descripcion || `Producto ID #${detalle.presentacion_id}`}
-                                                </p>
-                                                <p className="text-xs text-zinc-500">
-                                                  {detalle.cantidad} unidades • ${(parseFloat(detalle.subtotal) / detalle.cantidad).toFixed(2)} c/u
+                                                <p className="font-medium">{detalle.presentaciones?.descripcion || `Producto ID #${detalle.presentacion_id}`}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {detalle.cantidad} uds · <MoneyValue value={parseFloat(detalle.subtotal) / detalle.cantidad} tone="muted" className="text-xs" /> c/u
                                                 </p>
                                               </div>
                                             </div>
-                                            <div className="text-base font-black text-white">
-                                              ${parseFloat(detalle.subtotal).toFixed(2)}
-                                            </div>
+                                            <MoneyValue value={detalle.subtotal} className="font-semibold" />
                                           </div>
                                         ))}
                                       </div>
-                                      
-                                      {/* Anular Action */}
+
+                                      {/* Anular */}
                                       {venta.estado === 'COMPLETADA' && (
-                                        <div className="mt-4 pt-4 border-t border-zinc-900 flex justify-end">
-                                          <Button 
-                                            variant="outline" 
+                                        <div className="mt-3 flex justify-end border-t border-border pt-3">
+                                          <Button
+                                            variant="outline"
                                             size="sm"
-                                            className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20"
-                                            onClick={() => {
-                                              setVentaAAnular(venta.id)
-                                              setIsAnulando(true)
-                                            }}
+                                            className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
                                           >
-                                            <XCircle className="h-4 w-4 mr-2" /> Anular Venta
+                                            <XCircle className="h-4 w-4" /> Anular venta
                                           </Button>
                                         </div>
                                       )}
                                       {venta.estado === 'ANULADA' && venta.justificacion_nula && (
-                                        <div className="mt-4 pt-4 border-t border-zinc-900">
-                                          <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-3 text-xs">
-                                            <p className="font-bold text-red-400 mb-1">Motivo de anulación:</p>
-                                            <p className="text-zinc-400">{venta.justificacion_nula}</p>
+                                        <div className="mt-3 border-t border-border pt-3">
+                                          <div className="rounded-sm border border-destructive/20 bg-destructive/5 p-3 text-xs">
+                                            <p className="mb-1 font-medium text-destructive">Motivo de anulación:</p>
+                                            <p className="text-muted-foreground">{venta.justificacion_nula}</p>
                                           </div>
                                         </div>
                                       )}
@@ -501,45 +453,43 @@ export default function MovimientosPage() {
                           </div>
                         )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 )
               })}
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* ════════ DIALOG: ANULAR VENTA ════════ */}
       <Dialog open={isAnulando} onOpenChange={setIsAnulando}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200 sm:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-black text-rose-500 uppercase tracking-tight flex items-center gap-2">
-              <XCircle className="h-5 w-5" /> Anular Venta #{ventaAAnular}
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <XCircle className="h-5 w-5" /> Anular venta #{ventaAAnular}
             </DialogTitle>
-            <DialogDescription className="text-zinc-500">
-              Esta acción devolverá el stock al inventario y restará el dinero del balance de la caja. Esta acción es <strong className="text-zinc-300">irreversible</strong>.
+            <DialogDescription>
+              Esta acción devolverá el stock al inventario y restará el dinero del balance de la caja. Es <strong className="text-foreground">irreversible</strong>.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAnularVenta} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Motivo de la anulación</Label>
+          <form onSubmit={handleAnularVenta} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Motivo de la anulación</Label>
               <Input required value={motivoAnulacion}
                 onChange={(e) => setMotivoAnulacion(e.target.value)}
                 placeholder="Ej. El cliente devolvió el producto empacado"
-                className="bg-black/50 border-zinc-800 text-white h-12 rounded-xl focus-visible:ring-rose-500"
+                className="h-12"
                 autoFocus />
             </div>
-            {error && <p className="text-xs text-red-500 font-bold">{error}</p>}
-            <DialogFooter className="pt-2">
-              <Button type="button" onClick={() => setIsAnulando(false)}
-                className="bg-zinc-800 text-white hover:bg-zinc-700 rounded-xl" disabled={anularLoading}>
+            {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setIsAnulando(false)} disabled={anularLoading}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={anularLoading || !motivoAnulacion.trim()}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg">
-                {anularLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
-                Confirmar Anulación
+              <Button type="submit" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {anularLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                Confirmar anulación
               </Button>
             </DialogFooter>
           </form>

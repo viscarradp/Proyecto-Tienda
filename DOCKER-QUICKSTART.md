@@ -118,7 +118,7 @@ docker-compose build --no-cache
 
 ## 📚 Documentación completa
 
-Ver [docs/DOCKER-DEVELOPMENT.md](docs/DOCKER-DEVELOPMENT.md) para:
+Ver [docs/operations/docker-development.md](docs/operations/docker-development.md) para:
 - Setup detallado
 - Todas las variables de entorno
 - Cómo hacer backup de la BD

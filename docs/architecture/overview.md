@@ -100,11 +100,11 @@ no esté obviamente vencido antes de renderizar cualquier página del
 dashboard. Es una verificación liviana (no valida la firma criptográfica) —
 ver [`../decisions/0007-proxy-verificacion-liviana.md`](../decisions/0007-proxy-verificacion-liviana.md).
 El filtrado de botones/menús por rol en la UI sigue siendo solo visual; la
-autorización real la hace siempre el backend. Ver [`security.md`](../security.md) y
+autorización real la hace siempre el backend. Ver [`security.md`](security.md) y
 [`roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md).
 
 ## Ver también
 
 - [`data-model.md`](data-model.md) — tablas y el motor FIFO de inventario.
 - [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) — reglas de negocio.
-- [`../security.md`](../security.md) — autenticación y hardening aplicado.
+- [`security.md`](security.md) — autenticación y hardening aplicado.

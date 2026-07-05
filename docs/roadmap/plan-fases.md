@@ -2,9 +2,11 @@
 
 > **Propósito de este documento:** que cualquiera (incluyendo un asistente de IA sin memoria de conversaciones anteriores) pueda retomar este trabajo en cualquier momento sabiendo exactamente qué se hizo, por qué, qué falta, y qué decisiones ya están tomadas vs. cuáles siguen abiertas.
 >
-> **Origen:** `AUDITORIA-TECNICA.md` (raíz del repo), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `AUDITORIA-TECNICA.md` queda congelado como el informe original.
+> **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
 >
 > **Última actualización:** 2026-07-04 (Fase 3 completada y mergeada a `master`. Las 4 fases del plan original están cerradas).
+>
+> **¿Qué sigue?** El trabajo abierto viene de la [auditoría de negocio/contable del 2026-07-04](../auditorias/2026-07-04-auditoria-negocio-contable.md) (sección 10, "Priorización final"): su Bloque 1 son cambios de modelo de datos que deben cerrarse **antes de la primera venta real**, mientras la BD sigue vacía. En paralelo avanza el [rediseño UX/UI del frontend](../rediseno/README.md).
 
 ---
 
@@ -13,7 +15,7 @@
 1. Lee la sección **"Reglas del proyecto"** primero — son restricciones de diseño no negociables que el usuario fijó explícitamente.
 2. Revisa qué Fase está `✅ COMPLETADA`, `🔄 EN PROGRESO` o `⏳ PENDIENTE`.
 3. Si vas a retomar una fase pendiente, lee su sección completa antes de escribir código — cada una enlaza a los hallazgos de la auditoría y a los ADRs relevantes.
-4. Actualiza este archivo (estado, commits, decisiones) cada vez que avances una fase. Es un documento vivo, no un registro histórico congelado (para eso está `AUDITORIA-TECNICA.md`).
+4. Actualiza este archivo (estado, commits, decisiones) cada vez que avances una fase. Es un documento vivo, no un registro histórico congelado (para eso está `auditorias/2026-07-02-auditoria-tecnica.md`).
 
 ---
 
@@ -35,7 +37,7 @@ Restricciones operativas específicas (confirmadas con el usuario el 2026-07-02)
 
 **Rama:** `feature/fase0-hardening` — mergeada a `master` con `--no-ff` (commit `9a563a1`) y pusheada a `origin/master` el 2026-07-02.
 
-**Hallazgos de la auditoría que resuelve:** H1, H2, H3, H4, H7, H15, H16 (ver `AUDITORIA-TECNICA.md` sección 3).
+**Hallazgos de la auditoría que resuelve:** H1, H2, H3, H4, H7, H15, H16 (ver `auditorias/2026-07-02-auditoria-tecnica.md` sección 3).
 
 ### Bloque A — Concurrencia (bloqueo pesimista)
 Commit: `4dc95bd fix(backend): bloqueo pesimista para evitar sobreventa y sobregiro de caja`
@@ -346,7 +348,7 @@ Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
 
 ## Referencias
 
-- [`AUDITORIA-TECNICA.md`](../../AUDITORIA-TECNICA.md) — informe original de auditoría (congelado, no editar retroactivamente).
+- [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md) — informe original de auditoría (congelado, no editar retroactivamente).
 - [`../decisions/`](../decisions/) — ADRs 0001-0004, el porqué de cada decisión de Fase 0.
 - [`hardening-backlog.md`](hardening-backlog.md) — lista granular de deuda técnica diferida con el SQL/código exacto a aplicar.
-- [`../security.md`](../security.md), [`../operations/configuration.md`](../operations/configuration.md), [`../architecture/`](../architecture/), [`../domain/`](../domain/) — estado actual del sistema (se actualizan a medida que avanzan las fases).
+- [`../architecture/security.md`](../architecture/security.md), [`../operations/configuration.md`](../operations/configuration.md), [`../architecture/`](../architecture/), [`../domain/`](../domain/) — estado actual del sistema (se actualizan a medida que avanzan las fases).
