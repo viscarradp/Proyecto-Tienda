@@ -10,6 +10,7 @@ import {
 import { VentasService } from './ventas.service';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Roles('ADMIN', 'CAJERO')
 @Controller('ventas')
@@ -17,8 +18,11 @@ export class VentasController {
   constructor(private readonly ventasService: VentasService) {}
 
   @Post()
-  create(@Body() createVentaDto: CreateVentaDto) {
-    return this.ventasService.create(createVentaDto);
+  create(
+    @Body() createVentaDto: CreateVentaDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.ventasService.create(createVentaDto, userId);
   }
 
   @Get()

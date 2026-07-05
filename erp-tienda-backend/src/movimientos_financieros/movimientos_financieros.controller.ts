@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { MovimientosFinancierosService } from './movimientos_financieros.service';
 import { CreateMovimientosFinancieroDto } from './dto/create-movimientos_financiero.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Roles('ADMIN', 'CAJERO', 'VENDEDOR')
 @Controller('movimientos-financieros')
@@ -13,9 +14,11 @@ export class MovimientosFinancierosController {
   @Post()
   create(
     @Body() createMovimientosFinancieroDto: CreateMovimientosFinancieroDto,
+    @CurrentUser('userId') userId: number,
   ) {
     return this.movimientosFinancierosService.create(
       createMovimientosFinancieroDto,
+      userId,
     );
   }
 

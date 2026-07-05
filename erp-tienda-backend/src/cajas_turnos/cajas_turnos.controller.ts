@@ -12,6 +12,7 @@ import { CajasTurnosService } from './cajas_turnos.service';
 import { CreateCajaTurnoDto } from './dto/create-caja_turno.dto';
 import { CloseCajaTurnoDto } from './dto/close-caja_turno.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Control de Caja (Turnos)')
 @Roles('ADMIN', 'CAJERO')
@@ -23,8 +24,11 @@ export class CajasTurnosController {
   @ApiOperation({ summary: 'Abrir un nuevo turno de caja' })
   @ApiResponse({ status: 201, description: 'Turno abierto exitosamente.' })
   @ApiResponse({ status: 409, description: 'Ya existe un turno abierto.' })
-  abrir(@Body() createCajaTurnoDto: CreateCajaTurnoDto) {
-    return this.cajasTurnosService.abrir(createCajaTurnoDto);
+  abrir(
+    @Body() createCajaTurnoDto: CreateCajaTurnoDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.cajasTurnosService.abrir(createCajaTurnoDto, userId);
   }
 
   @Get('activa')
@@ -52,8 +56,9 @@ export class CajasTurnosController {
   cerrar(
     @Param('id', ParseIntPipe) id: number,
     @Body() closeCajaTurnoDto: CloseCajaTurnoDto,
+    @CurrentUser('userId') userId: number,
   ) {
-    return this.cajasTurnosService.cerrar(id, closeCajaTurnoDto);
+    return this.cajasTurnosService.cerrar(id, closeCajaTurnoDto, userId);
   }
 
   @Get()

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { AjustesInventarioService } from './ajustes_inventario.service';
 import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Roles('ADMIN')
 @Controller('ajustes-inventario')
@@ -11,8 +12,14 @@ export class AjustesInventarioController {
   ) {}
 
   @Post()
-  create(@Body() createAjusteInventarioDto: CreateAjusteInventarioDto) {
-    return this.ajustesInventarioService.create(createAjusteInventarioDto);
+  create(
+    @Body() createAjusteInventarioDto: CreateAjusteInventarioDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.ajustesInventarioService.create(
+      createAjusteInventarioDto,
+      userId,
+    );
   }
 
   @Get()

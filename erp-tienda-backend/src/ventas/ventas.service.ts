@@ -12,7 +12,7 @@ import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
 export class VentasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createVentaDto: CreateVentaDto) {
+  async create(createVentaDto: CreateVentaDto, userId?: number) {
     // 1. Caja Activa: Busca la caja con estado: 'ABIERTA'
     const cajaTurno = await this.prisma.cajas_turnos.findFirst({
       where: { estado: 'ABIERTA' },
@@ -51,6 +51,7 @@ export class VentasService {
         data: {
           caja_turno_id: cajaTurno.id,
           total: 0,
+          usuario_id: userId,
         },
       });
 
