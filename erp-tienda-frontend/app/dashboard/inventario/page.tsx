@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -27,14 +26,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { MoneyValue } from "@/components/money-value"
+import { StatePill } from "@/components/state-pill"
 import { apiFetch } from "@/lib/api"
-import Cookies from "js-cookie"
 import { useShallow } from "zustand/react/shallow"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/ProductDialog"
 import { CompraForm } from "@/components/inventario/CompraForm"
 import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventarioDialog"
 import { EditProductDialog } from "@/components/inventario/EditProductDialog"
-import { useInventoryStore, type Producto, type Categoria, type Presentacion, type LoteStock } from "../../../src/store/inventoryStore"
+import { useInventoryStore, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
 
 interface Compra {
   id: number
@@ -56,6 +57,9 @@ interface Compra {
 
 export default function InventarioPage() {
   const [mounted, setMounted] = React.useState(false)
+  const { user } = useCurrentUser()
+  const esCajero = user?.rol === "CAJERO"
+
   const { productos, categorias, loading: invLoading, fetchInventory, invalidateCache } = useInventoryStore(
     useShallow((state) => ({
       productos: state.productos,
@@ -87,18 +91,7 @@ export default function InventarioPage() {
   const [catError, setCatError] = React.useState("")
   const [catSuccess, setCatSuccess] = React.useState("")
 
-  // ─── User Role State ───
-  const [user, setUser] = React.useState<{ nombre: string; rol: string } | null>(null)
-
-  React.useEffect(() => { 
-    setMounted(true) 
-    const isUserCookie = Cookies.get("user")
-    if (isUserCookie) {
-      try {
-        setUser(JSON.parse(isUserCookie))
-      } catch (e) {}
-    }
-  }, [])
+  React.useEffect(() => { setMounted(true) }, [])
 
   const loadData = React.useCallback(async (forceRefresh = false) => {
     setLoading(true)
@@ -174,67 +167,58 @@ export default function InventarioPage() {
   if (!mounted) return null
 
   return (
-    <div className="flex flex-col h-full bg-black text-zinc-200">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-black/60 backdrop-blur-xl border-b border-zinc-900 p-4 lg:px-8 lg:py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="h-10 w-1.5 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-white uppercase">Inventario</h1>
-              <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] mt-0.5">
-                CATÁLOGO • CATEGORÍAS • COMPRAS
-              </p>
-            </div>
+    <div className="flex min-h-full flex-col bg-background text-foreground">
+      {/* Encabezado */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Inventario</h1>
+            <p className="text-xs text-muted-foreground">Catálogo · Categorías · Compras</p>
           </div>
-          {user?.rol !== 'CAJERO' && (
-            <div className="flex items-center gap-3">
-              <Button onClick={() => setCompraDialogOpen(true)} 
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl h-11 px-5 gap-2 shadow-lg shadow-indigo-900/20">
-                <Truck className="h-4 w-4 text-white" />
-                Nueva Compra
+          {!esCajero && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setCompraDialogOpen(true)} className="h-11 gap-2">
+                <Truck className="h-4 w-4" />
+                <span className="hidden sm:inline">Nueva compra</span>
               </Button>
-              <Button onClick={() => setProductDialogOpen(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl h-11 px-5 gap-2 shadow-lg shadow-blue-900/20">
+              <Button onClick={() => setProductDialogOpen(true)} className="h-11 gap-2">
                 <Plus className="h-4 w-4" />
-                Nuevo Producto
+                <span className="hidden sm:inline">Nuevo producto</span>
+                <span className="sm:hidden">Producto</span>
               </Button>
             </div>
           )}
         </div>
       </header>
 
-      {/* Content with Tabs */}
-      <div className="flex-1 overflow-auto p-4 lg:px-8 lg:py-6">
+      {/* Contenido con pestañas */}
+      <div className="flex-1 p-4 lg:px-8 lg:py-6">
         <Tabs defaultValue="catalogo" className="w-full">
-          <TabsList className="bg-zinc-950/50 p-1.5 rounded-[20px] h-auto gap-1.5 border border-zinc-900 mb-6">
-            <TabsTrigger value="catalogo"
-              className="px-5 py-2.5 rounded-[16px] font-black text-[11px] uppercase tracking-widest text-zinc-600 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300 gap-2">
-              <Package className="h-3.5 w-3.5" /> Catálogo
+          <TabsList className="mb-5 h-auto flex-wrap gap-1">
+            <TabsTrigger value="catalogo" className="gap-1.5 px-4 py-2">
+              <Package className="h-4 w-4" /> Catálogo
             </TabsTrigger>
-            {user?.rol !== 'CAJERO' && (
-              <TabsTrigger value="categorias"
-                className="px-5 py-2.5 rounded-[16px] font-black text-[11px] uppercase tracking-widest text-zinc-600 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300 gap-2">
-                <Tags className="h-3.5 w-3.5" /> Categorías
+            {!esCajero && (
+              <TabsTrigger value="categorias" className="gap-1.5 px-4 py-2">
+                <Tags className="h-4 w-4" /> Categorías
               </TabsTrigger>
             )}
-            <TabsTrigger value="historial"
-              className="px-5 py-2.5 rounded-[16px] font-black text-[11px] uppercase tracking-widest text-zinc-600 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300 gap-2">
-              <History className="h-3.5 w-3.5" /> Historial
+            <TabsTrigger value="historial" className="gap-1.5 px-4 py-2">
+              <History className="h-4 w-4" /> Historial
             </TabsTrigger>
           </TabsList>
 
           {/* Loading / Error */}
           {loading || invLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-zinc-500">
-              <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-              <p className="text-sm font-medium animate-pulse">Cargando inventario de la nube...</p>
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-muted-foreground">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" />
+              <p className="text-sm">Cargando inventario…</p>
             </div>
           ) : globalError ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4 text-zinc-400">
-              <AlertTriangle className="h-10 w-10 text-red-500/60" />
-              <p className="text-sm font-bold text-red-400">{globalError}</p>
-              <Button variant="outline" size="sm" className="rounded-xl border-zinc-800 gap-2" onClick={handleRefresh}>
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+              <AlertTriangle className="h-9 w-9 text-destructive/70" />
+              <p className="text-sm font-medium text-destructive">{globalError}</p>
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleRefresh}>
                 <RefreshCw className="h-4 w-4" /> Reintentar
               </Button>
             </div>
@@ -244,215 +228,202 @@ export default function InventarioPage() {
             <>
               {/* ──────── TAB 1: CATÁLOGO ──────── */}
               <TabsContent value="catalogo">
-                <ScrollArea className="h-[calc(100vh-260px)]">
-                  {/* Header de la tabla */}
-                  <div className="sticky top-0 bg-black/95 backdrop-blur z-10 border-b border-zinc-900 px-6 py-3 flex text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                    <div className="w-10" />
-                    <div className="w-16">ID</div>
-                    <div className="flex-1">Producto</div>
-                    <div className="w-32 text-right">Categoría</div>
-                    <div className="w-24 text-right">Stock</div>
-                    <div className="w-28 text-right">Presentaciones</div>
+                {productos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-muted-foreground">
+                    <Package className="h-10 w-10 opacity-20" />
+                    <p className="text-sm font-medium text-foreground">No hay productos en el catálogo</p>
+                    {!esCajero && (
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setProductDialogOpen(true)}>
+                        <Plus className="h-4 w-4" /> Crear primer producto
+                      </Button>
+                    )}
                   </div>
-
-                  {productos.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-zinc-500 gap-3">
-                      <Package className="h-10 w-10 opacity-20" />
-                      <p className="font-bold text-sm">No hay productos en el catálogo</p>
-                      {user?.rol !== 'CAJERO' && (
-                        <Button variant="outline" size="sm" onClick={() => setProductDialogOpen(true)}
-                          className="border-zinc-800 rounded-xl gap-1.5">
-                          <Plus className="h-3.5 w-3.5" /> Crear primer producto
-                        </Button>
-                      )}
+                ) : (
+                  <div className="overflow-hidden rounded-sm border border-border">
+                    {/* Encabezado de tabla (solo desktop) */}
+                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+                      <div className="w-6" />
+                      <div className="w-14 font-mono">ID</div>
+                      <div className="flex-1">Producto</div>
+                      <div className="w-32 text-right">Categoría</div>
+                      <div className="w-24 text-right">Stock</div>
+                      <div className="w-24 text-right">Present.</div>
                     </div>
-                  ) : (
-                    productos.map(prod => {
+
+                    {productos.map(prod => {
                       const stock = getStock(prod)
+                      const isOpen = expandedProduct === prod.id
                       return (
-                        <div key={prod.id}>
-                          <div
-                            className="group border-b border-zinc-900/50 hover:bg-zinc-900/40 transition-colors cursor-pointer px-6 py-4 flex items-center"
-                            onClick={() => setExpandedProduct(expandedProduct === prod.id ? null : prod.id)}
+                        <div key={prod.id} className="border-b border-border last:border-b-0">
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                            onClick={() => setExpandedProduct(isOpen ? null : prod.id)}
                           >
-                            <div className="w-10">
-                              {expandedProduct === prod.id
-                                ? <ChevronDown className="h-4 w-4 text-blue-500" />
-                                : <ChevronRight className="h-4 w-4 text-zinc-600" />}
+                            <div className="w-6 shrink-0">
+                              {isOpen
+                                ? <ChevronDown className="h-4 w-4 text-primary" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </div>
-                            <div className="w-16 text-xs font-mono text-zinc-600 group-hover:text-blue-500">
+                            <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground sm:block">
                               {String(prod.id).padStart(4, '0')}
                             </div>
-                            <div className="flex-1 font-bold text-sm text-zinc-300 group-hover:text-white truncate pr-4">
-                              {prod.nombre}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">{prod.nombre}</p>
+                              <p className="truncate text-xs text-muted-foreground sm:hidden">
+                                {prod.categorias.nombre} · {prod.presentaciones.length} pres.
+                              </p>
                             </div>
-                            <div className="w-32 text-right">
-                              <Badge variant="outline" className="border-zinc-800 text-zinc-400 font-bold text-[10px] uppercase">
-                                {prod.categorias.nombre}
-                              </Badge>
+                            <div className="hidden w-32 text-right sm:block">
+                              <Badge variant="outline" className="text-xs font-normal">{prod.categorias.nombre}</Badge>
                             </div>
-                            <div className="w-24 text-right">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                                stock > 0
-                                  ? 'bg-emerald-500/10 border-emerald-800 text-emerald-400'
-                                  : 'bg-red-500/10 border-red-800 text-red-400'
-                              }`}>
+                            <div className="w-auto shrink-0 text-right sm:w-24">
+                              <StatePill tone={stock > 0 ? "success" : "destructive"} className="font-mono tabular-nums">
                                 {stock} uds
-                              </span>
+                              </StatePill>
                             </div>
-                            <div className="w-28 text-right text-xs font-bold text-zinc-500">
+                            <div className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
                               {prod.presentaciones.length} pres.
                             </div>
-                          </div>
+                          </button>
 
-                          {/* Presentaciones expandidas */}
-                          {expandedProduct === prod.id && (
-                            <div className="bg-zinc-950/50 border-b border-zinc-900/50 px-6 py-3">
-                              <div className="ml-10 space-y-2">
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Detalles y Presentaciones</p>
-                                  <div className="flex items-center gap-2">
-                                    {user?.rol !== 'CAJERO' && (
-                                      <>
-                                        <Button type="button" variant="outline" size="sm"
-                                          className="border-indigo-900/50 text-indigo-400 hover:bg-indigo-900/20 hover:text-indigo-300 rounded-lg gap-1 h-7 text-xs font-bold"
+                          {/* Detalle expandido */}
+                          {isOpen && (
+                            <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
+                              <div className="flex flex-col gap-4">
+                                {/* Presentaciones */}
+                                <div>
+                                  <div className="mb-2 flex items-center justify-between">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Presentaciones</p>
+                                    {!esCajero && (
+                                      <div className="flex items-center gap-2">
+                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); setEditProductTarget(prod); setEditProductDialogOpen(true) }}>
-                                          <Pencil className="h-3 w-3" /> Editar
+                                          <Pencil className="h-3.5 w-3.5" /> Editar
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm"
-                                          className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-white rounded-lg gap-1 h-7 text-xs font-bold"
+                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); openPresDialog(prod) }}>
-                                          <Plus className="h-3 w-3" /> Agregar
+                                          <Plus className="h-3.5 w-3.5" /> Agregar
                                         </Button>
-                                      </>
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                                {prod.presentaciones.length === 0 ? (
-                                  <p className="text-xs text-zinc-600 italic">Sin presentaciones definidas. Agrega una para poder vender este producto.</p>
-                                ) : (
-                                  prod.presentaciones.map(pres => (
-                                    <div key={pres.id} className="flex items-center gap-4 bg-black/30 border border-zinc-800/30 rounded-xl px-4 py-2.5 text-sm">
-                                      <span className="font-bold text-zinc-300 flex-1">{pres.descripcion}</span>
-                                      {pres.codigo_barras && (
-                                        <span className="text-xs font-mono text-zinc-600 bg-zinc-900 px-2 py-0.5 rounded">
-                                          {pres.codigo_barras}
-                                        </span>
-                                      )}
-                                      <span className="text-xs text-zinc-500">×{pres.factor_conversion}</span>
-                                      <span className="font-black text-white">${parseFloat(pres.precio_venta).toFixed(2)}</span>
+                                  {prod.presentaciones.length === 0 ? (
+                                    <p className="text-xs italic text-muted-foreground">Sin presentaciones definidas. Agrega una para poder vender este producto.</p>
+                                  ) : (
+                                    <div className="flex flex-col gap-1.5">
+                                      {prod.presentaciones.map(pres => (
+                                        <div key={pres.id} className="flex items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
+                                          <span className="flex-1 truncate font-medium">{pres.descripcion}</span>
+                                          {pres.codigo_barras && (
+                                            <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{pres.codigo_barras}</span>
+                                          )}
+                                          <span className="font-mono text-xs text-muted-foreground">×{pres.factor_conversion}</span>
+                                          <MoneyValue value={pres.precio_venta} className="font-semibold" />
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))
-                                )}
-
-                                <div className="mt-6 flex items-center justify-between mb-2">
-                                  <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Lotes de Inventario Activos</p>
+                                  )}
                                 </div>
-                                {(() => {
-                                  const activeLotes = prod.lotes_inventario.filter(l => l.cantidad_disponible > 0)
-                                  if (activeLotes.length === 0) {
-                                    return <p className="text-xs text-zinc-600 italic">No hay existencias almacenadas para ningún lote.</p>
-                                  }
-                                  return (
-                                    <ScrollArea className="max-h-40">
-                                      <div className="space-y-1.5 pr-4">
+
+                                {/* Lotes */}
+                                <div>
+                                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes de inventario activos</p>
+                                  {(() => {
+                                    const activeLotes = prod.lotes_inventario.filter(l => l.cantidad_disponible > 0)
+                                    if (activeLotes.length === 0) {
+                                      return <p className="text-xs italic text-muted-foreground">No hay existencias almacenadas para ningún lote.</p>
+                                    }
+                                    return (
+                                      <div className="flex flex-col gap-1.5">
                                         {activeLotes.map((lote, idx) => (
-                                          <div key={`lote-${lote.id}-${idx}`} className="flex items-center gap-4 bg-black/50 border border-zinc-800/50 rounded-xl px-4 py-2.5 text-sm group">
-                                            <span className="font-mono text-zinc-500 text-xs w-16">#{lote.id}</span>
-                                            <span className="font-bold text-emerald-400 w-16 text-right cursor-default">{lote.cantidad_disponible} uds</span>
-                                            <span className="text-xs font-mono text-zinc-600 flex-1">@${parseFloat(lote.costo_unitario_adquisicion).toFixed(2)}</span>
-                                            
+                                          <div key={`lote-${lote.id}-${idx}`} className="group flex items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
+                                            <span className="w-12 font-mono text-xs text-muted-foreground">#{lote.id}</span>
+                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{lote.cantidad_disponible} uds</span>
+                                            <span className="flex-1 font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                             {lote.fecha_vencimiento && (
-                                              <span className="text-[10px] text-amber-500/70 mr-4">
+                                              <span className="text-xs text-warning">
                                                 Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}
                                               </span>
                                             )}
-                                            
-                                            {user?.rol !== 'CAJERO' && (
-                                              <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                className="h-7 px-2 border-amber-900/50 text-amber-500 hover:bg-amber-950 hover:text-amber-400 text-[10px] uppercase font-bold tracking-widest gap-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            {!esCajero && (
+                                              <Button variant="outline" size="sm"
+                                                className="h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
                                                 onClick={(e) => {
                                                   e.stopPropagation()
                                                   setAjusteTarget({ lote, nombre: prod.nombre })
                                                   setAjusteDialogOpen(true)
                                                 }}
                                               >
-                                                <AlertTriangle className="h-3 w-3" />
-                                                Merma
+                                                <AlertTriangle className="h-3.5 w-3.5" /> Merma
                                               </Button>
                                             )}
                                           </div>
                                         ))}
                                       </div>
-                                    </ScrollArea>
-                                  )
-                                })()}
+                                    )
+                                  })()}
+                                </div>
                               </div>
                             </div>
                           )}
                         </div>
                       )
-                    })
-                  )}
-                </ScrollArea>
+                    })}
+                  </div>
+                )}
               </TabsContent>
 
               {/* ──────── TAB 2: CATEGORÍAS ──────── */}
               <TabsContent value="categorias">
-                <div className="max-w-2xl space-y-6">
-                  {/* Create new category */}
-                  <div className="bg-zinc-950/50 border border-zinc-800/50 rounded-2xl p-6 space-y-4">
-                    <h3 className="text-sm font-black text-zinc-300 uppercase tracking-wider">Crear Nueva Categoría</h3>
+                <div className="flex max-w-2xl flex-col gap-6">
+                  {/* Crear categoría */}
+                  <div className="flex flex-col gap-4 rounded-sm border border-border bg-card p-5">
+                    <h3 className="text-sm font-semibold">Crear nueva categoría</h3>
 
                     {catError && (
-                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl font-medium">{catError}</div>
+                      <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{catError}</div>
                     )}
                     {catSuccess && (
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm p-3 rounded-xl font-medium">{catSuccess}</div>
+                      <div className="rounded-sm border border-success/20 bg-success/10 p-3 text-sm text-success">{catSuccess}</div>
                     )}
 
-                    <form onSubmit={handleCreateCategory} className="flex gap-3 items-end">
-                      <div className="flex-1 space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Nombre</Label>
+                    <form onSubmit={handleCreateCategory} className="flex items-end gap-3">
+                      <div className="flex flex-1 flex-col gap-2">
+                        <Label className="text-xs font-medium text-muted-foreground">Nombre</Label>
                         <Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)}
-                          placeholder="Ej: Lácteos, Limpieza, Bebidas..." required
-                          className="bg-black/50 border-zinc-800 text-white h-11 rounded-xl focus-visible:ring-blue-500" />
+                          placeholder="Ej: Lácteos, Limpieza, Bebidas…" required className="h-11" />
                       </div>
-                      <Button type="submit" disabled={catLoading}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl h-11 px-5 gap-2 shadow-lg shadow-blue-900/20">
+                      <Button type="submit" disabled={catLoading} className="h-11 gap-2">
                         {catLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         Crear
                       </Button>
                     </form>
                   </div>
 
-                  {/* Category list */}
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-black text-zinc-300 uppercase tracking-wider px-1">
-                      Categorías Existentes ({categorias.length})
-                    </h3>
+                  {/* Lista de categorías */}
+                  <div className="flex flex-col gap-2">
+                    <h3 className="px-1 text-sm font-semibold">Categorías existentes ({categorias.length})</h3>
                     {categorias.length === 0 ? (
-                      <div className="border border-dashed border-zinc-800 rounded-2xl p-10 text-center">
-                        <p className="text-zinc-600 text-sm font-medium">No hay categorías creadas.</p>
+                      <div className="rounded-sm border border-dashed border-border p-10 text-center">
+                        <p className="text-sm text-muted-foreground">No hay categorías creadas.</p>
                       </div>
                     ) : (
                       categorias.map(cat => {
                         const productCount = productos.filter(p => p.categoria_id === cat.id).length
                         return (
-                          <div key={cat.id} className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/50 rounded-xl px-5 py-3.5 group hover:border-zinc-700 transition-colors">
+                          <div key={cat.id} className="group flex items-center justify-between rounded-sm border border-border bg-card px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-lg bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
-                                <Tags className="h-4 w-4 text-blue-500" />
+                              <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-primary/10 text-primary">
+                                <Tags className="h-4 w-4" />
                               </div>
                               <div>
-                                <p className="font-bold text-sm text-zinc-200">{cat.nombre}</p>
-                                <p className="text-[10px] text-zinc-600 font-medium">{productCount} producto{productCount !== 1 ? 's' : ''}</p>
+                                <p className="text-sm font-medium">{cat.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{productCount} producto{productCount !== 1 ? 's' : ''}</p>
                               </div>
                             </div>
                             <Button variant="ghost" size="icon"
-                              className="h-8 w-8 text-zinc-700 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => handleDeleteCategory(cat.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -466,80 +437,78 @@ export default function InventarioPage() {
 
               {/* ──────── TAB 3: HISTORIAL ──────── */}
               <TabsContent value="historial">
-                <ScrollArea className="h-[calc(100vh-260px)]">
-                  {compras.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-zinc-500 gap-3">
-                      <History className="h-10 w-10 opacity-20" />
-                      <p className="font-bold text-sm">No hay compras registradas</p>
+                {compras.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-muted-foreground">
+                    <History className="h-10 w-10 opacity-20" />
+                    <p className="text-sm font-medium text-foreground">No hay compras registradas</p>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-sm border border-border">
+                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+                      <div className="w-6" />
+                      <div className="w-14 font-mono">ID</div>
+                      <div className="flex-1">Proveedor</div>
+                      <div className="w-28 text-right">Monto</div>
+                      <div className="w-24 text-right">Estado</div>
+                      <div className="w-28 text-right">Fecha</div>
                     </div>
-                  ) : (
-                    <div>
-                      <div className="sticky top-0 bg-black/95 backdrop-blur z-10 border-b border-zinc-900 px-6 py-3 flex text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                        <div className="w-10" />
-                        <div className="w-16">ID</div>
-                        <div className="flex-1">Proveedor</div>
-                        <div className="w-28 text-right">Monto</div>
-                        <div className="w-28 text-right">Estado</div>
-                        <div className="w-32 text-right">Fecha</div>
-                      </div>
 
-                      {compras.map(compra => (
-                        <div key={compra.id}>
-                          <div
-                            className="group border-b border-zinc-900/50 hover:bg-zinc-900/40 transition-colors cursor-pointer px-6 py-4 flex items-center"
-                            onClick={() => setExpandedCompra(expandedCompra === compra.id ? null : compra.id)}
+                    {compras.map(compra => {
+                      const isOpen = expandedCompra === compra.id
+                      return (
+                        <div key={compra.id} className="border-b border-border last:border-b-0">
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                            onClick={() => setExpandedCompra(isOpen ? null : compra.id)}
                           >
-                            <div className="w-10">
-                              {expandedCompra === compra.id
-                                ? <ChevronDown className="h-4 w-4 text-blue-500" />
-                                : <ChevronRight className="h-4 w-4 text-zinc-600" />}
+                            <div className="w-6 shrink-0">
+                              {isOpen
+                                ? <ChevronDown className="h-4 w-4 text-primary" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </div>
-                            <div className="w-16 text-xs font-mono text-zinc-600">#{compra.id}</div>
-                            <div className="flex-1 font-bold text-sm text-zinc-300 truncate pr-4">{compra.proveedor}</div>
-                            <div className="w-28 text-right font-black text-white">${parseFloat(compra.monto_total).toFixed(2)}</div>
-                            <div className="w-28 text-right">
-                              <Badge variant="outline" className={`text-[10px] font-bold uppercase ${compra.estado_pago === 'PAGADO' ? 'border-emerald-800 text-emerald-400' : 'border-amber-800 text-amber-400'}`}>
+                            <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground sm:block">#{compra.id}</div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{compra.proveedor}</p>
+                              <p className="text-xs text-muted-foreground sm:hidden">{new Date(compra.fecha).toLocaleDateString('es-SV')}</p>
+                            </div>
+                            <div className="w-auto text-right sm:w-28">
+                              <MoneyValue value={compra.monto_total} className="text-sm font-semibold" />
+                            </div>
+                            <div className="hidden w-24 text-right sm:block">
+                              <StatePill tone={compra.estado_pago === 'PAGADO' ? "success" : "warning"}>
                                 {compra.estado_pago === 'PAGADO' ? 'Pagado' : 'Crédito'}
-                              </Badge>
+                              </StatePill>
                             </div>
-                            <div className="w-32 text-right text-xs text-zinc-500">
+                            <div className="hidden w-28 text-right text-xs text-muted-foreground sm:block">
                               {new Date(compra.fecha).toLocaleDateString('es-SV')}
                             </div>
-                          </div>
+                          </button>
 
-                          {expandedCompra === compra.id && compra.lotes_inventario.length > 0 && (
-                            <div className="bg-zinc-950/50 border-b border-zinc-900/50 px-6 py-3">
-                              <div className="ml-10 space-y-2">
-                                <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-2">Lotes Generados</p>
+                          {isOpen && compra.lotes_inventario.length > 0 && (
+                            <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
+                              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes generados</p>
+                              <div className="flex flex-col gap-1.5">
                                 {compra.lotes_inventario.map((lote, idx) => {
                                   const prod = productos.find(p => p.id === lote.producto_id)
                                   return (
-                                    <div key={`compra-lote-${lote.id}-${idx}`} className="flex items-center gap-4 bg-black/30 border border-zinc-800/30 rounded-xl px-4 py-2.5 text-sm">
-                                      <span className="font-bold text-zinc-300 flex-1">{prod?.nombre || `Producto #${lote.producto_id}`}</span>
-                                      <span className="text-xs text-zinc-500">
-                                        {lote.cantidad_disponible}/{lote.cantidad_inicial} uds
-                                      </span>
-                                      <span className="text-xs font-mono text-zinc-600">
-                                        @${parseFloat(lote.costo_unitario_adquisicion).toFixed(4)}
-                                      </span>
+                                    <div key={`compra-lote-${lote.id}-${idx}`} className="flex flex-wrap items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
+                                      <span className="flex-1 truncate font-medium">{prod?.nombre || `Producto #${lote.producto_id}`}</span>
+                                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{lote.cantidad_disponible}/{lote.cantidad_inicial} uds</span>
+                                      <span className="font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                       {lote.fecha_vencimiento && (
-                                        <span className="text-[10px] text-amber-500/70">
-                                          Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}
-                                        </span>
+                                        <span className="text-xs text-warning">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
                                       )}
-                                      {lote.cantidad_disponible > 0 && user?.rol !== 'CAJERO' && (
-                                        <Button 
-                                          variant="outline" 
-                                          size="sm" 
-                                          className="h-7 px-2 border-amber-900/50 text-amber-500 hover:bg-amber-950 hover:text-amber-400 text-[10px] uppercase font-bold tracking-widest gap-1 rounded-lg ml-auto"
+                                      {lote.cantidad_disponible > 0 && !esCajero && (
+                                        <Button variant="outline" size="sm"
+                                          className="ml-auto h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
                                           onClick={(e) => {
                                             e.stopPropagation()
                                             setAjusteTarget({ lote, nombre: prod?.nombre || `Producto #${lote.producto_id}` })
                                             setAjusteDialogOpen(true)
                                           }}
                                         >
-                                          <AlertTriangle className="h-3 w-3" />
-                                          Merma
+                                          <AlertTriangle className="h-3.5 w-3.5" /> Merma
                                         </Button>
                                       )}
                                     </div>
@@ -549,10 +518,10 @@ export default function InventarioPage() {
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
+                      )
+                    })}
+                  </div>
+                )}
               </TabsContent>
             </>
           )}
@@ -561,13 +530,13 @@ export default function InventarioPage() {
 
       {/* Dialogs */}
       <Dialog open={compraDialogOpen} onOpenChange={setCompraDialogOpen}>
-        <DialogContent className="max-w-[95vw] lg:max-w-6xl w-full bg-black border-zinc-900 border text-white p-0 overflow-hidden shadow-2xl">
-          <DialogHeader className="px-6 py-4 border-b border-zinc-900 bg-zinc-950">
-            <DialogTitle className="font-black text-lg tracking-tight uppercase flex items-center gap-2">
-              <Truck className="h-5 w-5 text-blue-500" /> Registro de Compra
+        <DialogContent className="w-[95vw] max-w-[95vw] overflow-hidden p-0 lg:max-w-5xl" showCloseButton>
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" /> Registro de compra
             </DialogTitle>
           </DialogHeader>
-          <div className="p-6 overflow-y-auto max-h-[85vh]">
+          <div className="max-h-[80vh] overflow-y-auto p-6">
             <CompraForm
               productos={productos}
               onSuccess={() => {
