@@ -7,12 +7,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompraDto } from './dto/create-compra.dto';
 import { Prisma } from '@prisma/client';
 import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
+import {
+  BOVEDA_LEDGER_LOCK,
+  saldoBovedaDerivado,
+} from '../common/cuentas-efectivo';
 
 @Injectable()
 export class ComprasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createCompraDto: CreateCompraDto) {
+  async create(createCompraDto: CreateCompraDto, userId?: number) {
     const { detalles_lotes, ...compraData } = createCompraDto;
 
     // ── BUG 2: Validar coherencia lógica AL_CREDITO vs origen_fondos ──
@@ -117,6 +121,9 @@ export class ComprasService {
             tipo_movimiento: 'PAGO_PROVEEDOR',
             monto: montoCalculado,
             descripcion: `Pago a proveedor ${compraData.proveedor} por compra ID ${compra.id}`,
+            usuario_id: userId,
+            cuenta_origen: 'GAVETA',
+            cuenta_destino: 'PROVEEDOR',
           },
         });
 
@@ -128,31 +135,30 @@ export class ComprasService {
           },
         });
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
-        // caja_general es un libro de movimientos (no un contador de una sola
-        // fila), así que el saldo se calcula con SUM(). Un advisory lock
-        // serializa esta sección crítica entre transacciones concurrentes
-        // (ver docs/decisions/0001-concurrencia-for-update.md).
-        await acquireAdvisoryLock(tx, 'caja_general_ledger');
+        // El saldo de bóveda es un agregado derivado del libro (no una fila
+        // bloqueable con FOR UPDATE). Un advisory lock serializa esta sección
+        // crítica (ver docs/decisions/0001-concurrencia-for-update.md).
+        await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
 
-        // Validar fondos suficientes en caja general
-        const saldoAgg = await tx.caja_general.aggregate({
-          _sum: { monto: true },
-        });
-        const saldoDisponible = new Prisma.Decimal(saldoAgg._sum.monto ?? 0);
-
+        const saldoDisponible = await saldoBovedaDerivado(tx);
         if (saldoDisponible.lessThan(montoCalculado)) {
           throw new BadRequestException(
-            `Fondos insuficientes en caja general. ` +
+            `Fondos insuficientes en bóveda. ` +
               `Disponible: $${saldoDisponible.toFixed(2)}, ` +
               `Requerido: $${montoCalculado.toFixed(2)}`,
           );
         }
 
-        const montoDecimal = montoCalculado.negated();
-        await tx.caja_general.create({
+        // Pago desde bóveda: BOVEDA→PROVEEDOR (no requiere turno abierto).
+        await tx.movimientos_financieros.create({
           data: {
-            monto: montoDecimal,
+            caja_turno_id: null,
+            tipo_movimiento: 'PAGO_PROVEEDOR',
+            monto: montoCalculado,
             descripcion: `Pago a proveedor ${compraData.proveedor} de compra ID ${compra.id}`,
+            usuario_id: userId,
+            cuenta_origen: 'BOVEDA',
+            cuenta_destino: 'PROVEEDOR',
           },
         });
       }

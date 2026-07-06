@@ -167,10 +167,14 @@ model movimientos_financieros {
   descripcion        String
   fecha              DateTime?          @default(now()) @db.Timestamptz(6)
   usuario_id         Int?
+  // Modelo origen→destino (Bloque 1 §5.1): catálogo cerrado
+  // GAVETA/BOVEDA/DUEÑOS/GASTO/PROVEEDOR. Nullable porque MERMA_INVENTARIO no es
+  // un movimiento de efectivo. El saldo de bóveda se deriva de estas columnas.
+  cuenta_origen      String?            @db.VarChar(20)
+  cuenta_destino     String?            @db.VarChar(20)
   cajas_turnos       cajas_turnos?      @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
   categorias_gastos  categorias_gastos? @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
   usuarios           usuarios?          @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_movimiento")
-  caja_general       caja_general?
 
   // reportes.service.ts filtra siempre tipo_movimiento + fecha juntos
   // (gastos operativos, mermas). findAll(tipo_movimiento) también lo usa solo.
@@ -178,6 +182,9 @@ model movimientos_financieros {
   @@index([caja_turno_id])
   @@index([categoria_gasto_id])
   @@index([usuario_id])
+  // Saldo de bóveda derivado: Σ(destino=BOVEDA) − Σ(origen=BOVEDA).
+  @@index([cuenta_destino])
+  @@index([cuenta_origen])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -245,13 +252,6 @@ model ventas {
   @@index([usuario_id])
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model caja_general {
-  id                   Int       @id @default(autoincrement())
-  movimiento_origen_id Int?      @unique
-  monto                Decimal   @db.Decimal(10, 2)
-  descripcion          String
-  fecha                DateTime? @default(now()) @db.Timestamptz(6)
-
-  movimientos_financieros movimientos_financieros? @relation(fields: [movimiento_origen_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-}
+// La tabla caja_general se eliminó en el Bloque 1.C: el saldo de bóveda se
+// DERIVA del libro de movimientos_financieros vía (cuenta_origen, cuenta_destino).
+// Ver docs/modelo-contable/00-especificaciones.md §5.1.

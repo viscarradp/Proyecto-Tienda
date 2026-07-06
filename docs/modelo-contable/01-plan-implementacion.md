@@ -53,30 +53,33 @@
 - **Aceptación:** vender "0.5" de un producto descuenta 0.5 del lote; FIFO cruza lotes
   con decimales sin error de redondeo.
 
-### 1.C — Modelo origen→destino + bóveda derivada  §5.1 (ítem 4 + fugas C/D)
+### 1.C — Modelo origen→destino + bóveda derivada + gastos desde bóveda  §5.1 + §5.6 (ítems 4 + 6, fugas A/C/D)
 **Objetivo:** la columna vertebral. Conservación del efectivo por construcción.
+**Nota de alcance:** absorbe el ítem 6 (gastos desde bóveda) porque eliminar
+`caja_general` obliga a enrutar el gasto-desde-bóveda por el nuevo modelo (decisión
+del usuario 2026-07-05). Así 1.C cierra las fugas A/C/D juntas, sin parches.
 
-- **Schema:** `cuenta_origen`/`cuenta_destino` (VarChar, nullable) en
-  `movimientos_financieros`; **eliminar tabla `caja_general`** (bóveda pasa a derivada).
-- **Backend:** refactor `movimientos_financieros.service` para setear origen/destino;
-  helper de "saldo de bóveda derivado" (`Σ destino=BOVEDA − Σ origen=BOVEDA`);
-  `caja_general.service` reescrito: `getSaldo()` deriva del libro, `inyectarCapital()`
-  crea `INGRESO_CAPITAL` (DUEÑOS→BOVEDA), se elimina el `POST` genérico; reportes que
-  leían la tabla pasan al libro.
-- **Frontend:** `GET /caja-general/saldo` mantiene contrato → sin cambios visibles.
-- **Aceptación:** test de conservación (suma de patas = 0 por cuenta de efectivo);
-  saldo de bóveda coincide con el derivado; no queda puerta trasera de ajuste.
+- **Schema:** `cuenta_origen`/`cuenta_destino` (VarChar, nullable) + índices en
+  `movimientos_financieros`; **eliminar tabla `caja_general`** (bóveda derivada).
+- **Backend:** helper `saldoBovedaDerivado` (`Σ destino=BOVEDA − Σ origen=BOVEDA`) +
+  catálogo de cuentas; `movimientos.create` setea origen/destino y acepta
+  `origen_fondos` (GAVETA|BOVEDA) para egresos (bóveda no exige turno, valida saldo
+  derivado); `compras` (rama CAJA_GENERAL) crea un `PAGO_PROVEEDOR` BOVEDA→PROVEEDOR;
+  `caja_general.service` reescrito: `getSaldo` deriva, `inyectarCapital` crea
+  `INGRESO_CAPITAL` DUEÑOS→BOVEDA, **se elimina el POST genérico** (fuga D).
+- **Frontend:** Gastos enruta el gasto-desde-bóveda por `/movimientos-financieros`
+  (origen_fondos=BOVEDA); `GET /caja-general/saldo` mantiene contrato.
+- **Aceptación:** conservación por construcción; saldo de bóveda = derivado; se paga
+  gasto desde bóveda sin turno; no queda puerta trasera de ajuste.
 
-### 1.D — Retiro personal, "Sacar dinero" y gastos desde bóveda  §5.4 + §5.6
-**Objetivo:** cerrar F1 y F2 sobre la base de 1.C.
+### 1.D — Retiro personal + "Sacar dinero"  §5.4 (ítem 2, F1)
+**Objetivo:** cerrar F1 sobre la base de 1.C.
 
-- **Backend:** `RETIRO_PERSONAL` (GAVETA→DUEÑOS) en DTO+service; `movimientos.create`
-  acepta `origen_fondos` (GAVETA|BOVEDA) para egresos/retiros; reportes suman "retiros
-  de dueños".
-- **Frontend:** botón **"Sacar dinero"** con 3 opciones (Guardar en bóveda / Pagar algo
-  / Retiro personal); Gastos permite origen gaveta/bóveda.
-- **Aceptación:** retiro personal no infla bóveda ni baja utilidad; se paga un gasto
-  desde bóveda sin turno.
+- **Backend:** `RETIRO_PERSONAL` (GAVETA→DUEÑOS) en DTO+service; reportes suman
+  "retiros de dueños".
+- **Frontend:** botón **"Sacar dinero"** con 3 opciones (Guardar en bóveda / Pagar
+  algo / Retiro personal).
+- **Aceptación:** retiro personal no infla bóveda ni baja utilidad.
 
 ### 1.E — Traslados en cierre/apertura  §5.5 (ítem 3, F3)
 **Objetivo:** que el flujo nocturno normal no se registre como faltante.
@@ -107,8 +110,8 @@
 |---|---|---|
 | 1.A | Trazabilidad `usuario_id` | ✅ Completada |
 | 1.B | Cantidades a Decimal | ✅ Completada |
-| 1.C | Modelo origen→destino + bóveda derivada | ⬜ Pendiente |
-| 1.D | Retiro personal + Sacar dinero + gastos bóveda | ⬜ Pendiente |
+| 1.C | Modelo origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada |
+| 1.D | Retiro personal + "Sacar dinero" | ⬜ Pendiente |
 | 1.E | Traslados en cierre/apertura | ⬜ Pendiente |
 | 1.F | Carga inicial de inventario | ⬜ Pendiente |
 

@@ -137,28 +137,25 @@ export default function GastosPage() {
       }
     }
 
+    if (!categoriaId) {
+      setError("Selecciona una categoría de gasto.")
+      return
+    }
+
     setSubmitLoading(true)
     try {
-      if (origenFondos === "CAJA_POS") {
-        if (!categoriaId) throw new Error("Selecciona una categoría de gasto.")
-        await apiFetch("/movimientos-financieros", {
-          method: "POST",
-          body: JSON.stringify({
-            tipo_movimiento: 'EGRESO_OPERATIVO',
-            monto: montoParsed,
-            descripcion: descripcion,
-            categoria_gasto_id: parseInt(categoriaId)
-          })
+      // Un gasto es un EGRESO_OPERATIVO; el origen (gaveta o bóveda) lo decide
+      // origen_fondos. Desde 1.C la bóveda ya no se toca por la puerta trasera.
+      await apiFetch("/movimientos-financieros", {
+        method: "POST",
+        body: JSON.stringify({
+          tipo_movimiento: 'EGRESO_OPERATIVO',
+          monto: montoParsed,
+          descripcion: descripcion,
+          categoria_gasto_id: parseInt(categoriaId),
+          origen_fondos: origenFondos === "CAJA_POS" ? "GAVETA" : "BOVEDA",
         })
-      } else {
-        await apiFetch("/caja-general", {
-          method: "POST",
-          body: JSON.stringify({
-            monto: -montoParsed, // En negativo porque es un retiro manual
-            descripcion: descripcion + (categoriaId ? ` (Cat: ${categorias.find(c => c.id.toString() === categoriaId)?.nombre})` : '')
-          })
-        })
-      }
+      })
 
       setSuccess("¡Gasto registrado exitosamente!")
       setDescripcion("")
@@ -312,7 +309,7 @@ export default function GastosPage() {
                       + Nueva
                     </Button>
                   </div>
-                  <Select value={categoriaId} onValueChange={setCategoriaId} required={origenFondos === "CAJA_POS"}>
+                  <Select value={categoriaId} onValueChange={setCategoriaId} required>
                     <SelectTrigger className="h-12 w-full">
                       <SelectValue placeholder="Selecciona una categoría…" />
                     </SelectTrigger>
@@ -323,7 +320,7 @@ export default function GastosPage() {
                     </SelectContent>
                   </Select>
                   {origenFondos === "CAJA_GENERAL" && (
-                    <p className="pl-1 text-xs text-muted-foreground">Opcional para retiros de bóveda</p>
+                    <p className="pl-1 text-xs text-muted-foreground">Se paga desde la bóveda; no requiere turno abierto</p>
                   )}
                 </div>
               </div>

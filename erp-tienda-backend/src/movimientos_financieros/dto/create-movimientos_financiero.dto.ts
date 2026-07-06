@@ -26,4 +26,11 @@ export class CreateMovimientosFinancieroDto {
   @IsOptional()
   @IsInt()
   categoria_gasto_id?: number;
+
+  // De qué cuenta de efectivo sale un egreso: GAVETA (default, exige turno) o
+  // BOVEDA (no exige turno, valida saldo derivado). Bloque 1 §5.6.
+  @IsOptional()
+  @IsString()
+  @IsIn(['GAVETA', 'BOVEDA'])
+  origen_fondos?: string;
 }
