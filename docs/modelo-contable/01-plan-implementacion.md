@@ -113,6 +113,6 @@ del usuario 2026-07-05). Así 1.C cierra las fugas A/C/D juntas, sin parches.
 | 1.C | Modelo origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada |
 | 1.D | Retiro personal + "Sacar dinero" | ✅ Completada |
 | 1.E | Traslados en cierre/apertura | ✅ Completada |
-| 1.F | Carga inicial de inventario | ⬜ Pendiente |
+| 1.F | Carga inicial de inventario | ✅ Completada |
 
 > Al cerrar el Bloque 1: actualizar `plan-fases.md` y el SRS a v3.0.

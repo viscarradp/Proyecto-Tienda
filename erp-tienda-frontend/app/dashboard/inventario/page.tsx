@@ -14,6 +14,7 @@ import {
   Tags,
   Trash2,
   Pencil,
+  PackagePlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -74,6 +75,7 @@ export default function InventarioPage() {
   const [globalError, setGlobalError] = React.useState("")
   const [productDialogOpen, setProductDialogOpen] = React.useState(false)
   const [compraDialogOpen, setCompraDialogOpen] = React.useState(false)
+  const [compraInicial, setCompraInicial] = React.useState(false)
   const [ajusteDialogOpen, setAjusteDialogOpen] = React.useState(false)
   const [ajusteTarget, setAjusteTarget] = React.useState<{ lote: LoteStock, nombre: string } | null>(null)
   const [editProductDialogOpen, setEditProductDialogOpen] = React.useState(false)
@@ -177,7 +179,11 @@ export default function InventarioPage() {
           </div>
           {!esCajero && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setCompraDialogOpen(true)} className="h-11 gap-2">
+              <Button variant="outline" onClick={() => { setCompraInicial(true); setCompraDialogOpen(true) }} className="h-11 gap-2">
+                <PackagePlus className="h-4 w-4" />
+                <span className="hidden lg:inline">Inventario inicial</span>
+              </Button>
+              <Button variant="outline" onClick={() => { setCompraInicial(false); setCompraDialogOpen(true) }} className="h-11 gap-2">
                 <Truck className="h-4 w-4" />
                 <span className="hidden sm:inline">Nueva compra</span>
               </Button>
@@ -533,12 +539,17 @@ export default function InventarioPage() {
         <DialogContent className="w-[95vw] max-w-[95vw] overflow-hidden p-0 lg:max-w-5xl" showCloseButton>
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" /> Registro de compra
+              {compraInicial ? (
+                <><PackagePlus className="h-5 w-5 text-primary" /> Cargar inventario inicial</>
+              ) : (
+                <><Truck className="h-5 w-5 text-primary" /> Registro de compra</>
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <CompraForm
               productos={productos}
+              inicial={compraInicial}
               onSuccess={() => {
                 setCompraDialogOpen(false)
                 loadData(true)
