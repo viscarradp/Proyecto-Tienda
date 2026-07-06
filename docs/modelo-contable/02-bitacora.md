@@ -5,13 +5,14 @@
 
 ## Estado global
 
-**Sub-fase actual:** 1.C completada; siguiente = 1.D (retiro personal + "Sacar dinero").
+**Sub-fase actual:** 1.D completada; siguiente = 1.E (traslados cierre/apertura).
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
 | 1.A · `usuario_id` | ✅ Completada | 4 tablas + `@CurrentUser()`; e2e 7/7 verdes. |
 | 1.B · Decimal (fraccionados) | ✅ Completada | Cantidades a `Decimal(12,3)`; FIFO en Decimal; e2e 8/8 (nuevo test de media libra). |
 | 1.C · origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada | Cuentas origen/destino; `caja_general` eliminada (saldo derivado); gasto desde bóveda; fugas A/C/D cerradas; e2e 9/9 (nueva suite bóveda). |
+| 1.D · retiro personal + "Sacar dinero" | ✅ Completada | `RETIRO_PERSONAL` (GAVETA→DUEÑOS); métrica retiros de dueños en reportes; diálogo "Sacar dinero" (3 opciones) en POS; e2e 10/10. |
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
 | 1.E · traslados cierre/apertura | ⬜ Pendiente | — |
 | 1.F · carga inicial inventario | ⬜ Pendiente | — |
@@ -42,6 +43,18 @@
 - **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
   7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
   usuario, patrón Fase 3).
+
+### 2026-07-05 — Sub-fase 1.D: retiro personal + "Sacar dinero" ✅
+- **Backend**: nuevo tipo `RETIRO_PERSONAL` (GAVETA→DUEÑOS) en DTO + switch de
+  `movimientos.service` (baja la gaveta, no toca bóveda, no exige categoría).
+  `reportes.getEstadoResultados` añade `retiros_duenos` (distribución de patrimonio,
+  **no resta la utilidad**) para el insight "el negocio ganó $X y vos retiraste $Y".
+- **Frontend**: `components/pos/SacarDineroDialog.tsx` — un botón **"Sacar dinero"** en
+  el POS (con caja abierta) con 3 opciones: *Guardar en bóveda* (RETIRO_BOVEDA),
+  *Pagar algo* (EGRESO_OPERATIVO), *Retiro personal* (RETIRO_PERSONAL). Estadísticas
+  muestra "Retiros de dueños" bajo la utilidad neta.
+- **Verificación**: backend build+lint limpios, **e2e 10/10** (nuevo test de retiro
+  personal: baja gaveta, bóveda intacta, aparece como retiro no gasto). Frontend build+lint limpios.
 
 ### 2026-07-05 — Sub-fase 1.C: origen→destino + bóveda derivada (+ ítem 6) ✅
 - **Decisión de alcance**: se fusionó el ítem 6 (gastos desde bóveda) en 1.C, porque

@@ -104,6 +104,11 @@ export class MovimientosFinancierosService {
         cuenta_destino = 'GASTO';
         saleDeGaveta = true;
         break;
+      case 'RETIRO_PERSONAL': // retiro del dueño: gaveta → patrimonio
+        cuenta_origen = 'GAVETA';
+        cuenta_destino = 'DUEÑOS';
+        saleDeGaveta = true;
+        break;
       default:
         throw new BadRequestException(
           `Tipo de movimiento no soportado: ${tipo_movimiento}`,

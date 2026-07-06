@@ -11,7 +11,12 @@ import {
 export class CreateMovimientosFinancieroDto {
   @IsString()
   @IsNotEmpty()
-  @IsIn(['INGRESO_CAPITAL', 'RETIRO_BOVEDA', 'EGRESO_OPERATIVO'])
+  @IsIn([
+    'INGRESO_CAPITAL',
+    'RETIRO_BOVEDA',
+    'EGRESO_OPERATIVO',
+    'RETIRO_PERSONAL',
+  ])
   tipo_movimiento: string;
 
   @IsNumber()

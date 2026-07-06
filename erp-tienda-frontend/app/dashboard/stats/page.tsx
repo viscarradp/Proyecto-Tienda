@@ -49,6 +49,7 @@ interface EstadoResultados {
   gastos_operativos: string
   mermas_inventario: string
   utilidad_neta: string
+  retiros_duenos: string
   total_ventas_completadas: number
   total_ventas_anuladas: number
   ticket_promedio: string
@@ -374,6 +375,18 @@ export default function StatsPage() {
                   <PLRow label="Pérdidas por mermas" value={estado.mermas_inventario} type="expense" />
                   <PLDivider />
                   <PLRow label="Utilidad neta" value={estado.utilidad_neta} type="total" />
+                  {parseFloat(estado.retiros_duenos) > 0 && (
+                    <>
+                      <PLDivider />
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          Retiros de dueños
+                          <span className="ml-1 text-xs opacity-70">(no baja la utilidad)</span>
+                        </span>
+                        <MoneyValue value={estado.retiros_duenos} tone="warning" className="text-sm font-semibold" />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">

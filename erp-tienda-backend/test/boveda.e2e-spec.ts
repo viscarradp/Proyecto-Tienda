@@ -90,4 +90,52 @@ describe('Bóveda — saldo derivado y gastos desde bóveda (e2e, 1.C)', () => {
     expect(exceso.status).toBe(400);
     expect((exceso.body as ErrorBody).message).toMatch(/bóveda/i);
   });
+
+  it('retiro personal: baja la gaveta, no toca la bóveda y se reporta como retiro (no gasto)', async () => {
+    const bovedaAntes = await saldoBoveda();
+
+    // Abrir turno con fondo 100.
+    const abrir = await request(app.getHttpServer())
+      .post('/cajas-turnos/abrir')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fondo_inicial: 100 });
+    expect(abrir.status).toBe(201);
+    const turnoId = (abrir.body as WithId).id;
+
+    // Retiro personal de 20 (GAVETA→DUEÑOS).
+    const retiro = await request(app.getHttpServer())
+      .post('/movimientos-financieros')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo_movimiento: 'RETIRO_PERSONAL',
+        monto: 20,
+        descripcion: 'Retiro personal de la dueña',
+      });
+    expect(retiro.status).toBe(201);
+
+    // La gaveta bajó a 80 (efectivo_esperado).
+    const activa = await request(app.getHttpServer())
+      .get('/cajas-turnos/activa')
+      .set('Authorization', `Bearer ${token}`);
+    const esperado = (activa.body as { efectivo_esperado: string | number })
+      .efectivo_esperado;
+    expect(Number(esperado)).toBeCloseTo(80);
+
+    // La bóveda NO se tocó (no se infla con retiros personales, fuga F1).
+    expect(await saldoBoveda()).toBeCloseTo(bovedaAntes);
+
+    // El reporte lo muestra como retiro de dueños, no como gasto operativo.
+    const rep = await request(app.getHttpServer())
+      .get('/reportes/estado-resultados?desde=2020-01-01&hasta=2030-01-01')
+      .set('Authorization', `Bearer ${token}`);
+    const retirosDuenos = (rep.body as { retiros_duenos: string | number })
+      .retiros_duenos;
+    expect(Number(retirosDuenos)).toBeGreaterThanOrEqual(20);
+
+    // Cierra el turno declarando los 80 para dejar estado limpio.
+    await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turnoId}/cerrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ efectivo_declarado: 80 });
+  });
 });

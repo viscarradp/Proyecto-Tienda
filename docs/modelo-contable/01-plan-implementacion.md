@@ -111,7 +111,7 @@ del usuario 2026-07-05). Así 1.C cierra las fugas A/C/D juntas, sin parches.
 | 1.A | Trazabilidad `usuario_id` | ✅ Completada |
 | 1.B | Cantidades a Decimal | ✅ Completada |
 | 1.C | Modelo origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada |
-| 1.D | Retiro personal + "Sacar dinero" | ⬜ Pendiente |
+| 1.D | Retiro personal + "Sacar dinero" | ✅ Completada |
 | 1.E | Traslados en cierre/apertura | ⬜ Pendiente |
 | 1.F | Carga inicial de inventario | ⬜ Pendiente |
 

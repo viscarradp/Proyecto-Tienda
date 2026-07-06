@@ -14,6 +14,7 @@ import {
   DoorOpen,
   DoorClosed,
   CheckCircle2,
+  HandCoins,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -37,6 +38,7 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { CartLines } from "@/components/pos/CartLines"
 import { CheckoutSection } from "@/components/pos/CheckoutSection"
+import { SacarDineroDialog } from "@/components/pos/SacarDineroDialog"
 import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
 import { useInventoryStore } from "../../../src/store/inventoryStore"
@@ -94,6 +96,7 @@ export default function POSPage() {
   const [cajaLoading, setCajaLoading] = React.useState(true)
   const [openCajaDialog, setOpenCajaDialog] = React.useState(false)
   const [closeCajaDialog, setCloseCajaDialog] = React.useState(false)
+  const [sacarDineroOpen, setSacarDineroOpen] = React.useState(false)
   const [fondoInicial, setFondoInicial] = React.useState<string>("")
   const [efectivoDeclarado, setEfectivoDeclarado] = React.useState<string>("")
   const [montoBoveda, setMontoBoveda] = React.useState<string>("")
@@ -349,15 +352,25 @@ export default function POSPage() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
             ) : cajaActiva ? (
-              <Button
-                variant="outline"
-                onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
-                className="h-10 gap-2 border-success/40 text-success hover:bg-success/10 hover:text-success"
-              >
-                <DoorClosed className="h-4 w-4" />
-                <span className="hidden sm:inline">Caja abierta</span>
-                <span className="sm:hidden">Caja</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSacarDineroOpen(true)}
+                  className="h-10 gap-2"
+                >
+                  <HandCoins className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sacar dinero</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
+                  className="h-10 gap-2 border-success/40 text-success hover:bg-success/10 hover:text-success"
+                >
+                  <DoorClosed className="h-4 w-4" />
+                  <span className="hidden sm:inline">Caja abierta</span>
+                  <span className="sm:hidden">Caja</span>
+                </Button>
+              </div>
             ) : (
               <Button
                 onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
@@ -708,6 +721,13 @@ export default function POSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ════════ SACAR DINERO (bóveda / gasto / retiro personal) ════════ */}
+      <SacarDineroDialog
+        open={sacarDineroOpen}
+        onOpenChange={setSacarDineroOpen}
+        onSuccess={loadCaja}
+      />
     </div>
   )
 }

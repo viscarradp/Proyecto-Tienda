@@ -92,6 +92,18 @@ export class ReportesService {
     });
     const mermas_inventario = mermasAgg._sum.monto ?? new Prisma.Decimal(0);
 
+    // ── 6.5. Retiros personales del dueño (§2, Bloque 1.D) ──
+    // Es una DISTRIBUCIÓN de patrimonio, NO un gasto: no resta de la utilidad.
+    // Se reporta aparte para explicar "el negocio ganó $X y vos retiraste $Y".
+    const retirosAgg = await this.prisma.movimientos_financieros.aggregate({
+      where: {
+        tipo_movimiento: 'RETIRO_PERSONAL',
+        fecha: { gte: desde, lte: hasta },
+      },
+      _sum: { monto: true },
+    });
+    const retiros_duenos = retirosAgg._sum.monto ?? new Prisma.Decimal(0);
+
     // ── 7. Utilidad Neta ──
     const utilidad_neta = utilidad_bruta
       .sub(gastos_operativos)
@@ -119,6 +131,7 @@ export class ReportesService {
       gastos_operativos,
       mermas_inventario,
       utilidad_neta,
+      retiros_duenos,
       total_ventas_completadas,
       total_ventas_anuladas,
       ticket_promedio,
