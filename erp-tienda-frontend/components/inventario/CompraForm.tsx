@@ -115,9 +115,12 @@ interface LoteLineForm {
 interface CompraFormProps {
   productos: Producto[]
   onSuccess: () => void
+  /** Modo "carga inicial de inventario" (Bloque 1.F): aporte del dueño en
+   * especie. Fuerza origen CAPITAL_DUEÑOS + PAGADO y oculta esos selectores. */
+  inicial?: boolean
 }
 
-export function CompraForm({ productos, onSuccess }: CompraFormProps) {
+export function CompraForm({ productos, onSuccess, inicial = false }: CompraFormProps) {
   const [proveedor, setProveedor] = React.useState("")
   const [estadoPago, setEstadoPago] = React.useState("PAGADO")
   const [origenFondos, setOrigenFondos] = React.useState("CAPITAL_DUEÑOS")
@@ -183,9 +186,9 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
       return
     }
 
-    const invalidLines = lineas.filter(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) < 1 || (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0)
+    const invalidLines = lineas.filter(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) <= 0 || (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0)
     if (invalidLines.length > 0) {
-      setError("Todos los lotes deben tener producto, cantidad ≥ 1 y costo > 0")
+      setError("Todos los lotes deben tener producto, cantidad > 0 y costo > 0")
       setLoading(false)
       return
     }
@@ -200,7 +203,7 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
           origen_fondos: origenFondos,
           detalles_lotes: lineas.map(l => ({
             producto_id: parseInt(l.producto_id),
-            cantidad_inicial: parseInt(l.cantidad_inicial) || 0,
+            cantidad_inicial: parseFloat(l.cantidad_inicial) || 0,
             costo_unitario_adquisicion: parseFloat(l.costo_unitario_adquisicion) || 0,
             fecha_vencimiento: l.fecha_vencimiento || undefined,
           })),
@@ -235,41 +238,54 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
 
       {/* Cabecera de la compra */}
       <div className="flex flex-col gap-4 rounded-sm border border-border bg-card p-5">
-        <h3 className="text-sm font-semibold">Datos de la compra</h3>
+        <h3 className="text-sm font-semibold">{inicial ? "Inventario inicial" : "Datos de la compra"}</h3>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {inicial && (
+          <p className="rounded-sm bg-muted/50 p-3 text-xs text-muted-foreground">
+            Registra el stock con el que ya arranca la tienda. Se contabiliza como
+            aporte del dueño en especie (capital), sin salida de caja ni turno abierto.
+          </p>
+        )}
+
+        <div className={inicial ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 gap-4 md:grid-cols-3"}>
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Proveedor</Label>
+            <Label className="text-xs font-medium text-muted-foreground">
+              {inicial ? "Origen del inventario" : "Proveedor"}
+            </Label>
             <Input value={proveedor} onChange={(e) => setProveedor(e.target.value)} required
-              placeholder="Nombre del proveedor" className="h-11" />
+              placeholder={inicial ? "Ej. Inventario propio inicial" : "Nombre del proveedor"} className="h-11" />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
-            <Select value={estadoPago} onValueChange={setEstadoPago}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PAGADO">Pagado</SelectItem>
-                <SelectItem value="AL_CREDITO">Al crédito</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!inicial && (
+            <>
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
+                <Select value={estadoPago} onValueChange={setEstadoPago}>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PAGADO">Pagado</SelectItem>
+                    <SelectItem value="AL_CREDITO">Al crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Origen de fondos</Label>
-            <Select value={origenFondos} onValueChange={setOrigenFondos}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CAPITAL_DUEÑOS">Capital dueños</SelectItem>
-                <SelectItem value="CAJA_GENERAL">Caja general</SelectItem>
-                <SelectItem value="CAJA_POS">Caja POS (requiere turno abierto)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-medium text-muted-foreground">Origen de fondos</Label>
+                <Select value={origenFondos} onValueChange={setOrigenFondos}>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CAPITAL_DUEÑOS">Capital dueños</SelectItem>
+                    <SelectItem value="CAJA_GENERAL">Caja general</SelectItem>
+                    <SelectItem value="CAJA_POS">Caja POS (requiere turno abierto)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -311,7 +327,7 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
 
               <div>
                 <Label className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
-                <Input type="number" min={1} value={linea.cantidad_inicial}
+                <Input type="number" min={0.001} step="0.001" inputMode="decimal" value={linea.cantidad_inicial}
                   onChange={(e) => updateLinea(linea.key, "cantidad_inicial", e.target.value)}
                   className="h-9 font-mono text-sm" />
               </div>
@@ -358,7 +374,7 @@ export function CompraForm({ productos, onSuccess }: CompraFormProps) {
               Registrando…
             </>
           ) : (
-            "Registrar compra"
+            inicial ? "Cargar inventario inicial" : "Registrar compra"
           )}
         </Button>
       </div>

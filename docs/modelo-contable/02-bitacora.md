@@ -5,7 +5,7 @@
 
 ## Estado global
 
-**Sub-fase actual:** 1.E completada; siguiente = 1.F (carga inicial de inventario) — última del bloque.
+**Estado:** 🏁 **Bloque 1 COMPLETO** (1.A–1.F). Pendientes de cierre: meta-hallazgo (SRS v3) y follow-ups menores (ver abajo). El `db push` a Supabase real es paso manual del usuario.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -14,6 +14,15 @@
 | 1.C · origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada | Cuentas origen/destino; `caja_general` eliminada (saldo derivado); gasto desde bóveda; fugas A/C/D cerradas; e2e 9/9 (nueva suite bóveda). |
 | 1.D · retiro personal + "Sacar dinero" | ✅ Completada | `RETIRO_PERSONAL` (GAVETA→DUEÑOS); métrica retiros de dueños en reportes; diálogo "Sacar dinero" (3 opciones) en POS; e2e 10/10. |
 | 1.E · traslados cierre/apertura | ✅ Completada | `TRASLADO_A_BOVEDA`/`TRASLADO_DESDE_BOVEDA`; apertura sin faltante falso (fuga F3); cierre con conteo físico + traslado; e2e 11/11. |
+| 1.F · carga inicial de inventario | ✅ Completada | Flujo guiado "Inventario inicial" (compra `CAPITAL_DUEÑOS`, sin caja); fix `parseInt`→`parseFloat` en compras (fraccionado). |
+
+### Follow-ups conocidos (no bloquean el Bloque 1)
+- **Meta-hallazgo:** actualizar el SRS a v3.0 reflejando lo construido. Pendiente.
+- **Venta fraccionada en el POS:** el backend ya vende decimales (verificado), pero el
+  stepper del carrito del POS es entero. Falta un input de cantidad fraccionada en el
+  POS para vender "0.5" desde la UI (la compra/inventario ya acepta decimales).
+- **`db push` a Supabase real:** paso manual del usuario (aditivo salvo `DROP TABLE
+  caja_general`, tabla vacía). Correr `cd erp-tienda-backend && npx prisma db push`.
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
 | 1.E · traslados cierre/apertura | ⬜ Pendiente | — |
 | 1.F · carga inicial inventario | ⬜ Pendiente | — |
@@ -44,6 +53,16 @@
 - **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
   7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
   usuario, patrón Fase 3).
+
+### 2026-07-05 — Sub-fase 1.F: carga inicial de inventario ✅
+- **Backend**: sin cambios — `compras` con `origen_fondos=CAPITAL_DUEÑOS` ya crea lotes
+  como aporte del dueño en especie, sin salida de caja ni turno (ya lo ejercitan los e2e).
+- **Frontend**: `CompraForm` gana un modo `inicial` (fuerza `CAPITAL_DUEÑOS`+`PAGADO`,
+  oculta esos selectores, nota explicativa, labels "Inventario inicial"). La página de
+  Inventario añade un botón **"Inventario inicial"** que abre ese flujo guiado.
+- **Fix de fraccionados (1.B)**: `CompraForm` usaba `parseInt` para la cantidad (truncaba
+  decimales) → `parseFloat`; input con `step="0.001"`, min > 0.
+- **Verificación**: frontend build+lint limpios.
 
 ### 2026-07-05 — Sub-fase 1.E: traslados gaveta↔bóveda en cierre/apertura ✅
 - **`cajas_turnos.service`**:
