@@ -138,4 +138,62 @@ describe('Bóveda — saldo derivado y gastos desde bóveda (e2e, 1.C)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ efectivo_declarado: 80 });
   });
+
+  it('cierre traslada a bóveda (no faltante) y la reapertura no inventa faltantes (fuga F3)', async () => {
+    const bovedaAntes = await saldoBoveda();
+
+    // Abrir turno con fondo 100.
+    const abrir1 = await request(app.getHttpServer())
+      .post('/cajas-turnos/abrir')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fondo_inicial: 100 });
+    expect(abrir1.status).toBe(201);
+    const turno1 = (abrir1.body as WithId).id;
+
+    // Cerrar: contó 100 (sin descuadre) y traslada 60 a la bóveda.
+    const cerrar = await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turno1}/cerrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ efectivo_declarado: 100, monto_a_boveda: 60 });
+    expect(cerrar.status).toBe(200);
+
+    // La bóveda subió 60 (traslado, no faltante).
+    expect(await saldoBoveda()).toBeCloseTo(bovedaAntes + 60);
+
+    // El fondo siguiente = 100 − 60 = 40.
+    const ult = await request(app.getHttpServer())
+      .get('/cajas-turnos/ultimo-cierre')
+      .set('Authorization', `Bearer ${token}`);
+    expect(
+      Number(
+        (ult.body as { fondo_siguiente: string | number }).fondo_siguiente,
+      ),
+    ).toBeCloseTo(40);
+
+    // Reabrir con 40 NO debe inventar un AJUSTE_FALTANTE (fuga F3 corregida).
+    const abrir2 = await request(app.getHttpServer())
+      .post('/cajas-turnos/abrir')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fondo_inicial: 40 });
+    expect(abrir2.status).toBe(201);
+    const turno2 = (abrir2.body as WithId).id;
+
+    const detalle2 = await request(app.getHttpServer())
+      .get(`/cajas-turnos/${turno2}`)
+      .set('Authorization', `Bearer ${token}`);
+    const movs = (
+      detalle2.body as {
+        movimientos_financieros: { tipo_movimiento: string }[];
+      }
+    ).movimientos_financieros;
+    expect(movs.some((m) => m.tipo_movimiento === 'AJUSTE_FALTANTE')).toBe(
+      false,
+    );
+
+    // Cierra el segundo turno para dejar estado limpio.
+    await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turno2}/cerrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ efectivo_declarado: 40 });
+  });
 });

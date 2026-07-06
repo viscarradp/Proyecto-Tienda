@@ -5,7 +5,6 @@ import {
   Search,
   ScanBarcode,
   Plus,
-  Minus,
   ShoppingCart,
   ChevronRight,
   Loader2,
@@ -13,7 +12,6 @@ import {
   RefreshCw,
   DoorOpen,
   DoorClosed,
-  CheckCircle2,
   HandCoins,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -193,28 +191,19 @@ export default function POSPage() {
 
     setCajaActionLoading(true)
     try {
-      // 1. Enviar a Bóveda si hay monto
-      if (bovedaParsed > 0) {
-        await apiFetch(`/movimientos-financieros`, {
-          method: "POST",
-          body: JSON.stringify({
-            tipo_movimiento: "RETIRO_BOVEDA",
-            monto: bovedaParsed,
-            descripcion: "Traspaso automático a Bóveda al cierre de turno"
-          })
-        })
-      }
-
-      // 2. Cerrar el turno declarando SOLO el fondo restante
+      // Cerrar: se declara el efectivo FÍSICO contado (para el descuadre real) y
+      // cuánto se traslada a la bóveda. El backend registra el TRASLADO_A_BOVEDA
+      // (no un "faltante") — ver docs/modelo-contable §5.5.
       await apiFetch(`/cajas-turnos/${cajaActiva.id}/cerrar`, {
         method: "PATCH",
         body: JSON.stringify({
-          efectivo_declarado: fondoSiguiente,
+          efectivo_declarado: efectivoParsed,
+          monto_a_boveda: bovedaParsed,
           observaciones: observacionesCierre.trim() || undefined
         }),
       })
 
-      // 3. Reabrir automáticamente
+      // Reabrir automáticamente con lo que quedó en la gaveta
       if (autoOpenNext && fondoSiguiente > 0) {
         const nuevaCaja = await apiFetch<CajaTurno>("/cajas-turnos/abrir", {
           method: "POST",
@@ -597,30 +586,22 @@ export default function POSPage() {
                   <MoneyValue value={ultimoCierreFondo} className="text-sm font-semibold" />
                 </div>
 
-                {fondoInicial !== "" && (() => {
-                  const diff = parseFloat(fondoInicial) - Number(ultimoCierreFondo)
-                  if (diff > 0) {
-                    return (
-                      <div className="flex items-start gap-2 rounded-sm bg-primary/10 p-2 text-primary">
-                        <Plus className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>Iniciando con <strong><MoneyValue value={Math.abs(diff)} tone="default" className="text-primary" /></strong> extra. Se registrará como inyección de capital.</p>
-                      </div>
-                    )
-                  } else if (diff < 0) {
-                    return (
-                      <div className="flex items-start gap-2 rounded-sm bg-destructive/10 p-2 text-destructive">
-                        <Minus className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>Iniciando con <strong><MoneyValue value={Math.abs(diff)} tone="destructive" /></strong> menos. Se registrará como faltante.</p>
-                      </div>
-                    )
-                  }
-                  return (
-                    <div className="flex items-start gap-2 rounded-sm bg-success/10 p-2 text-success">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                      <p>Iniciando con el mismo monto exacto que se dejó ayer.</p>
-                    </div>
-                  )
-                })()}
+                {fondoInicial !== "" &&
+                  parseFloat(fondoInicial) !== Number(ultimoCierreFondo) && (
+                    <p className="text-muted-foreground">
+                      Iniciando con{" "}
+                      <strong>
+                        <MoneyValue
+                          value={Math.abs(parseFloat(fondoInicial) - Number(ultimoCierreFondo))}
+                          tone="muted"
+                          className="text-xs"
+                        />
+                      </strong>{" "}
+                      {parseFloat(fondoInicial) > Number(ultimoCierreFondo) ? "más" : "menos"} que lo
+                      dejado ayer. Si sacaste dinero de la bóveda para el fondo, regístralo con
+                      &quot;Sacar dinero&quot;.
+                    </p>
+                  )}
               </div>
             )}
 
