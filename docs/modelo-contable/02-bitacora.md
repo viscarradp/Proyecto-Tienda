@@ -31,6 +31,17 @@
 
 ## Entradas
 
+### 2026-07-05 — Bloque 2 · Sub-fase 2.A: faltantes al P&L + merma sin turno ✅
+- **`reportes.getEstadoResultados`**: agrega `faltantes`/`sobrantes` (caja + bóveda) y
+  `utilidad_neta = … − faltantes + sobrantes` (antes se ignoraban y la utilidad se
+  inflaba). Se exponen como métricas.
+- **`ajustes_inventario.service`**: la merma **siempre** registra su `MERMA_INVENTARIO`
+  (se quitó el `if (cajaActiva)`); `caja_turno_id` nullable lo permite.
+- **Frontend**: Estadísticas muestra "Faltantes de caja" (y sobrantes si > 0) en el P&L.
+- **Verificación**: backend build+lint limpios, **e2e 13/13** (nuevos tests: merma sin
+  turno llega al P&L; un faltante baja la utilidad). Frontend build+lint limpios.
+- Decisiones del bloque: umbral de cierre = **$1.00** (configurable); **backup diferido**.
+
 ### 2026-07-05 — Arranque
 - Leído el `plan-fases.md`: Fases 0-3 del plan técnico original cerradas. El trabajo
   abierto es el **Bloque 1** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10.
