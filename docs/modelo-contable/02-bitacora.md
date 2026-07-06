@@ -31,6 +31,17 @@
 
 ## Entradas
 
+### 2026-07-05 — Bloque 2 · Sub-fase 2.B: umbral de tolerancia + cierre forzado ADMIN ✅
+- **`common/tolerancia.ts`**: `TOLERANCIA_DESCUADRE` (env, default $1.00).
+- **`cerrar`**: registra siempre la diferencia; exige justificación si `|dif| ≥ umbral`
+  o si es cierre forzado. Nuevo flag `forzado` → estado `CERRADA_FORZADA`.
+- **Controller**: `PATCH /cajas-turnos/:id/cerrar-forzado` (solo ADMIN).
+- **Frontend**: POS valida el umbral antes de enviar; Movimientos muestra "Cerrar
+  forzado" (ADMIN) en turnos abiertos, con diálogo de efectivo + justificación.
+- **Tests**: 2 nuevos (descuadre ≥ umbral sin nota → 400; cierre forzado → CERRADA_FORZADA);
+  actualizados 2 tests preexistentes de `cajas-turnos` para incluir justificación
+  (contrato nuevo). **e2e 15/15**. Build+lint limpios (backend y frontend).
+
 ### 2026-07-05 — Bloque 2 · Sub-fase 2.A: faltantes al P&L + merma sin turno ✅
 - **`reportes.getEstadoResultados`**: agrega `faltantes`/`sobrantes` (caja + bóveda) y
   `utilidad_neta = … − faltantes + sobrantes` (antes se ignoraban y la utilidad se
