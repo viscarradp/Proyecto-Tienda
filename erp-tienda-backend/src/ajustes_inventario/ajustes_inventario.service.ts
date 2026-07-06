@@ -66,30 +66,28 @@ export class AjustesInventarioService {
         },
       });
 
-      // 6. BUG 4: Registrar la pérdida financieramente en el turno activo
-      // La merma es una pérdida patrimonial (activo de inventario se reduce),
-      // pero NO es una salida de efectivo de la gaveta, por eso NO se toca
-      // efectivo_esperado. Solo queda como registro contable del período.
+      // 6. Registrar la pérdida financieramente (§4, Bloque 2).
+      // La merma es una pérdida patrimonial (el activo de inventario se reduce),
+      // pero NO es una salida de efectivo de la gaveta, por eso NO toca
+      // efectivo_esperado ni lleva cuentas origen/destino. Se registra SIEMPRE,
+      // haya o no turno abierto (caja_turno_id es nullable): una merma un domingo
+      // sin turno también debe llegar al P&L del período.
       const cajaActiva = await tx.cajas_turnos.findFirst({
         where: { estado: 'ABIERTA' },
       });
 
-      if (cajaActiva) {
-        await tx.movimientos_financieros.create({
-          data: {
-            caja_turno_id: cajaActiva.id,
-            tipo_movimiento: 'MERMA_INVENTARIO',
-            monto: costo_asumido,
-            descripcion:
-              `Merma: ${tipo_ajuste}` +
-              (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
-              ` (Lote #${lote_id})`,
-            usuario_id: userId,
-          },
-        });
-        // NOTA: NO se hace decrement de efectivo_esperado porque la merma
-        // no es salida de gaveta; es pérdida de inventario (activo).
-      }
+      await tx.movimientos_financieros.create({
+        data: {
+          caja_turno_id: cajaActiva?.id ?? null,
+          tipo_movimiento: 'MERMA_INVENTARIO',
+          monto: costo_asumido,
+          descripcion:
+            `Merma: ${tipo_ajuste}` +
+            (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
+            ` (Lote #${lote_id})`,
+          usuario_id: userId,
+        },
+      });
 
       return ajuste;
     });

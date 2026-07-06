@@ -48,6 +48,8 @@ interface EstadoResultados {
   margen_bruto_porcentaje: string
   gastos_operativos: string
   mermas_inventario: string
+  faltantes: string
+  sobrantes: string
   utilidad_neta: string
   retiros_duenos: string
   total_ventas_completadas: number
@@ -373,6 +375,10 @@ export default function StatsPage() {
                   <PLDivider />
                   <PLRow label="Gastos operativos" value={estado.gastos_operativos} type="expense" />
                   <PLRow label="Pérdidas por mermas" value={estado.mermas_inventario} type="expense" />
+                  <PLRow label="Faltantes de caja" value={estado.faltantes} type="expense" />
+                  {parseFloat(estado.sobrantes) > 0 && (
+                    <PLRow label="Sobrantes de caja" value={estado.sobrantes} type="income" />
+                  )}
                   <PLDivider />
                   <PLRow label="Utilidad neta" value={estado.utilidad_neta} type="total" />
                   {parseFloat(estado.retiros_duenos) > 0 && (

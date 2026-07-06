@@ -104,10 +104,34 @@ export class ReportesService {
     });
     const retiros_duenos = retirosAgg._sum.monto ?? new Prisma.Decimal(0);
 
+    // ── 6.6. Faltantes / sobrantes de caja y bóveda (§4, Bloque 2) ──
+    // El faltante es una pérdida real (señal #1 de robo hormiga) y debe restar
+    // de la utilidad; el sobrante, sumar. Antes se ignoraban y la utilidad se
+    // inflaba sistemáticamente.
+    const faltantesAgg = await this.prisma.movimientos_financieros.aggregate({
+      where: {
+        tipo_movimiento: { in: ['AJUSTE_FALTANTE', 'AJUSTE_BOVEDA_FALTANTE'] },
+        fecha: { gte: desde, lte: hasta },
+      },
+      _sum: { monto: true },
+    });
+    const faltantes = faltantesAgg._sum.monto ?? new Prisma.Decimal(0);
+
+    const sobrantesAgg = await this.prisma.movimientos_financieros.aggregate({
+      where: {
+        tipo_movimiento: { in: ['AJUSTE_SOBRANTE', 'AJUSTE_BOVEDA_SOBRANTE'] },
+        fecha: { gte: desde, lte: hasta },
+      },
+      _sum: { monto: true },
+    });
+    const sobrantes = sobrantesAgg._sum.monto ?? new Prisma.Decimal(0);
+
     // ── 7. Utilidad Neta ──
     const utilidad_neta = utilidad_bruta
       .sub(gastos_operativos)
-      .sub(mermas_inventario);
+      .sub(mermas_inventario)
+      .sub(faltantes)
+      .add(sobrantes);
 
     // ── 8. Margen bruto % ──
     const margen_bruto_pct = ingreso_bruto.gt(0)
@@ -130,6 +154,8 @@ export class ReportesService {
       margen_bruto_porcentaje: margen_bruto_pct,
       gastos_operativos,
       mermas_inventario,
+      faltantes,
+      sobrantes,
       utilidad_neta,
       retiros_duenos,
       total_ventas_completadas,
