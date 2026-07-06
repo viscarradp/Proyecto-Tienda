@@ -66,6 +66,8 @@ export class CajasTurnosService {
             descripcion:
               'Inyección de capital (Inicio de turno mayor al cierre anterior)',
             usuario_id: userId,
+            cuenta_origen: 'DUEÑOS',
+            cuenta_destino: 'GAVETA',
           },
         });
       }
@@ -79,6 +81,8 @@ export class CajasTurnosService {
             descripcion:
               'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
             usuario_id: userId,
+            cuenta_origen: 'GAVETA',
+            cuenta_destino: 'GASTO',
           },
         });
       }
@@ -171,6 +175,10 @@ export class CajasTurnosService {
             tipo_movimiento: diferencia.isNegative()
               ? 'AJUSTE_FALTANTE'
               : 'AJUSTE_SOBRANTE',
+            // Faltante: sale de gaveta como pérdida (GAVETA→GASTO).
+            // Sobrante: entra a gaveta como recuperación (GASTO→GAVETA).
+            cuenta_origen: diferencia.isNegative() ? 'GAVETA' : 'GASTO',
+            cuenta_destino: diferencia.isNegative() ? 'GASTO' : 'GAVETA',
             monto: desc_abs,
             descripcion:
               (diferencia.isNegative()

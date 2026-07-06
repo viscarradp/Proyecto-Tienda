@@ -1,66 +1,59 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateCajaGeneralDto } from './dto/create-caja_general.dto';
-import { Prisma } from '@prisma/client';
+import { saldoBovedaDerivado } from '../common/cuentas-efectivo';
 
+/**
+ * "Caja general" = bóveda. Desde el Bloque 1.C ya NO es una tabla propia: su
+ * saldo se DERIVA del libro de movimientos_financieros vía (origen, destino).
+ * Este service expone lecturas del saldo/libro de bóveda y la inyección de
+ * capital (ahora un movimiento con asiento, no una fila suelta).
+ */
 @Injectable()
 export class CajaGeneralService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createDto: CreateCajaGeneralDto) {
-    if (createDto.movimiento_origen_id) {
-      const existe = await this.prisma.caja_general.findUnique({
-        where: { movimiento_origen_id: createDto.movimiento_origen_id },
-      });
-      if (existe) {
-        throw new BadRequestException(
-          'El movimiento de origen ya está registrado en caja general',
-        );
-      }
-    }
-
-    return this.prisma.caja_general.create({
-      data: {
-        monto: createDto.monto,
-        descripcion: createDto.descripcion,
-        movimiento_origen_id: createDto.movimiento_origen_id,
-      },
-    });
-  }
-
-  async findAll() {
-    return this.prisma.caja_general.findMany({
-      orderBy: { fecha: 'desc' },
-      include: {
-        movimientos_financieros: true,
-      },
-    });
-  }
-
-  async inyectarCapital(monto: number, descripcion?: string) {
+  /**
+   * Aporte del dueño a la bóveda. Antes creaba una fila en caja_general sin
+   * movimiento de origen (fuga C); ahora es un INGRESO_CAPITAL (DUEÑOS→BOVEDA)
+   * con su asiento en el libro.
+   */
+  async inyectarCapital(monto: number, descripcion?: string, userId?: number) {
     if (!monto || monto <= 0) {
       throw new BadRequestException('El monto de inyección debe ser mayor a 0');
     }
 
-    return this.prisma.caja_general.create({
+    return this.prisma.movimientos_financieros.create({
       data: {
-        monto: monto,
+        tipo_movimiento: 'INGRESO_CAPITAL',
+        monto,
         descripcion:
           descripcion ||
           `Inyección de capital del dueño — $${monto.toFixed(2)}`,
+        caja_turno_id: null,
+        usuario_id: userId,
+        cuenta_origen: 'DUEÑOS',
+        cuenta_destino: 'BOVEDA',
       },
     });
   }
 
+  /** Saldo de bóveda derivado del libro (reemplaza el SUM sobre caja_general). */
   async getSaldo() {
-    const result = await this.prisma.caja_general.aggregate({
-      _sum: { monto: true },
-      _count: { id: true },
+    const saldo_actual = await saldoBovedaDerivado(this.prisma);
+    const total_depositos = await this.prisma.movimientos_financieros.count({
+      where: { cuenta_destino: 'BOVEDA' },
     });
+    return { saldo_actual, total_depositos };
+  }
 
-    return {
-      saldo_actual: result._sum.monto ?? new Prisma.Decimal(0),
-      total_depositos: result._count.id,
-    };
+  /** Libro de bóveda: movimientos que entran o salen de BOVEDA. */
+  findAll() {
+    return this.prisma.movimientos_financieros.findMany({
+      where: {
+        OR: [{ cuenta_origen: 'BOVEDA' }, { cuenta_destino: 'BOVEDA' }],
+      },
+      orderBy: { fecha: 'desc' },
+      include: { categorias_gastos: true },
+    });
   }
 }

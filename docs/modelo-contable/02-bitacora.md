@@ -5,13 +5,13 @@
 
 ## Estado global
 
-**Sub-fase actual:** 1.B completada; siguiente = 1.C (origen→destino).
+**Sub-fase actual:** 1.C completada; siguiente = 1.D (retiro personal + "Sacar dinero").
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
 | 1.A · `usuario_id` | ✅ Completada | 4 tablas + `@CurrentUser()`; e2e 7/7 verdes. |
 | 1.B · Decimal (fraccionados) | ✅ Completada | Cantidades a `Decimal(12,3)`; FIFO en Decimal; e2e 8/8 (nuevo test de media libra). |
-| 1.C · origen→destino + bóveda derivada | ⬜ Pendiente | — |
+| 1.C · origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada | Cuentas origen/destino; `caja_general` eliminada (saldo derivado); gasto desde bóveda; fugas A/C/D cerradas; e2e 9/9 (nueva suite bóveda). |
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
 | 1.E · traslados cierre/apertura | ⬜ Pendiente | — |
 | 1.F · carga inicial inventario | ⬜ Pendiente | — |
@@ -42,6 +42,26 @@
 - **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
   7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
   usuario, patrón Fase 3).
+
+### 2026-07-05 — Sub-fase 1.C: origen→destino + bóveda derivada (+ ítem 6) ✅
+- **Decisión de alcance**: se fusionó el ítem 6 (gastos desde bóveda) en 1.C, porque
+  eliminar `caja_general` obliga a enrutar el gasto-desde-bóveda por el nuevo modelo.
+  Así se cierran las fugas A/C/D juntas.
+- **Schema**: `cuenta_origen`/`cuenta_destino` (VarChar nullable) + índices en
+  `movimientos_financieros`; **tabla `caja_general` eliminada** (bóveda derivada).
+- **`common/cuentas-efectivo.ts`**: catálogo cerrado (GAVETA/BOVEDA/DUEÑOS/GASTO/
+  PROVEEDOR), `BOVEDA_LEDGER_LOCK` y `saldoBovedaDerivado` (`Σ destino=BOVEDA − Σ origen=BOVEDA`).
+- **`movimientos.service`**: setea origen/destino por tipo; acepta `origen_fondos`
+  (GAVETA|BOVEDA); egreso desde bóveda no exige turno y valida saldo derivado bajo lock.
+- **`compras.service`** (rama CAJA_GENERAL): crea `PAGO_PROVEEDOR` BOVEDA→PROVEEDOR;
+  autor cableado. **`caja_general.service`**: `getSaldo` derivado, `inyectarCapital`→
+  `INGRESO_CAPITAL` DUEÑOS→BOVEDA, **POST genérico eliminado** (fuga D). Movimientos
+  automáticos de apertura/cierre con sus cuentas.
+- **Frontend**: Gastos enruta el gasto-desde-bóveda por `/movimientos-financieros`
+  (origen_fondos=BOVEDA); categoría requerida para ambos orígenes.
+- **Verificación**: prisma validate OK, backend build+lint limpios, **e2e 9/9** (nueva
+  suite `boveda.e2e-spec.ts`: inyección→saldo derivado→gasto desde bóveda sin turno→
+  validación de fondos). Frontend build+lint limpios.
 
 ### 2026-07-05 — Sub-fase 1.B: cantidades a `Decimal` (fraccionados) ✅
 - **Schema**: `Int → Decimal(12,3)` en `presentaciones.factor_conversion`,

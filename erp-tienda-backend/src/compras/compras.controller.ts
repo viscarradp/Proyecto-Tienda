@@ -10,6 +10,7 @@ import { ComprasService } from './compras.service';
 import { CreateCompraDto } from './dto/create-compra.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('compras')
 @Roles('ADMIN', 'CAJERO')
@@ -22,8 +23,11 @@ export class ComprasController {
   @ApiOperation({
     summary: 'Registra una nueva compra y genera lotes de inventario',
   })
-  create(@Body() createCompraDto: CreateCompraDto) {
-    return this.comprasService.create(createCompraDto);
+  create(
+    @Body() createCompraDto: CreateCompraDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.comprasService.create(createCompraDto, userId);
   }
 
   @Get()
