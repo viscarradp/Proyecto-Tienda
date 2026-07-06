@@ -20,14 +20,20 @@ async function bootstrap() {
     helmet(swaggerEnabled ? { contentSecurityPolicy: false } : undefined),
   );
 
-  // Configuración de CORS: allowlist explícita por entorno, no cualquier origen.
-  // No se envían cookies cross-origin (el JWT viaja por header Authorization),
-  // por lo que no se necesita credentials: true.
-  const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3001')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  app.enableCors({ origin: corsOrigins, credentials: false });
+  // CORS: en desarrollo permitimos cualquier origen (Cloudflare Tunnel, móvil, etc.).
+  // En producción requiere allowlist explícita (CORS_ORIGINS).
+  // El JWT viaja por header Authorization, no como cookie, así que no se necesita credentials.
+  const corsOptions =
+    process.env.NODE_ENV === 'development'
+      ? { origin: '*', credentials: false }
+      : {
+          origin: (process.env.CORS_ORIGINS ?? 'http://localhost:3001')
+            .split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean),
+          credentials: false,
+        };
+  app.enableCors(corsOptions);
 
   // Configuración de validación global
   app.useGlobalPipes(
