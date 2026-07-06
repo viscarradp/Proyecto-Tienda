@@ -112,4 +112,48 @@ describe('P&L — faltantes y merma sin turno (e2e, 2.A)', () => {
     // El faltante de 2 llegó al reporte.
     expect(Number((await reporte()).faltantes)).toBeCloseTo(faltantesAntes + 2);
   });
+
+  it('rechaza el cierre con descuadre ≥ umbral sin justificación (§7)', async () => {
+    const abrir = await request(app.getHttpServer())
+      .post('/cajas-turnos/abrir')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fondo_inicial: 100 });
+    const turnoId = (abrir.body as WithId).id;
+
+    // Descuadre de 10 (>= $1.00) sin observaciones → 400.
+    const sinJustif = await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turnoId}/cerrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ efectivo_declarado: 90 });
+    expect(sinJustif.status).toBe(400);
+
+    // Con justificación sí cierra.
+    const conJustif = await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turnoId}/cerrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ efectivo_declarado: 90, observaciones: 'Faltaron $10' });
+    expect(conJustif.status).toBe(200);
+  });
+
+  it('cierre forzado (ADMIN) marca el turno como CERRADA_FORZADA', async () => {
+    const abrir = await request(app.getHttpServer())
+      .post('/cajas-turnos/abrir')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fondo_inicial: 50 });
+    const turnoId = (abrir.body as WithId).id;
+
+    const forzar = await request(app.getHttpServer())
+      .patch(`/cajas-turnos/${turnoId}/cerrar-forzado`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        efectivo_declarado: 50,
+        observaciones: 'La cajera se retiró sin cerrar',
+      });
+    expect(forzar.status).toBe(200);
+
+    const detalle = await request(app.getHttpServer())
+      .get(`/cajas-turnos/${turnoId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect((detalle.body as { estado: string }).estado).toBe('CERRADA_FORZADA');
+  });
 });

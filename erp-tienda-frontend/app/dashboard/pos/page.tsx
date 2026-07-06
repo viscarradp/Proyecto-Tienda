@@ -187,6 +187,15 @@ export default function POSPage() {
       return
     }
 
+    // Umbral de descuadre (§7): a partir de $1.00 el backend exige justificación.
+    // Lo validamos aquí para evitar el round-trip. La diferencia siempre se registra.
+    const esperado = parseFloat(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial)
+    const descuadre = Math.abs(efectivoParsed - esperado)
+    if (descuadre >= 1 && !observacionesCierre.trim()) {
+      toast.error(`El descuadre de $${descuadre.toFixed(2)} requiere una justificación (Observaciones).`)
+      return
+    }
+
     const fondoSiguiente = efectivoParsed - bovedaParsed
 
     setCajaActionLoading(true)

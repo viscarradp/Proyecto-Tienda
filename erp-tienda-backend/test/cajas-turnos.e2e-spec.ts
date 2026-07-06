@@ -64,7 +64,11 @@ describe('Cajas de turno — invariantes de apertura/cierre (e2e)', () => {
     const cierre = await request(app.getHttpServer())
       .patch(`/cajas-turnos/${turnoActivo.id}/cerrar`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ efectivo_declarado: declarado });
+      // El descuadre de $15 (≥ umbral) exige justificación desde el Bloque 2.
+      .send({
+        efectivo_declarado: declarado,
+        observaciones: 'Sobrante deliberado (prueba)',
+      });
 
     const turnoCerrado = cierre.body as CajaTurnoResponseBody;
     expect(cierre.status).toBe(200);
@@ -92,7 +96,10 @@ describe('Cajas de turno — invariantes de apertura/cierre (e2e)', () => {
         request(app.getHttpServer())
           .patch(`/cajas-turnos/${turnoId}/cerrar`)
           .set('Authorization', `Bearer ${token}`)
-          .send({ efectivo_declarado: 40 }),
+          .send({
+            efectivo_declarado: 40,
+            observaciones: 'Faltante deliberado (prueba)',
+          }),
       ),
     );
 

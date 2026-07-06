@@ -28,6 +28,7 @@ import { MoneyValue } from "@/components/money-value"
 import { formatMoney } from "@/lib/format"
 import { StatePill } from "@/components/state-pill"
 import { StatCard } from "@/components/stat-card"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch } from "@/lib/api"
 import { format, differenceInDays } from "date-fns"
 import { es } from "date-fns/locale"
@@ -86,6 +87,15 @@ export default function MovimientosPage() {
   const [ventaAAnular, setVentaAAnular] = React.useState<number | null>(null)
   const [motivoAnulacion, setMotivoAnulacion] = React.useState("")
   const [anularLoading, setAnularLoading] = React.useState(false)
+
+  // Cierre forzado (ADMIN) — §7 Bloque 2
+  const { user } = useCurrentUser()
+  const esAdmin = user?.rol === "ADMIN"
+  const [forzarOpen, setForzarOpen] = React.useState(false)
+  const [forzarTurnoId, setForzarTurnoId] = React.useState<number | null>(null)
+  const [forzarEfectivo, setForzarEfectivo] = React.useState("")
+  const [forzarJustif, setForzarJustif] = React.useState("")
+  const [forzarLoading, setForzarLoading] = React.useState(false)
 
   React.useEffect(() => { setMounted(true) }, [])
 
@@ -177,6 +187,37 @@ export default function MovimientosPage() {
       setIsAnulando(false)
     } finally {
       setAnularLoading(false)
+    }
+  }
+
+  const handleForzarCierre = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!forzarTurnoId || !forzarJustif.trim()) return
+    const efectivoParsed = parseFloat(forzarEfectivo)
+    if (isNaN(efectivoParsed) || efectivoParsed < 0) {
+      setError("Ingresa el efectivo contado (mayor o igual a 0)")
+      return
+    }
+    setForzarLoading(true)
+    setError("")
+    try {
+      await apiFetch(`/cajas-turnos/${forzarTurnoId}/cerrar-forzado`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          efectivo_declarado: efectivoParsed,
+          observaciones: forzarJustif.trim(),
+        }),
+      })
+      await loadData()
+      setForzarOpen(false)
+      setForzarTurnoId(null)
+      setForzarEfectivo("")
+      setForzarJustif("")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al forzar el cierre")
+      setForzarOpen(false)
+    } finally {
+      setForzarLoading(false)
     }
   }
 
@@ -353,6 +394,25 @@ export default function MovimientosPage() {
                       </div>
                     </button>
 
+                    {isAbierta && esAdmin && (
+                      <div className="flex items-center justify-between gap-2 border-t border-border bg-warning/5 px-4 py-2">
+                        <span className="text-xs text-muted-foreground">¿Turno abandonado sin cerrar?</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                          onClick={() => {
+                            setForzarTurnoId(turno.id)
+                            setForzarEfectivo("")
+                            setForzarJustif("")
+                            setForzarOpen(true)
+                          }}
+                        >
+                          <DoorClosed className="h-4 w-4" /> Cerrar forzado
+                        </Button>
+                      </div>
+                    )}
+
                     {/* Ventas Expanded */}
                     {isExpanded && (
                       <div className="border-t border-border bg-muted/20">
@@ -490,6 +550,45 @@ export default function MovimientosPage() {
               <Button type="submit" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 {anularLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                 Confirmar anulación
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════════ DIALOG: CIERRE FORZADO (ADMIN) ════════ */}
+      <Dialog open={forzarOpen} onOpenChange={setForzarOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <DoorClosed className="h-5 w-5" /> Cierre forzado del turno #{forzarTurnoId}
+            </DialogTitle>
+            <DialogDescription>
+              Solo ADMIN. Declara el efectivo realmente contado en la gaveta y una
+              justificación. El turno quedará marcado como <strong className="text-foreground">cerrado forzado</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForzarCierre} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Efectivo contado ($)</Label>
+              <Input type="number" min={0} step="0.01" inputMode="decimal" required
+                value={forzarEfectivo} onChange={(e) => setForzarEfectivo(e.target.value)}
+                placeholder="0.00" className="h-12 text-center font-mono text-xl font-bold tabular-nums" autoFocus />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">Justificación</Label>
+              <Input required value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
+                placeholder="Ej. La cajera se retiró sin cerrar" className="h-11" />
+            </div>
+            {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setForzarOpen(false)} disabled={forzarLoading}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={forzarLoading || !forzarJustif.trim()}
+                className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
+                {forzarLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
+                Forzar cierre
               </Button>
             </DialogFooter>
           </form>

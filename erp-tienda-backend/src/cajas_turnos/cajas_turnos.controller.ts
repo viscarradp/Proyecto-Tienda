@@ -61,6 +61,20 @@ export class CajasTurnosController {
     return this.cajasTurnosService.cerrar(id, closeCajaTurnoDto, userId);
   }
 
+  @Patch(':id/cerrar-forzado')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Cierre forzado (solo ADMIN) de un turno que la cajera dejó abierto; exige justificación',
+  })
+  cerrarForzado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() closeCajaTurnoDto: CloseCajaTurnoDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.cajasTurnosService.cerrar(id, closeCajaTurnoDto, userId, true);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Listar historial de todos los turnos' })
   findAll() {

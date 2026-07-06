@@ -13,6 +13,7 @@ import {
   BOVEDA_LEDGER_LOCK,
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
+import { TOLERANCIA_DESCUADRE } from '../common/tolerancia';
 
 @Injectable()
 export class CajasTurnosService {
@@ -136,6 +137,7 @@ export class CajasTurnosService {
     id: number,
     closeCajaTurnoDto: CloseCajaTurnoDto,
     userId?: number,
+    forzado = false,
   ) {
     // Todo el método corre en una única transacción con la fila del turno
     // bloqueada (FOR UPDATE): dos solicitudes de cierre concurrentes sobre el
@@ -162,27 +164,42 @@ export class CajasTurnosService {
         );
       }
 
-      // 2. Calcular diferencia
+      // 2. Calcular diferencia (conteo físico vs esperado por el sistema)
       const efectivoDeclarado = new Prisma.Decimal(
         closeCajaTurnoDto.efectivo_declarado,
       );
       const efectivoEsperado = new Prisma.Decimal(turno.efectivo_esperado ?? 0);
       const diferencia = efectivoDeclarado.sub(efectivoEsperado);
+      const desc_abs = diferencia.abs();
+      const justificacion = closeCajaTurnoDto.observaciones?.trim();
 
-      // 3. Ejecutar actualización y movimiento financiero
+      // Umbral de tolerancia (§7): un descuadre ≥ umbral (o un cierre forzado)
+      // exige justificación. Debajo del umbral, ajuste automático sin fricción.
+      const requiereJustificacion =
+        forzado || desc_abs.greaterThanOrEqualTo(TOLERANCIA_DESCUADRE);
+      if (requiereJustificacion && !justificacion) {
+        throw new BadRequestException(
+          forzado
+            ? 'El cierre forzado requiere una justificación.'
+            : `El descuadre de $${desc_abs.toFixed(2)} requiere una justificación ` +
+                `(umbral $${TOLERANCIA_DESCUADRE.toFixed(2)}).`,
+        );
+      }
+
+      // 3. Ejecutar el cierre
       const cajaCerrada = await tx.cajas_turnos.update({
         where: { id },
         data: {
-          estado: 'CERRADA',
+          estado: forzado ? 'CERRADA_FORZADA' : 'CERRADA',
           fecha_cierre: new Date(),
           efectivo_declarado: efectivoDeclarado,
           diferencia: diferencia,
-          observaciones: closeCajaTurnoDto.observaciones || null,
+          observaciones: justificacion || null,
         },
       });
 
-      // Si hay descuadre
-      const desc_abs = diferencia.abs();
+      // El descuadre se registra SIEMPRE (aunque esté debajo del umbral), para
+      // detectar el patrón de faltantes chiquitos diarios.
       if (desc_abs.greaterThan(new Prisma.Decimal('0.001'))) {
         await tx.movimientos_financieros.create({
           data: {
