@@ -5,7 +5,7 @@
 
 ## Estado global
 
-**Sub-fase actual:** 1.D completada; siguiente = 1.E (traslados cierre/apertura).
+**Sub-fase actual:** 1.E completada; siguiente = 1.F (carga inicial de inventario) — última del bloque.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -13,6 +13,7 @@
 | 1.B · Decimal (fraccionados) | ✅ Completada | Cantidades a `Decimal(12,3)`; FIFO en Decimal; e2e 8/8 (nuevo test de media libra). |
 | 1.C · origen→destino + bóveda derivada (+ ítem 6) | ✅ Completada | Cuentas origen/destino; `caja_general` eliminada (saldo derivado); gasto desde bóveda; fugas A/C/D cerradas; e2e 9/9 (nueva suite bóveda). |
 | 1.D · retiro personal + "Sacar dinero" | ✅ Completada | `RETIRO_PERSONAL` (GAVETA→DUEÑOS); métrica retiros de dueños en reportes; diálogo "Sacar dinero" (3 opciones) en POS; e2e 10/10. |
+| 1.E · traslados cierre/apertura | ✅ Completada | `TRASLADO_A_BOVEDA`/`TRASLADO_DESDE_BOVEDA`; apertura sin faltante falso (fuga F3); cierre con conteo físico + traslado; e2e 11/11. |
 | 1.D · retiro personal + gastos bóveda | ⬜ Pendiente | — |
 | 1.E · traslados cierre/apertura | ⬜ Pendiente | — |
 | 1.F · carga inicial inventario | ⬜ Pendiente | — |
@@ -43,6 +44,22 @@
 - **Verificación**: `prisma validate` OK, `build` limpio, `lint:check` 0 errores; **e2e
   7/7 verdes** contra Postgres desechable (`db push --force-reset` con consentimiento del
   usuario, patrón Fase 3).
+
+### 2026-07-05 — Sub-fase 1.E: traslados gaveta↔bóveda en cierre/apertura ✅
+- **`cajas_turnos.service`**:
+  - `abrir()`: **eliminada la comparación contra el último cierre** que inventaba
+    `AJUSTE_FALTANTE`/`INGRESO_CAPITAL` (fuga F3). Opcional `desde_boveda` → registra
+    `TRASLADO_DESDE_BOVEDA` (BOVEDA→GAVETA) validando el saldo derivado bajo lock.
+  - `cerrar()`: el descuadre se calcula sobre el **conteo físico** vs esperado (solo
+    descuadres reales → `AJUSTE_*`); nuevo `monto_a_boveda` → `TRASLADO_A_BOVEDA`
+    (GAVETA→BOVEDA). `getUltimoCierre` deriva el fondo siguiente = declarado − traslado.
+- **DTOs**: `close` gana `monto_a_boveda`, `create` gana `desde_boveda`.
+- **Frontend POS**: el cierre envía el conteo físico + `monto_a_boveda` (el backend
+  hace el traslado; se quitó el `RETIRO_BOVEDA` manual). La apertura ya no muestra el
+  mensaje engañoso de "se registrará como inyección/faltante".
+- **Verificación**: backend build+lint limpios, **e2e 11/11** (nuevo test: cerrar con
+  traslado sube la bóveda 60 sin faltante, reabrir con menos no inventa faltante).
+  Frontend build+lint limpios.
 
 ### 2026-07-05 — Sub-fase 1.D: retiro personal + "Sacar dinero" ✅
 - **Backend**: nuevo tipo `RETIRO_PERSONAL` (GAVETA→DUEÑOS) en DTO + switch de

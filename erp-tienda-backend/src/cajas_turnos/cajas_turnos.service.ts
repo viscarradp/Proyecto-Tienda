@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,10 @@ import { CreateCajaTurnoDto } from './dto/create-caja_turno.dto';
 import { CloseCajaTurnoDto } from './dto/close-caja_turno.dto';
 import { Prisma } from '@prisma/client';
 import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
+import {
+  BOVEDA_LEDGER_LOCK,
+  saldoBovedaDerivado,
+} from '../common/cuentas-efectivo';
 
 @Injectable()
 export class CajasTurnosService {
@@ -15,6 +20,13 @@ export class CajasTurnosService {
 
   async abrir(createCajaTurnoDto: CreateCajaTurnoDto, userId?: number) {
     const fondoInicial = createCajaTurnoDto.fondo_inicial;
+    const desdeBoveda = createCajaTurnoDto.desde_boveda ?? 0;
+
+    if (desdeBoveda > fondoInicial) {
+      throw new BadRequestException(
+        'El monto tomado de la bóveda no puede superar el fondo inicial.',
+      );
+    }
 
     // Advisory lock: serializa aperturas de turno concurrentes. Sin esto, dos
     // requests de apertura simultáneos podrían leer "0 turnos abiertos" ambos
@@ -33,56 +45,44 @@ export class CajasTurnosService {
         );
       }
 
-      // 2. Obtener el monto que quedó en la gaveta en el último cierre
-      const ultimoCierre = await tx.cajas_turnos.findFirst({
-        where: { estado: 'CERRADA' },
-        orderBy: { fecha_cierre: 'desc' },
-      });
-      const sobranteAnterior = ultimoCierre
-        ? Number(ultimoCierre.efectivo_declarado)
-        : 0;
+      // 2. Si parte del fondo sale de la bóveda, validar su saldo bajo lock.
+      //    NOTA (fuga F3): ya NO se compara el fondo contra el último cierre para
+      //    inventar un AJUSTE_FALTANTE/INGRESO_CAPITAL — el traslado de dinero
+      //    fuera de la gaveta se registra explícitamente al CIERRE.
+      if (desdeBoveda > 0) {
+        await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
+        const saldo = await saldoBovedaDerivado(tx);
+        if (saldo.lessThan(desdeBoveda)) {
+          throw new BadRequestException(
+            `Fondos insuficientes en bóveda. ` +
+              `Disponible: $${saldo.toFixed(2)}, Requerido: $${desdeBoveda}`,
+          );
+        }
+      }
 
-      // 3. Crear el turno y los movimientos de ajuste
+      // 3. Crear el turno. El efectivo esperado arranca en el fondo inicial.
       const nuevoTurno = await tx.cajas_turnos.create({
         data: {
           fondo_inicial: fondoInicial,
           estado: 'ABIERTA',
           fecha_apertura: new Date(),
-          // Lo esperado siempre coincide con lo que reportamos al inicio
           efectivo_esperado: fondoInicial,
           usuario_id: userId,
         },
       });
 
-      const diferencia = fondoInicial - sobranteAnterior;
-
-      // Si inició con MÁS de lo que había, es capital extra (inyección)
-      if (diferencia > 0) {
+      // 4. Registrar el traslado bóveda→gaveta si se tomó fondo de la bóveda.
+      //    Solo reduce el saldo derivado de bóveda; la gaveta ya es fondoInicial.
+      if (desdeBoveda > 0) {
         await tx.movimientos_financieros.create({
           data: {
             caja_turno_id: nuevoTurno.id,
-            tipo_movimiento: 'INGRESO_CAPITAL',
-            monto: new Prisma.Decimal(diferencia),
-            descripcion:
-              'Inyección de capital (Inicio de turno mayor al cierre anterior)',
+            tipo_movimiento: 'TRASLADO_DESDE_BOVEDA',
+            monto: new Prisma.Decimal(desdeBoveda),
+            descripcion: 'Fondo inicial tomado de la bóveda',
             usuario_id: userId,
-            cuenta_origen: 'DUEÑOS',
+            cuenta_origen: 'BOVEDA',
             cuenta_destino: 'GAVETA',
-          },
-        });
-      }
-      // Si inició con MENOS de lo que había, es pérdida/faltante
-      else if (diferencia < 0) {
-        await tx.movimientos_financieros.create({
-          data: {
-            caja_turno_id: nuevoTurno.id,
-            tipo_movimiento: 'AJUSTE_FALTANTE',
-            monto: new Prisma.Decimal(Math.abs(diferencia)),
-            descripcion:
-              'Faltante de efectivo (Inicio de turno menor al cierre anterior)',
-            usuario_id: userId,
-            cuenta_origen: 'GAVETA',
-            cuenta_destino: 'GASTO',
           },
         });
       }
@@ -109,12 +109,27 @@ export class CajasTurnosService {
     const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
       where: { estado: 'CERRADA' },
       orderBy: { fecha_cierre: 'desc' },
+      include: {
+        movimientos_financieros: {
+          where: { tipo_movimiento: 'TRASLADO_A_BOVEDA' },
+        },
+      },
     });
 
-    return {
-      fondo_siguiente: ultimoCierre ? ultimoCierre.efectivo_declarado : 0,
-      fecha_cierre: ultimoCierre ? ultimoCierre.fecha_cierre : null,
-    };
+    if (!ultimoCierre) {
+      return { fondo_siguiente: new Prisma.Decimal(0), fecha_cierre: null };
+    }
+
+    // Lo que quedó en la gaveta = efectivo contado − lo trasladado a la bóveda.
+    const trasladado = ultimoCierre.movimientos_financieros.reduce(
+      (acc, m) => acc.add(m.monto),
+      new Prisma.Decimal(0),
+    );
+    const fondo_siguiente = new Prisma.Decimal(
+      ultimoCierre.efectivo_declarado ?? 0,
+    ).sub(trasladado);
+
+    return { fondo_siguiente, fecha_cierre: ultimoCierre.fecha_cierre };
   }
 
   async cerrar(
@@ -192,6 +207,31 @@ export class CajasTurnosService {
         });
       }
 
+      // 4. Traslado del excedente a la bóveda (§5.5). El resto queda en la
+      //    gaveta como fondo del próximo turno. Es un movimiento explícito
+      //    (GAVETA→BOVEDA), no un "faltante".
+      const montoABoveda = new Prisma.Decimal(
+        closeCajaTurnoDto.monto_a_boveda ?? 0,
+      );
+      if (montoABoveda.greaterThan(0)) {
+        if (montoABoveda.greaterThan(efectivoDeclarado)) {
+          throw new BadRequestException(
+            'El monto a trasladar a la bóveda no puede superar el efectivo contado.',
+          );
+        }
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: id,
+            tipo_movimiento: 'TRASLADO_A_BOVEDA',
+            monto: montoABoveda,
+            descripcion: 'Traslado a bóveda al cierre del turno',
+            usuario_id: userId,
+            cuenta_origen: 'GAVETA',
+            cuenta_destino: 'BOVEDA',
+          },
+        });
+      }
+
       return cajaCerrada;
     });
   }
@@ -263,9 +303,11 @@ export class CajasTurnosService {
         new Prisma.Decimal(0),
       );
 
-    // Sum retiros a bóveda (traslado a caja general, no gasto operativo)
+    // Sum traslados a bóveda (RETIRO_BOVEDA manual + TRASLADO_A_BOVEDA de cierre)
     const retiros = turno.movimientos_financieros
-      .filter((m) => m.tipo_movimiento === 'RETIRO_BOVEDA')
+      .filter((m) =>
+        ['RETIRO_BOVEDA', 'TRASLADO_A_BOVEDA'].includes(m.tipo_movimiento),
+      )
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
         new Prisma.Decimal(0),
