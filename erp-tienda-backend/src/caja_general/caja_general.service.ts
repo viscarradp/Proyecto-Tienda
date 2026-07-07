@@ -1,6 +1,12 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { saldoBovedaDerivado } from '../common/cuentas-efectivo';
+import { acquireAdvisoryLock } from '../common/concurrency';
+import {
+  BOVEDA_LEDGER_LOCK,
+  saldoBovedaDerivado,
+} from '../common/cuentas-efectivo';
+import { TOLERANCIA_DESCUADRE } from '../common/tolerancia';
 
 /**
  * "Caja general" = bóveda. Desde el Bloque 1.C ya NO es una tabla propia: su
@@ -34,6 +40,62 @@ export class CajaGeneralService {
         cuenta_origen: 'DUEÑOS',
         cuenta_destino: 'BOVEDA',
       },
+    });
+  }
+
+  /**
+   * Arqueo de bóveda (§9, Bloque 2): el ADMIN declara el efectivo físico contado
+   * en la bóveda; se compara contra el saldo derivado y, si difieren, se registra
+   * un ajuste (`AJUSTE_BOVEDA_FALTANTE` BOVEDA→GASTO o `AJUSTE_BOVEDA_SOBRANTE`
+   * GASTO→BOVEDA) que deja el derivado igual al físico. Le da a "¿dónde está el
+   * dinero?" una respuesta verificable, no solo calculada.
+   */
+  async arqueo(
+    saldoDeclarado: number,
+    justificacion: string | undefined,
+    userId?: number,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      // El saldo es un agregado: lock antes de leer+escribir.
+      await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
+
+      const esperado = await saldoBovedaDerivado(tx);
+      const declarado = new Prisma.Decimal(saldoDeclarado);
+      const diferencia = declarado.sub(esperado);
+      const desc_abs = diferencia.abs();
+      const justif = justificacion?.trim();
+
+      if (desc_abs.greaterThanOrEqualTo(TOLERANCIA_DESCUADRE) && !justif) {
+        throw new BadRequestException(
+          `El descuadre de bóveda de $${desc_abs.toFixed(2)} requiere una ` +
+            `justificación (umbral $${TOLERANCIA_DESCUADRE.toFixed(2)}).`,
+        );
+      }
+
+      if (desc_abs.greaterThan(new Prisma.Decimal('0.001'))) {
+        const faltante = diferencia.isNegative(); // declarado < esperado → falta
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: null,
+            tipo_movimiento: faltante
+              ? 'AJUSTE_BOVEDA_FALTANTE'
+              : 'AJUSTE_BOVEDA_SOBRANTE',
+            monto: desc_abs,
+            descripcion: `Arqueo de bóveda${justif ? ` — ${justif}` : ''}`,
+            usuario_id: userId,
+            cuenta_origen: faltante ? 'BOVEDA' : 'GASTO',
+            cuenta_destino: faltante ? 'GASTO' : 'BOVEDA',
+          },
+        });
+      }
+
+      const saldo_actual = await saldoBovedaDerivado(tx);
+      return {
+        saldo_esperado: esperado,
+        saldo_declarado: declarado,
+        diferencia,
+        saldo_actual,
+      };
     });
   }
 
