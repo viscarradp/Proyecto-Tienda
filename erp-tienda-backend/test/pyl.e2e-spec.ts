@@ -156,4 +156,64 @@ describe('P&L — faltantes y merma sin turno (e2e, 2.A)', () => {
       .set('Authorization', `Bearer ${token}`);
     expect((detalle.body as { estado: string }).estado).toBe('CERRADA_FORZADA');
   });
+
+  it('un ajuste positivo (conteo) incrementa el stock del lote (2.D)', async () => {
+    const cat = await request(app.getHttpServer())
+      .post('/categorias')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'Conteo-E2E' });
+    const prod = await request(app.getHttpServer())
+      .post('/productos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'Arroz-E2E', categoria_id: (cat.body as WithId).id });
+    const prodId = (prod.body as WithId).id;
+    await request(app.getHttpServer())
+      .post('/compras')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        proveedor: 'Conteo-E2E',
+        estado_pago: 'PAGADO',
+        origen_fondos: 'CAPITAL_DUEÑOS',
+        detalles_lotes: [
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 1,
+            cantidad_inicial: 10,
+          },
+        ],
+      });
+
+    const productos = await request(app.getHttpServer())
+      .get('/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const p = (productos.body as ProductoBody[]).find((x) => x.id === prodId);
+    const loteId = p!.lotes_inventario[0].id;
+
+    // Ajuste positivo de +5 (encontrar stock).
+    const aj = await request(app.getHttpServer())
+      .post('/ajustes-inventario')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        lote_id: loteId,
+        cantidad_ajustada: 5,
+        tipo_ajuste: 'CONTEO_SOBRANTE',
+      });
+    expect(aj.status).toBe(201);
+
+    // El lote quedó en 15.
+    const despues = await request(app.getHttpServer())
+      .get('/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const p2 = (
+      despues.body as {
+        id: number;
+        lotes_inventario: {
+          id: number;
+          cantidad_disponible: string | number;
+        }[];
+      }[]
+    ).find((x) => x.id === prodId);
+    const lote = p2!.lotes_inventario.find((l) => l.id === loteId);
+    expect(Number(lote!.cantidad_disponible)).toBeCloseTo(15);
+  });
 });
