@@ -31,6 +31,17 @@
 
 ## Entradas
 
+### 2026-07-05 — Bloque 2 · Sub-fase 2.D: ajustes positivos de inventario ✅
+- **`ajustes_inventario.service`**: nuevo `tipo_ajuste = 'CONTEO_SOBRANTE'` que
+  **incrementa** `cantidad_disponible` (sin tope) en vez de decrementar; no genera
+  movimiento de P&L (el stock reingresa; el costo FIFO fluye al venderse).
+- **DTO**: `CONTEO_SOBRANTE` agregado al enum de `tipo_ajuste`.
+- **Frontend**: el diálogo de ajuste tiene un toggle **Quitar (merma) / Agregar (conteo)**;
+  labels/colores/validación se adaptan. Fix `parseInt`→`parseFloat` (fraccionado, 1.B).
+- **Verificación**: backend build+lint limpios, **e2e 17/17** (ajuste +5 deja el lote en 15).
+  Frontend build+lint limpios.
+- **🏁 Bloque 2 (código) completo** (2.A–2.D). 2.E (backup) diferido por decisión del usuario.
+
 ### 2026-07-05 — Bloque 2 · Sub-fase 2.C: arqueo de bóveda ✅
 - **`POST /caja-general/arqueo`** (ADMIN): declara el efectivo físico contado en la
   bóveda vs el saldo derivado; si difieren, registra `AJUSTE_BOVEDA_FALTANTE`

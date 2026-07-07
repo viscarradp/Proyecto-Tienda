@@ -15,6 +15,9 @@ export class AjustesInventarioService {
     const { lote_id, cantidad_ajustada, tipo_ajuste, justificacion } =
       createAjusteDto;
 
+    // Ajuste POSITIVO (encontrar stock / conteo hacia arriba) vs merma (§6, 2.D).
+    const esPositivo = tipo_ajuste === 'CONTEO_SOBRANTE';
+
     return await this.prisma.$transaction(async (tx) => {
       // 1. Buscar y Validar el Lote
       const lote = await tx.lotes_inventario.findUnique({
@@ -25,25 +28,26 @@ export class AjustesInventarioService {
         throw new NotFoundException(`Lote con ID ${lote_id} no encontrado`);
       }
 
-      // 2. Validar Cantidad (Decimal desde 1.B)
-      if (lote.cantidad_disponible.lessThan(cantidad_ajustada)) {
+      // 2. Validar Cantidad (Decimal desde 1.B). Para un ajuste positivo no hay
+      //    tope: se está AGREGANDO stock, no quitando.
+      if (!esPositivo && lote.cantidad_disponible.lessThan(cantidad_ajustada)) {
         throw new BadRequestException(
           'La cantidad a ajustar supera la disponibilidad del lote',
         );
       }
 
-      // 3. Calcular Costo de la Pérdida
+      // 3. Costo del ajuste (valorado al costo del lote)
       const costo_asumido = new Prisma.Decimal(cantidad_ajustada).mul(
         lote.costo_unitario_adquisicion,
       );
 
-      // 4. Actualizar el Lote: Resta la cantidad_ajustada de la cantidad_disponible
+      // 4. Actualizar el Lote: incrementa (positivo) o decrementa (merma).
       await tx.lotes_inventario.update({
         where: { id: lote_id },
         data: {
-          cantidad_disponible: {
-            decrement: cantidad_ajustada,
-          },
+          cantidad_disponible: esPositivo
+            ? { increment: cantidad_ajustada }
+            : { decrement: cantidad_ajustada },
         },
       });
 
@@ -66,28 +70,30 @@ export class AjustesInventarioService {
         },
       });
 
-      // 6. Registrar la pérdida financieramente (§4, Bloque 2).
-      // La merma es una pérdida patrimonial (el activo de inventario se reduce),
-      // pero NO es una salida de efectivo de la gaveta, por eso NO toca
-      // efectivo_esperado ni lleva cuentas origen/destino. Se registra SIEMPRE,
-      // haya o no turno abierto (caja_turno_id es nullable): una merma un domingo
-      // sin turno también debe llegar al P&L del período.
-      const cajaActiva = await tx.cajas_turnos.findFirst({
-        where: { estado: 'ABIERTA' },
-      });
+      // 6. Solo las MERMAS (ajustes negativos) impactan el P&L. Un sobrante de
+      // conteo reingresa al inventario y su costo fluye al venderse (FIFO), así
+      // que no genera movimiento financiero. La merma es una pérdida patrimonial
+      // (NO salida de efectivo, sin cuentas origen/destino) y se registra SIEMPRE,
+      // haya o no turno abierto (caja_turno_id nullable): una merma un domingo sin
+      // turno también debe llegar al P&L del período.
+      if (!esPositivo) {
+        const cajaActiva = await tx.cajas_turnos.findFirst({
+          where: { estado: 'ABIERTA' },
+        });
 
-      await tx.movimientos_financieros.create({
-        data: {
-          caja_turno_id: cajaActiva?.id ?? null,
-          tipo_movimiento: 'MERMA_INVENTARIO',
-          monto: costo_asumido,
-          descripcion:
-            `Merma: ${tipo_ajuste}` +
-            (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
-            ` (Lote #${lote_id})`,
-          usuario_id: userId,
-        },
-      });
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: cajaActiva?.id ?? null,
+            tipo_movimiento: 'MERMA_INVENTARIO',
+            monto: costo_asumido,
+            descripcion:
+              `Merma: ${tipo_ajuste}` +
+              (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
+              ` (Lote #${lote_id})`,
+            usuario_id: userId,
+          },
+        });
+      }
 
       return ajuste;
     });

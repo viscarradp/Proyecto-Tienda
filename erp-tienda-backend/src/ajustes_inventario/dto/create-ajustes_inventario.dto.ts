@@ -19,9 +19,11 @@ export class CreateAjusteInventarioDto {
   @Min(0.001)
   cantidad_ajustada: number;
 
+  // CONTEO_SOBRANTE es un ajuste POSITIVO (encontrar stock / conteo hacia
+  // arriba); el resto son mermas (ajustes negativos). Ver §6, Bloque 2.D.
   @IsString()
   @IsNotEmpty()
-  @IsIn(['QUEBRADO', 'VENCIDO', 'ROBO', 'CONTEO'])
+  @IsIn(['QUEBRADO', 'VENCIDO', 'ROBO', 'CONTEO', 'CONTEO_SOBRANTE'])
   tipo_ajuste: string;
 
   @IsString()
