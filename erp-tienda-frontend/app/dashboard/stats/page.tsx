@@ -17,6 +17,7 @@ import {
   Plus,
   X,
   Check,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react"
 import {
@@ -139,6 +140,11 @@ export default function StatsPage() {
   const [inyeccionDesc, setInyeccionDesc] = useState("")
   const [inyeccionLoading, setInyeccionLoading] = useState(false)
   const [inyeccionMsg, setInyeccionMsg] = useState<string | null>(null)
+  const [showArqueo, setShowArqueo] = useState(false)
+  const [arqueoSaldo, setArqueoSaldo] = useState("")
+  const [arqueoJustif, setArqueoJustif] = useState("")
+  const [arqueoLoading, setArqueoLoading] = useState(false)
+  const [arqueoMsg, setArqueoMsg] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -203,6 +209,34 @@ export default function StatsPage() {
       setInyeccionMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
     } finally {
       setInyeccionLoading(false)
+    }
+  }
+
+  const handleArqueo = async () => {
+    setArqueoLoading(true)
+    setArqueoMsg(null)
+    try {
+      const res = await apiFetch<{ diferencia: string | number }>("/caja-general/arqueo", {
+        method: "POST",
+        body: JSON.stringify({
+          saldo_declarado: parseFloat(arqueoSaldo),
+          justificacion: arqueoJustif.trim() || undefined,
+        }),
+      })
+      const dif = Number(res.diferencia)
+      const detalle = dif === 0 ? "sin descuadre" : dif < 0 ? "faltante" : "sobrante"
+      setArqueoMsg(`✅ Arqueo registrado (${detalle}: ${formatMoney(Math.abs(dif))})`)
+      setArqueoSaldo("")
+      setArqueoJustif("")
+      fetchData()
+      setTimeout(() => {
+        setShowArqueo(false)
+        setArqueoMsg(null)
+      }, 2500)
+    } catch (err) {
+      setArqueoMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
+    } finally {
+      setArqueoLoading(false)
     }
   }
 
@@ -279,7 +313,14 @@ export default function StatsPage() {
                     tone={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "success" : "destructive"}
                   />
                   <button
-                    onClick={() => { setShowInyeccion(!showInyeccion); setInyeccionMsg(null) }}
+                    onClick={() => { setShowArqueo(!showArqueo); setArqueoMsg(null); setShowInyeccion(false) }}
+                    className="absolute right-9 top-2 flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    title="Arqueo de bóveda"
+                  >
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => { setShowInyeccion(!showInyeccion); setInyeccionMsg(null); setShowArqueo(false) }}
                     className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     title="Inyectar capital"
                   >
@@ -323,6 +364,49 @@ export default function StatsPage() {
                 {inyeccionMsg && (
                   <p className={cn("mt-3 text-sm font-medium", inyeccionMsg.startsWith("✅") ? "text-success" : "text-destructive")}>
                     {inyeccionMsg}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Arqueo de bóveda */}
+            {showArqueo && saldoBoveda && (
+              <div className="rounded-sm border border-warning/30 bg-card p-5">
+                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-warning">
+                  <ClipboardCheck className="h-4 w-4" /> Arqueo de bóveda
+                </h3>
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Declara el efectivo físico contado en la bóveda. Si difiere del saldo del sistema
+                  (<MoneyValue value={saldoBoveda.saldo_actual} tone="muted" className="text-xs" />), se
+                  registra el ajuste y el saldo queda igual al conteo.
+                </p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Efectivo contado ($)</Label>
+                    <Input type="number" min="0" step="0.01" placeholder="0.00"
+                      value={arqueoSaldo} onChange={(e) => setArqueoSaldo(e.target.value)}
+                      className="h-11 font-mono text-lg" />
+                  </div>
+                  <div className="flex flex-[2] flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Justificación (si hay descuadre)</Label>
+                    <Input type="text" placeholder="Ej: Conteo físico de fin de mes"
+                      value={arqueoJustif} onChange={(e) => setArqueoJustif(e.target.value)}
+                      className="h-11" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      disabled={arqueoLoading || arqueoSaldo === "" || parseFloat(arqueoSaldo) < 0}
+                      onClick={handleArqueo}
+                      className="h-11 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
+                    >
+                      {arqueoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Registrar arqueo
+                    </Button>
+                  </div>
+                </div>
+                {arqueoMsg && (
+                  <p className={cn("mt-3 text-sm font-medium", arqueoMsg.startsWith("✅") ? "text-success" : "text-destructive")}>
+                    {arqueoMsg}
                   </p>
                 )}
               </div>

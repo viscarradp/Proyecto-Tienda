@@ -196,4 +196,31 @@ describe('Bóveda — saldo derivado y gastos desde bóveda (e2e, 1.C)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ efectivo_declarado: 40 });
   });
+
+  it('arqueo de bóveda reconcilia el saldo derivado al conteo físico (§9, 2.C)', async () => {
+    // Saldo conocido: inyectar 50.
+    const antes = await saldoBoveda();
+    await request(app.getHttpServer())
+      .post('/caja-general/inyeccion')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ monto: 50 });
+    const esperado = antes + 50;
+    expect(await saldoBoveda()).toBeCloseTo(esperado);
+
+    // Arqueo declarando 10 menos (faltante) con justificación.
+    const arqueo = await request(app.getHttpServer())
+      .post('/caja-general/arqueo')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ saldo_declarado: esperado - 10, justificacion: 'Conteo físico' });
+    expect(arqueo.status).toBe(201);
+    // El saldo derivado ahora coincide con el conteo físico.
+    expect(await saldoBoveda()).toBeCloseTo(esperado - 10);
+
+    // Un descuadre grande sin justificación se rechaza.
+    const sinJustif = await request(app.getHttpServer())
+      .post('/caja-general/arqueo')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ saldo_declarado: 0 });
+    expect(sinJustif.status).toBe(400);
+  });
 });

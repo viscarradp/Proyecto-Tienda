@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
 import { CajaGeneralService } from './caja_general.service';
+import { ArqueoBovedaDto } from './dto/arqueo-caja_general.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -24,6 +25,20 @@ export class CajaGeneralController {
     return this.cajaGeneralService.inyectarCapital(
       body.monto,
       body.descripcion,
+      userId,
+    );
+  }
+
+  @Post('arqueo')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Arqueo de bóveda: declarar el físico contado vs el saldo derivado',
+  })
+  arqueo(@Body() dto: ArqueoBovedaDto, @CurrentUser('userId') userId: number) {
+    return this.cajaGeneralService.arqueo(
+      dto.saldo_declarado,
+      dto.justificacion,
       userId,
     );
   }

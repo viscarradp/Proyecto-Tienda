@@ -31,6 +31,16 @@
 
 ## Entradas
 
+### 2026-07-05 — Bloque 2 · Sub-fase 2.C: arqueo de bóveda ✅
+- **`POST /caja-general/arqueo`** (ADMIN): declara el efectivo físico contado en la
+  bóveda vs el saldo derivado; si difieren, registra `AJUSTE_BOVEDA_FALTANTE`
+  (BOVEDA→GASTO) o `AJUSTE_BOVEDA_SOBRANTE` (GASTO→BOVEDA) que deja el derivado = físico.
+  Umbral de justificación como el cierre; advisory lock de bóveda. Estos ajustes ya
+  entran al P&L (2.A los incluye en faltantes/sobrantes).
+- **Frontend**: acción "Arqueo de bóveda" en Estadísticas (junto a inyectar capital).
+- **Verificación**: backend build+lint limpios, **e2e 16/16** (arqueo reconcilia el
+  saldo; descuadre grande sin justificación → 400). Frontend build+lint limpios.
+
 ### 2026-07-05 — Bloque 2 · Sub-fase 2.B: umbral de tolerancia + cierre forzado ADMIN ✅
 - **`common/tolerancia.ts`**: `TOLERANCIA_DESCUADRE` (env, default $1.00).
 - **`cerrar`**: registra siempre la diferencia; exige justificación si `|dif| ≥ umbral`

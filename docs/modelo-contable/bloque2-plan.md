@@ -45,6 +45,6 @@ Pendiente de decisión de hosting/almacenamiento + secrets. Documentado, no impl
 |---|---|
 | 2.A · Faltantes al P&L + merma sin turno | ✅ Completada |
 | 2.B · Umbral + cierre forzado | ✅ Completada |
-| 2.C · Arqueo de bóveda | ⬜ Pendiente |
+| 2.C · Arqueo de bóveda | ✅ Completada |
 | 2.D · Ajustes positivos de inventario | ⬜ Pendiente |
 | 2.E · Backup | ⏸️ Diferido |
