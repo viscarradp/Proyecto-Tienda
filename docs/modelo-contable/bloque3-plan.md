@@ -59,7 +59,7 @@ reconciliación documental (3.E, refleja todo lo construido).
 
 | Sub-fase | Estado |
 |---|---|
-| 3.A · Patrimonio + flujo de efectivo | ⬜ Pendiente |
+| 3.A · Patrimonio + flujo de efectivo | ✅ Completada |
 | 3.B · Devolución post-turno | ⬜ Pendiente |
 | 3.C · Higiene (FIFO + historial precios) | ⬜ Pendiente |
 | 3.D · Modo contingencia (fecha manual) | ⬜ Pendiente |

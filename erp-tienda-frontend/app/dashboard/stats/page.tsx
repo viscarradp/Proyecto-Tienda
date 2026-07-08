@@ -18,6 +18,10 @@ import {
   X,
   Check,
   ClipboardCheck,
+  Wallet,
+  Landmark,
+  Scale,
+  ArrowRightLeft,
   type LucideIcon,
 } from "lucide-react"
 import {
@@ -71,6 +75,25 @@ interface ProductoTop {
 interface CajaGeneralSaldo {
   saldo_actual: string
   total_depositos: number
+}
+
+interface Patrimonio {
+  inventario: string
+  efectivo: { gaveta: string; boveda: string; total: string }
+  activos_fijos: string
+  deudas: string
+  patrimonio_neto: string
+}
+
+interface FlujoCuenta {
+  entradas: string
+  salidas: string
+  neto: string
+}
+interface FlujoEfectivo {
+  ventas_efectivo: string
+  gaveta: FlujoCuenta
+  boveda: FlujoCuenta
 }
 
 /* ─────────────── Helpers ─────────────── */
@@ -133,6 +156,8 @@ export default function StatsPage() {
   const [estado, setEstado] = useState<EstadoResultados | null>(null)
   const [productos, setProductos] = useState<ProductoTop[]>([])
   const [saldoBoveda, setSaldoBoveda] = useState<CajaGeneralSaldo | null>(null)
+  const [patrimonio, setPatrimonio] = useState<Patrimonio | null>(null)
+  const [flujo, setFlujo] = useState<FlujoEfectivo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showInyeccion, setShowInyeccion] = useState(false)
@@ -153,15 +178,19 @@ export default function StatsPage() {
       const { desde, hasta } = getPeriodoDates(periodo)
       const qs = `desde=${desde}&hasta=${hasta}`
 
-      const [estadoRes, productosRes, saldoRes] = await Promise.all([
+      const [estadoRes, productosRes, saldoRes, patrimonioRes, flujoRes] = await Promise.all([
         apiFetch(`/reportes/estado-resultados?${qs}`) as Promise<EstadoResultados>,
         apiFetch(`/reportes/productos-top?${qs}&limit=15`) as Promise<ProductoTop[]>,
         apiFetch(`/caja-general/saldo`) as Promise<CajaGeneralSaldo>,
+        apiFetch(`/reportes/patrimonio`) as Promise<Patrimonio>,
+        apiFetch(`/reportes/flujo-efectivo?${qs}`) as Promise<FlujoEfectivo>,
       ])
 
       setEstado(estadoRes)
       setProductos(productosRes)
       setSaldoBoveda(saldoRes)
+      setPatrimonio(patrimonioRes)
+      setFlujo(flujoRes)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar reportes")
     } finally {
@@ -412,6 +441,51 @@ export default function StatsPage() {
               </div>
             )}
 
+            {/* Patrimonio del negocio (foto de balance, ítem 15) */}
+            {patrimonio && (
+              <div className="rounded-sm border border-border bg-card p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <Scale className="h-4 w-4" /> Patrimonio del negocio
+                  <span className="text-xs font-normal opacity-70">— hoy</span>
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  <BalanceItem label="Inventario" value={patrimonio.inventario} icon={Package} />
+                  <BalanceItem
+                    label="Efectivo"
+                    value={patrimonio.efectivo.total}
+                    icon={Wallet}
+                    hint={`Gaveta ${formatMoney(patrimonio.efectivo.gaveta)} · Bóveda ${formatMoney(patrimonio.efectivo.boveda)}`}
+                  />
+                  <BalanceItem label="Activos fijos" value={patrimonio.activos_fijos} icon={Landmark} />
+                  <BalanceItem label="Deudas" value={patrimonio.deudas} icon={TrendingDown} tone="destructive" prefix="− " />
+                  <div className="col-span-2 flex flex-col justify-center rounded-sm border border-primary/30 bg-primary/5 p-4 sm:col-span-3 lg:col-span-1">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Patrimonio neto</span>
+                    <MoneyValue
+                      value={patrimonio.patrimonio_neto}
+                      tone={parseFloat(patrimonio.patrimonio_neto) >= 0 ? "success" : "destructive"}
+                      className="mt-1 text-2xl font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Flujo de efectivo por cuenta (ítem 15) */}
+            {flujo && (
+              <div className="rounded-sm border border-border bg-card p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <ArrowRightLeft className="h-4 w-4" /> Flujo de efectivo — {periodoLabels[periodo]}
+                </h2>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <FlujoCard titulo="Gaveta (mostrador)" icon={Wallet} cuenta={flujo.gaveta} />
+                  <FlujoCard titulo="Bóveda" icon={Vault} cuenta={flujo.boveda} />
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Las ventas del período (<span className="font-medium text-foreground">{formatMoney(flujo.ventas_efectivo)}</span>) entran como efectivo a la gaveta.
+                </p>
+              </div>
+            )}
+
             {/* Gráfico: ingreso por producto */}
             {chartData.length > 0 && (
               <div className="rounded-sm border border-border bg-card p-5">
@@ -568,6 +642,73 @@ function KPICard({
         <Icon className={cn("h-4 w-4 shrink-0", toneText[tone])} />
       </div>
       <p className={cn("mt-2 font-mono text-xl font-bold tracking-tight tabular-nums", toneText[tone])}>{value}</p>
+    </div>
+  )
+}
+
+function BalanceItem({
+  label,
+  value,
+  icon: Icon,
+  tone = "muted",
+  hint,
+  prefix = "",
+}: {
+  label: string
+  value: string
+  icon: LucideIcon
+  tone?: Tone
+  hint?: string
+  prefix?: string
+}) {
+  return (
+    <div className="flex flex-col rounded-sm border border-border bg-background/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+        <Icon className={cn("h-3.5 w-3.5 shrink-0", toneText[tone])} />
+      </div>
+      <span className={cn("mt-1 font-mono text-base font-semibold tabular-nums", toneText[tone])}>
+        {prefix}
+        {formatMoney(value)}
+      </span>
+      {hint && <span className="mt-0.5 truncate text-[10px] text-muted-foreground">{hint}</span>}
+    </div>
+  )
+}
+
+function FlujoCard({
+  titulo,
+  icon: Icon,
+  cuenta,
+}: {
+  titulo: string
+  icon: LucideIcon
+  cuenta: FlujoCuenta
+}) {
+  const neto = parseFloat(cuenta.neto)
+  return (
+    <div className="rounded-sm border border-border bg-background/40 p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+        <Icon className="h-4 w-4 text-muted-foreground" /> {titulo}
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <ArrowUpRight className="h-3.5 w-3.5 text-success" /> Entradas
+          </span>
+          <MoneyValue value={cuenta.entradas} tone="success" className="text-sm" />
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <ArrowDownRight className="h-3.5 w-3.5 text-destructive" /> Salidas
+          </span>
+          <MoneyValue value={cuenta.salidas} tone="destructive" className="text-sm" />
+        </div>
+        <div className="flex items-center justify-between border-t border-dashed border-border pt-2 text-sm">
+          <span className="font-medium">Neto</span>
+          <MoneyValue value={cuenta.neto} tone={neto >= 0 ? "success" : "destructive"} className="text-sm font-semibold" />
+        </div>
+      </div>
     </div>
   )
 }

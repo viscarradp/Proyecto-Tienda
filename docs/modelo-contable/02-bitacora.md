@@ -5,7 +5,11 @@
 
 ## Estado global
 
-**Estado:** 🏁 **Bloque 1 COMPLETO** (1.A–1.F). Pendientes de cierre: meta-hallazgo (SRS v3) y follow-ups menores (ver abajo). El `db push` a Supabase real es paso manual del usuario.
+**Estado:** 🏁 Bloques 1 y 2 COMPLETOS (en `master`). 🔄 **Bloque 3 EN PROGRESO** en
+`feature/bloque3-operacion` — ver [`bloque3-plan.md`](bloque3-plan.md). El `db push` a
+Supabase real sigue siendo paso manual del usuario.
+
+**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ⬜ · 3.C ⬜ · 3.D ⬜ · 3.E ⬜.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -30,6 +34,23 @@
 ---
 
 ## Entradas
+
+### 2026-07-08 — Bloque 3 · Sub-fase 3.A: patrimonio + flujo de efectivo ✅
+- **`reportes.service`**: `getPatrimonio()` = inventario (Σ disponible × costo FIFO) +
+  efectivo (gaveta + bóveda derivada) + activos fijos (sin depreciación) − deudas
+  (cuentas por pagar). `getFlujoEfectivo(desde,hasta)` = entradas/salidas por cuenta
+  (GAVETA/BOVEDA) derivadas de (origen,destino) + ventas como entrada a gaveta.
+- Helper privado `getEfectivoGaveta()`: turno ABIERTA → `efectivo_esperado`; si no,
+  fondo remanente del último cierre (**incluye `CERRADA_FORZADA`**, gap que 2.B dejó
+  en `getUltimoCierre` y que 3.C corregirá también allí).
+- **`reportes.controller`**: `GET /reportes/patrimonio`, `GET /reportes/flujo-efectivo`.
+- **Frontend** (`stats/page.tsx`): tarjeta "Patrimonio del negocio" (desglose activos/
+  deudas + patrimonio neto) y "Flujo de efectivo" (gaveta/bóveda entradas/salidas/neto).
+- **Verificación**: backend build+lint limpios; **e2e 20/20** (3 nuevos: invariantes de
+  patrimonio, neto de bóveda == saldo derivado, la venta entra a gaveta). Frontend
+  build+lint limpios. Render confirmado en navegador (backend :3005 + front :3001 contra
+  la BD local): patrimonio $414 = 124+320+0−30; flujo bóveda neto $270 = saldo.
+- Sin cambios de schema.
 
 ### 2026-07-05 — Bloque 2 · Sub-fase 2.D: ajustes positivos de inventario ✅
 - **`ajustes_inventario.service`**: nuevo `tipo_ajuste = 'CONTEO_SOBRANTE'` que
