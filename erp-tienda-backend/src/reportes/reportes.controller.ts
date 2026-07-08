@@ -47,6 +47,28 @@ export class ReportesController {
   }
 
   /**
+   * GET /reportes/patrimonio
+   * Foto de balance al instante: inventario + efectivo + activos − deudas.
+   */
+  @Get('patrimonio')
+  async getPatrimonio() {
+    return this.reportesService.getPatrimonio();
+  }
+
+  /**
+   * GET /reportes/flujo-efectivo?desde=2026-04-01&hasta=2026-04-18
+   * Entradas y salidas de efectivo por cuenta (gaveta, bóveda) en el período.
+   */
+  @Get('flujo-efectivo')
+  async getFlujoEfectivo(
+    @Query('desde') desdeStr?: string,
+    @Query('hasta') hastaStr?: string,
+  ) {
+    const { desde, hasta } = this.parsePeriodo(desdeStr, hastaStr);
+    return this.reportesService.getFlujoEfectivo(desde, hasta);
+  }
+
+  /**
    * Parsea los query params de fecha.
    * Default: desde el 1ro del mes actual hasta el final de hoy.
    */

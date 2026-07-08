@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { saldoBovedaDerivado } from '../common/cuentas-efectivo';
 
 @Injectable()
 export class ReportesService {
@@ -161,6 +162,148 @@ export class ReportesService {
       total_ventas_completadas,
       total_ventas_anuladas,
       ticket_promedio,
+    };
+  }
+
+  /**
+   * Efectivo en la GAVETA (caja del mostrador) en este instante.
+   *  - Si hay un turno ABIERTA: es su efectivo_esperado.
+   *  - Si no: es el fondo que quedó del último cierre = efectivo declarado
+   *    menos lo que ese cierre trasladó a la bóveda. Se consideran tanto
+   *    'CERRADA' como 'CERRADA_FORZADA' (2.B) para no derivar de un cierre viejo.
+   */
+  private async getEfectivoGaveta(): Promise<Prisma.Decimal> {
+    const turnoAbierto = await this.prisma.cajas_turnos.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (turnoAbierto) {
+      return new Prisma.Decimal(turnoAbierto.efectivo_esperado ?? 0);
+    }
+
+    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
+      where: { estado: { in: ['CERRADA', 'CERRADA_FORZADA'] } },
+      orderBy: { fecha_cierre: 'desc' },
+      include: {
+        movimientos_financieros: {
+          where: { tipo_movimiento: 'TRASLADO_A_BOVEDA' },
+        },
+      },
+    });
+    if (!ultimoCierre) {
+      return new Prisma.Decimal(0);
+    }
+    const trasladado = ultimoCierre.movimientos_financieros.reduce(
+      (acc, m) => acc.add(m.monto),
+      new Prisma.Decimal(0),
+    );
+    return new Prisma.Decimal(ultimoCierre.efectivo_declarado ?? 0).sub(
+      trasladado,
+    );
+  }
+
+  /**
+   * Patrimonio del negocio (foto de balance al instante), §8.4 de la auditoría:
+   *   patrimonio_neto = inventario + efectivo(gaveta + bóveda) + activos_fijos − deudas
+   *
+   * - inventario: valuado al costo FIFO congelado de cada lote (Σ disponible × costo).
+   * - efectivo: gaveta (turno o último cierre) + bóveda (saldo derivado del libro).
+   * - activos_fijos: a valor estimado, SIN depreciación (decisión consciente a esta escala).
+   * - deudas: saldo pendiente de cuentas por pagar.
+   */
+  async getPatrimonio() {
+    // Inventario: Σ (cantidad_disponible × costo_unitario_adquisicion). No se puede
+    // expresar con aggregate de Prisma (multiplica dos columnas) → SQL crudo.
+    const invRows = await this.prisma.$queryRaw<
+      { valor: Prisma.Decimal | string | null }[]
+    >`
+      SELECT COALESCE(SUM(cantidad_disponible * costo_unitario_adquisicion), 0) AS valor
+      FROM lotes_inventario
+    `;
+    const inventario = new Prisma.Decimal(invRows[0]?.valor ?? 0);
+
+    const gaveta = await this.getEfectivoGaveta();
+    const boveda = await saldoBovedaDerivado(this.prisma);
+    const efectivo_total = gaveta.add(boveda);
+
+    const activosAgg = await this.prisma.activos_fijos.aggregate({
+      _sum: { valor_estimado: true },
+    });
+    const activos_fijos =
+      activosAgg._sum.valor_estimado ?? new Prisma.Decimal(0);
+
+    const deudasAgg = await this.prisma.cuentas_por_pagar.aggregate({
+      _sum: { saldo_pendiente: true },
+    });
+    const deudas = deudasAgg._sum.saldo_pendiente ?? new Prisma.Decimal(0);
+
+    const patrimonio_neto = inventario
+      .add(efectivo_total)
+      .add(activos_fijos)
+      .sub(deudas);
+
+    return {
+      inventario,
+      efectivo: { gaveta, boveda, total: efectivo_total },
+      activos_fijos,
+      deudas,
+      patrimonio_neto,
+    };
+  }
+
+  /**
+   * Flujo de efectivo por cuenta en el período (§8.5). "Casi gratis" gracias al
+   * modelo origen→destino del Bloque 1: para cada cuenta de efectivo real,
+   * entradas = Σ(monto donde destino = cuenta), salidas = Σ(monto donde origen = cuenta).
+   *
+   * Las VENTAS entran a la gaveta pero no viven en movimientos_financieros (suben
+   * efectivo_esperado directamente) → se suman aparte como entrada a gaveta.
+   * (Las devoluciones del ítem 13 restarán de la gaveta cuando aterrice 3.B.)
+   */
+  async getFlujoEfectivo(desde: Date, hasta: Date) {
+    const rango = { gte: desde, lte: hasta };
+
+    const flujoCuenta = async (cuenta: 'GAVETA' | 'BOVEDA') => {
+      const [entradasAgg, salidasAgg] = await Promise.all([
+        this.prisma.movimientos_financieros.aggregate({
+          where: { cuenta_destino: cuenta, fecha: rango },
+          _sum: { monto: true },
+        }),
+        this.prisma.movimientos_financieros.aggregate({
+          where: { cuenta_origen: cuenta, fecha: rango },
+          _sum: { monto: true },
+        }),
+      ]);
+      return {
+        entradas: entradasAgg._sum.monto ?? new Prisma.Decimal(0),
+        salidas: salidasAgg._sum.monto ?? new Prisma.Decimal(0),
+      };
+    };
+
+    const gaveta = await flujoCuenta('GAVETA');
+    const boveda = await flujoCuenta('BOVEDA');
+
+    // Ventas completadas: efectivo que entró a la gaveta sin pasar por el libro.
+    const ventasAgg = await this.prisma.ventas.aggregate({
+      where: { estado: 'COMPLETADA', fecha: rango },
+      _sum: { total: true },
+    });
+    const ventas_efectivo = ventasAgg._sum.total ?? new Prisma.Decimal(0);
+    gaveta.entradas = gaveta.entradas.add(ventas_efectivo);
+
+    const conNeto = (c: {
+      entradas: Prisma.Decimal;
+      salidas: Prisma.Decimal;
+    }) => ({
+      entradas: c.entradas,
+      salidas: c.salidas,
+      neto: c.entradas.sub(c.salidas),
+    });
+
+    return {
+      periodo: { desde, hasta },
+      ventas_efectivo,
+      gaveta: conNeto(gaveta),
+      boveda: conNeto(boveda),
     };
   }
 
