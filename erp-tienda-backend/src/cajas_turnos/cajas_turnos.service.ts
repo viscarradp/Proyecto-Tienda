@@ -108,7 +108,9 @@ export class CajasTurnosService {
 
   async getUltimoCierre() {
     const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
-      where: { estado: 'CERRADA' },
+      // Incluye CERRADA_FORZADA (Bloque 3.C): si el último turno se cerró forzado
+      // (2.B), el fondo del siguiente debe derivarse de ESE cierre, no de uno viejo.
+      where: { estado: { in: ['CERRADA', 'CERRADA_FORZADA'] } },
       orderBy: { fecha_cierre: 'desc' },
       include: {
         movimientos_financieros: {

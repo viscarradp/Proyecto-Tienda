@@ -41,16 +41,49 @@ export class PresentacionesService {
     return presentacion;
   }
 
-  async update(id: number, updatePresentacionDto: UpdatePresentacionDto) {
+  async update(
+    id: number,
+    updatePresentacionDto: UpdatePresentacionDto,
+    userId?: number,
+  ) {
     try {
-      await this.findOne(id);
-      return await this.prisma.presentaciones.update({
+      const actual = await this.findOne(id);
+      const actualizada = await this.prisma.presentaciones.update({
         where: { id },
         data: updatePresentacionDto,
       });
+
+      // Historial de precios (Bloque 3.C): si el precio_venta cambió, se deja
+      // constancia del anterior→nuevo para poder auditar los cambios de precio.
+      if (
+        updatePresentacionDto.precio_venta !== undefined &&
+        !new Prisma.Decimal(actual.precio_venta).equals(
+          actualizada.precio_venta,
+        )
+      ) {
+        await this.prisma.historial_precios_presentaciones.create({
+          data: {
+            presentacion_id: id,
+            precio_anterior: actual.precio_venta,
+            precio_nuevo: actualizada.precio_venta,
+            usuario_id: userId,
+          },
+        });
+      }
+
+      return actualizada;
     } catch (error) {
       this.handlePrismaError(error);
     }
+  }
+
+  /** Historial de cambios de precio de una presentación (Bloque 3.C). */
+  async getHistorialPrecios(id: number) {
+    await this.findOne(id);
+    return this.prisma.historial_precios_presentaciones.findMany({
+      where: { presentacion_id: id },
+      orderBy: { fecha: 'desc' },
+    });
   }
 
   async remove(id: number) {

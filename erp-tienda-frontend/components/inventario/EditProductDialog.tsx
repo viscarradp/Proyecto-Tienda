@@ -1,5 +1,10 @@
 import * as React from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, History, ArrowRight } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import { formatMoney } from "@/lib/format"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
 import {
   Dialog,
@@ -28,6 +33,13 @@ interface EditProductDialogProps {
   producto: Producto | null
 }
 
+interface HistorialPrecio {
+  id: number
+  precio_anterior: string
+  precio_nuevo: string
+  fecha: string
+}
+
 export function EditProductDialog({ open, onClose, onSuccess, producto }: EditProductDialogProps) {
   // Selector de un solo campo: no necesita useShallow (una referencia no
   // compuesta ya evita re-renders cuando cambian otros campos del store,
@@ -42,6 +54,11 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+
+  // Historial de precios (Bloque 3.C): por presentación, bajo demanda.
+  const [histFor, setHistFor] = React.useState<number | null>(null)
+  const [histData, setHistData] = React.useState<Record<number, HistorialPrecio[]>>({})
+  const [histLoading, setHistLoading] = React.useState(false)
 
   React.useEffect(() => {
     if (open && producto) {
@@ -110,6 +127,25 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
     }
   }
 
+  const toggleHistorial = async (presId: number) => {
+    if (histFor === presId) {
+      setHistFor(null)
+      return
+    }
+    setHistFor(presId)
+    if (!histData[presId]) {
+      setHistLoading(true)
+      try {
+        const rows = await apiFetch<HistorialPrecio[]>(`/presentaciones/${presId}/historial-precios`)
+        setHistData((prev) => ({ ...prev, [presId]: rows }))
+      } catch {
+        setHistData((prev) => ({ ...prev, [presId]: [] }))
+      } finally {
+        setHistLoading(false)
+      }
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
       <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-3xl" showCloseButton>
@@ -162,45 +198,86 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
               {presentaciones.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Este producto aún no tiene presentaciones creadas.</p>
               ) : presentaciones.map((pres, idx) => (
-                <div key={pres.id} className="grid grid-cols-2 gap-3 rounded-sm border border-border bg-muted/30 p-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
-                    <Input
-                      value={pres.descripcion}
-                      onChange={(e) => handleUpdatePresentacion(idx, "descripcion", e.target.value)}
-                      className="h-8 text-xs"
-                    />
+                <div key={pres.id} className="rounded-sm border border-border bg-muted/30 p-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
+                      <Input
+                        value={pres.descripcion}
+                        onChange={(e) => handleUpdatePresentacion(idx, "descripcion", e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
+                      <Input
+                        value={pres.codigo_barras || ""}
+                        onChange={(e) => handleUpdatePresentacion(idx, "codigo_barras", e.target.value)}
+                        placeholder="Sin código"
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={pres.factor_conversion}
+                        onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", parseInt(e.target.value) || 1)}
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium text-muted-foreground">Precio ($)</Label>
+                        <button
+                          type="button"
+                          onClick={() => toggleHistorial(pres.id)}
+                          className={cn(
+                            "flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                            histFor === pres.id && "bg-muted text-foreground",
+                          )}
+                          title="Historial de precios"
+                        >
+                          <History className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={pres.precio_venta}
+                        onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
+                        className="h-8 font-mono text-xs font-semibold text-success"
+                      />
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
-                    <Input
-                      value={pres.codigo_barras || ""}
-                      onChange={(e) => handleUpdatePresentacion(idx, "codigo_barras", e.target.value)}
-                      placeholder="Sin código"
-                      className="h-8 font-mono text-xs"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={pres.factor_conversion}
-                      onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", parseInt(e.target.value) || 1)}
-                      className="h-8 font-mono text-xs"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Precio ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={pres.precio_venta}
-                      onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
-                      className="h-8 font-mono text-xs font-semibold text-success"
-                    />
-                  </div>
+
+                  {histFor === pres.id && (
+                    <div className="mt-3 border-t border-border pt-3">
+                      {histLoading && !histData[pres.id] ? (
+                        <p className="text-xs text-muted-foreground">Cargando historial…</p>
+                      ) : (histData[pres.id]?.length ?? 0) === 0 ? (
+                        <p className="text-xs text-muted-foreground">Sin cambios de precio registrados.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Historial de precios
+                          </p>
+                          {histData[pres.id].map((h) => (
+                            <div key={h.id} className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="text-muted-foreground">
+                                {format(new Date(h.fecha), "dd MMM yyyy HH:mm", { locale: es })}
+                              </span>
+                              <span className="font-mono text-muted-foreground">{formatMoney(h.precio_anterior)}</span>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-mono font-semibold text-success">{formatMoney(h.precio_nuevo)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

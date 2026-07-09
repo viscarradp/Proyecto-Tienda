@@ -13,6 +13,7 @@ import { PresentacionesService } from './presentaciones.service';
 import { CreatePresentacionDto } from './dto/create-presentacion.dto';
 import { UpdatePresentacionDto } from './dto/update-presentacion.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Presentaciones')
 @Roles('ADMIN', 'CAJERO')
@@ -57,8 +58,17 @@ export class PresentacionesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePresentacionDto: UpdatePresentacionDto,
+    @CurrentUser('userId') userId: number,
   ) {
-    return this.presentacionesService.update(id, updatePresentacionDto);
+    return this.presentacionesService.update(id, updatePresentacionDto, userId);
+  }
+
+  @Get(':id/historial-precios')
+  @ApiOperation({
+    summary: 'Historial de cambios de precio de una presentación',
+  })
+  getHistorialPrecios(@Param('id', ParseIntPipe) id: number) {
+    return this.presentacionesService.getHistorialPrecios(id);
   }
 
   @Delete(':id')
