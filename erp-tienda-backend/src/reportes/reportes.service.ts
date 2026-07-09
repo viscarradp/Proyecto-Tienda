@@ -60,7 +60,7 @@ export class ReportesService {
       },
     });
 
-    const costo_de_ventas = costosRaw.reduce(
+    const costo_de_ventas_bruto = costosRaw.reduce(
       (acc, row) =>
         acc.add(
           new Prisma.Decimal(row.cantidad_descargada).mul(row.costo_aplicado),
@@ -68,10 +68,35 @@ export class ReportesService {
       new Prisma.Decimal(0),
     );
 
-    // ── 4. Utilidad Bruta ──
-    const utilidad_bruta = new Prisma.Decimal(ingreso_bruto).sub(
-      costo_de_ventas,
+    // ── 3.5. Devoluciones de clientes del período (Bloque 3.B, ítem 13) ──
+    // Reversan ingreso; las de destino REINGRESO además devuelven su costo al
+    // inventario, así que bajan el costo de ventas (las MERMA dejan ese costo
+    // como pérdida real). Se netean por la fecha de la devolución.
+    const devolucionesAgg = await this.prisma.devoluciones.aggregate({
+      where: { fecha: { gte: desde, lte: hasta } },
+      _sum: { total_reembolsado: true },
+    });
+    const devoluciones =
+      devolucionesAgg._sum.total_reembolsado ?? new Prisma.Decimal(0);
+
+    const reingresoAgg = await this.prisma.detalle_devoluciones.aggregate({
+      where: {
+        destino: 'REINGRESO',
+        devoluciones: { fecha: { gte: desde, lte: hasta } },
+      },
+      _sum: { costo_revertido: true },
+    });
+    const costo_revertido_reingreso =
+      reingresoAgg._sum.costo_revertido ?? new Prisma.Decimal(0);
+
+    // Ingreso y costo NETOS de devoluciones.
+    const ingreso_neto = new Prisma.Decimal(ingreso_bruto).sub(devoluciones);
+    const costo_de_ventas = costo_de_ventas_bruto.sub(
+      costo_revertido_reingreso,
     );
+
+    // ── 4. Utilidad Bruta ──
+    const utilidad_bruta = ingreso_neto.sub(costo_de_ventas);
 
     // ── 5. Gastos Operativos ──
     const gastosAgg = await this.prisma.movimientos_financieros.aggregate({
@@ -134,9 +159,9 @@ export class ReportesService {
       .sub(faltantes)
       .add(sobrantes);
 
-    // ── 8. Margen bruto % ──
-    const margen_bruto_pct = ingreso_bruto.gt(0)
-      ? utilidad_bruta.div(ingreso_bruto).mul(100).toDecimalPlaces(2)
+    // ── 8. Margen bruto % (sobre ingreso neto de devoluciones) ──
+    const margen_bruto_pct = ingreso_neto.gt(0)
+      ? utilidad_bruta.div(ingreso_neto).mul(100).toDecimalPlaces(2)
       : new Prisma.Decimal(0);
 
     // ── 9. Ticket promedio ──
@@ -150,6 +175,7 @@ export class ReportesService {
     return {
       periodo: { desde, hasta },
       ingreso_bruto_ventas: ingreso_bruto,
+      devoluciones,
       costo_de_ventas_fifo: costo_de_ventas,
       utilidad_bruta,
       margen_bruto_porcentaje: margen_bruto_pct,
@@ -290,6 +316,16 @@ export class ReportesService {
     const ventas_efectivo = ventasAgg._sum.total ?? new Prisma.Decimal(0);
     gaveta.entradas = gaveta.entradas.add(ventas_efectivo);
 
+    // Devoluciones: reembolsos que SALEN de la gaveta (Bloque 3.B). Tampoco
+    // viven en movimientos_financieros, así que se restan aparte.
+    const devolucionesAgg = await this.prisma.devoluciones.aggregate({
+      where: { fecha: rango },
+      _sum: { total_reembolsado: true },
+    });
+    const devoluciones_efectivo =
+      devolucionesAgg._sum.total_reembolsado ?? new Prisma.Decimal(0);
+    gaveta.salidas = gaveta.salidas.add(devoluciones_efectivo);
+
     const conNeto = (c: {
       entradas: Prisma.Decimal;
       salidas: Prisma.Decimal;
@@ -302,6 +338,7 @@ export class ReportesService {
     return {
       periodo: { desde, hasta },
       ventas_efectivo,
+      devoluciones_efectivo,
       gaveta: conNeto(gaveta),
       boveda: conNeto(boveda),
     };
