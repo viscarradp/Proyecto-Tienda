@@ -5,11 +5,11 @@
 
 ## Estado global
 
-**Estado:** 🏁 Bloques 1 y 2 COMPLETOS (en `master`). 🔄 **Bloque 3 EN PROGRESO** en
-`feature/bloque3-operacion` — ver [`bloque3-plan.md`](bloque3-plan.md). El `db push` a
-Supabase real sigue siendo paso manual del usuario.
+**Estado:** 🏁 **Bloques 1, 2 y 3 COMPLETOS** (en `master`). El SRS v3.0 (meta-hallazgo)
+también quedó cerrado en 3.E. Pendientes de negocio antes de la primera venta real: backup
+automatizado (2.E, diferido) y correr `db push` contra la Supabase real (paso manual).
 
-**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ✅ · 3.D ✅ · 3.E ⬜.
+**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ✅ · 3.D ✅ · 3.E ✅.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -21,7 +21,7 @@ Supabase real sigue siendo paso manual del usuario.
 | 1.F · carga inicial de inventario | ✅ Completada | Flujo guiado "Inventario inicial" (compra `CAPITAL_DUEÑOS`, sin caja); fix `parseInt`→`parseFloat` en compras (fraccionado). |
 
 ### Follow-ups conocidos (no bloquean el Bloque 1)
-- **Meta-hallazgo:** actualizar el SRS a v3.0 reflejando lo construido. Pendiente.
+- **Meta-hallazgo:** actualizar el SRS a v3.0 reflejando lo construido. ✅ Hecho en 3.E.
 - **Venta fraccionada en el POS:** el backend ya vende decimales (verificado), pero el
   stepper del carrito del POS es entero. Falta un input de cantidad fraccionada en el
   POS para vender "0.5" desde la UI (la compra/inventario ya acepta decimales).
@@ -34,6 +34,16 @@ Supabase real sigue siendo paso manual del usuario.
 ---
 
 ## Entradas
+
+### 2026-07-08 — Bloque 3 · Sub-fase 3.E: SRS v3.0 (meta-hallazgo) ✅
+- Reescrito [`../producto/srs.md`](../producto/srs.md) de v2.0 (diseño, detrás del código) a
+  **v3.0**: refleja el stack real (NestJS/Prisma/Next), el modelo de efectivo origen→destino
+  con bóveda derivada, y todo lo construido en los Bloques 1–3 (retiro personal, traslados,
+  faltantes al P&L, umbral + cierre forzado, arqueo, ajustes positivos, patrimonio, flujo de
+  efectivo, devoluciones, historial de precios, contingencia, trazabilidad de autor).
+- Documenta las decisiones y el alcance diferido (migraciones, inmutabilidad BD, backup,
+  depreciación/DTE/multi-tienda) con enlaces a los ADRs y al backlog. Solo documentación.
+- 🏁 **Bloque 3 COMPLETO** (3.A–3.E). Con esto cierran los Bloques 1–3 de la auditoría de negocio.
 
 ### 2026-07-08 — Bloque 3 · Sub-fase 3.D: modo contingencia (fecha manual) ✅
 - **`CreateVentaDto.fecha`** opcional (ISO); `ventas.service.create` la usa si viene y

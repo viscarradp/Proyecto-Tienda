@@ -4,9 +4,9 @@
 >
 > **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-04 (Fase 3 completada y mergeada a `master`. Las 4 fases del plan original están cerradas).
+> **Última actualización:** 2026-07-08 (Bloques 1–3 de la auditoría de negocio completos y mergeados a `master`, incluido el SRS v3.0).
 >
-> **¿Qué sigue?** El trabajo abierto viene de la [auditoría de negocio/contable del 2026-07-04](../auditorias/2026-07-04-auditoria-negocio-contable.md) (sección 10, "Priorización final"): su Bloque 1 son cambios de modelo de datos que deben cerrarse **antes de la primera venta real**, mientras la BD sigue vacía. En paralelo avanza el [rediseño UX/UI del frontend](../rediseno/README.md).
+> **¿Qué sigue?** Las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E, diferido por decisión de nube/secrets) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
 
 ---
 
