@@ -9,7 +9,7 @@
 `feature/bloque3-operacion` — ver [`bloque3-plan.md`](bloque3-plan.md). El `db push` a
 Supabase real sigue siendo paso manual del usuario.
 
-**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ⬜ · 3.D ⬜ · 3.E ⬜.
+**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ✅ · 3.D ⬜ · 3.E ⬜.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -34,6 +34,22 @@ Supabase real sigue siendo paso manual del usuario.
 ---
 
 ## Entradas
+
+### 2026-07-08 — Bloque 3 · Sub-fase 3.C: higiene (FIFO, historial de precios) ✅
+- **Desempate FIFO determinista**: el motor ordena `fecha_ingreso ASC, id ASC`;
+  `lotes_inventario.fecha_ingreso` pasa a **NOT NULL** (con `@default(now())`).
+- **`getUltimoCierre` incluye `CERRADA_FORZADA`**: antes derivaba el fondo siguiente
+  de un cierre viejo si el último fue forzado (gap de 2.B).
+- **Historial de precios**: nueva tabla `historial_precios_presentaciones`;
+  `presentaciones.update` registra el cambio anterior→nuevo (con `usuario_id`);
+  `GET /presentaciones/:id/historial-precios`. Frontend: botón de historial por
+  presentación en el diálogo de edición (panel expandible con fecha y cambio).
+- **Inmutabilidad a nivel BD**: **diferida** con el SQL de `REVOKE` documentado en
+  [`../roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md) §2b (solo tablas
+  de libro append-only). Convención de signos: verificada, ya unificada en 1.C.
+- **Verificación**: backend build+lint limpios; **e2e 27/27** (3 nuevos: historial de
+  precios, FIFO desempata por id con lotes del mismo instante, ultimo-cierre ve el
+  forzado). Frontend build+lint limpios; endpoint de historial verificado por HTTP.
 
 ### 2026-07-08 — Bloque 3 · Sub-fase 3.B: devolución de cliente post-turno ✅
 - **Schema**: nuevas tablas `devoluciones` (venta_id, caja_turno_id, usuario_id,

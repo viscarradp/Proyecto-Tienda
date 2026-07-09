@@ -103,7 +103,7 @@ export class VentasService {
           FROM lotes_inventario
           WHERE producto_id = ${presentacion.producto_id}
             AND cantidad_disponible > 0
-          ORDER BY fecha_ingreso ASC
+          ORDER BY fecha_ingreso ASC, id ASC
           FOR UPDATE
         `;
 

@@ -61,7 +61,7 @@ reconciliación documental (3.E, refleja todo lo construido).
 |---|---|
 | 3.A · Patrimonio + flujo de efectivo | ✅ Completada |
 | 3.B · Devolución post-turno | ✅ Completada |
-| 3.C · Higiene (FIFO + historial precios) | ⬜ Pendiente |
+| 3.C · Higiene (FIFO + historial precios) | ✅ Completada |
 | 3.D · Modo contingencia (fecha manual) | ⬜ Pendiente |
 | 3.E · SRS v3.0 | ⬜ Pendiente |
 

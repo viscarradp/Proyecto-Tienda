@@ -33,6 +33,33 @@ CREATE UNIQUE INDEX ux_cajas_turnos_una_abierta
   ON cajas_turnos (estado) WHERE estado = 'ABIERTA';
 ```
 
+### 2b. Inmutabilidad de las tablas de libro a nivel BD (auditoría negocio §10, ítem 16)
+
+**Por qué se difirió:** es un `REVOKE` de privilegios sobre el **rol de aplicación**
+de la base de datos, no un cambio de schema — no se puede aplicar con `db push` ni
+probar en este entorno (no hay un rol de app separado ni la Supabase real aquí).
+Coherente con [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md).
+A nivel de aplicación estas tablas ya son *append-only* (nada las edita tras insertar).
+**Cuándo:** al configurar el rol de app en producción, junto con el baseline del ítem 1.
+**Qué aplicar** (solo sobre las tablas de **libro** verdaderamente inmutables — NO sobre
+`ventas`/`cajas_turnos`/`lotes_inventario`, que el app sí actualiza legítimamente:
+anular, cerrar turno, FIFO — y cuya integridad se cuida en la capa de app, ADR 0001):
+
+```sql
+-- El rol de la aplicación puede INSERT y SELECT, pero nunca UPDATE/DELETE
+-- sobre el libro contable: movimientos de efectivo, puentes de costo FIFO,
+-- devoluciones e historial de precios son inmutables por construcción.
+REVOKE UPDATE, DELETE ON movimientos_financieros           FROM app_role;
+REVOKE UPDATE, DELETE ON detalle_venta_lotes               FROM app_role;
+REVOKE UPDATE, DELETE ON detalle_devoluciones              FROM app_role;
+REVOKE UPDATE, DELETE ON historial_precios_presentaciones  FROM app_role;
+```
+
+**Nota sobre convención de signos (mismo ítem 16):** ya quedó unificada en el Bloque 1.C
+— se eliminó `caja_general` (que guardaba `monto` con signo) y hoy solo existe
+`movimientos_financieros.monto`, siempre positivo, con `tipo_movimiento` + `cuenta_origen`/
+`cuenta_destino`. No hay dos convenciones que reconciliar.
+
 ## Importante, no bloqueante
 
 ### 3. Trazabilidad de autor en operaciones financieras (hallazgo H8)
