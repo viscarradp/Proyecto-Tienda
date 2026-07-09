@@ -25,6 +25,18 @@ export class VentasService {
       );
     }
 
+    // Modo contingencia (3.D): si viene una fecha real (venta de un apagón), se
+    // usa esa; nunca puede ser futura. Si se omite, Prisma usa el default now().
+    let fechaVenta: Date | undefined;
+    if (createVentaDto.fecha) {
+      fechaVenta = new Date(createVentaDto.fecha);
+      if (fechaVenta.getTime() > Date.now()) {
+        throw new BadRequestException(
+          'La fecha de la venta no puede estar en el futuro',
+        );
+      }
+    }
+
     // Todo el método create() debe estar dentro de un this.prisma.$transaction
     return await this.prisma.$transaction(async (tx) => {
       // Bloquea la fila del turno ANTES de insertar la venta (que la
@@ -53,6 +65,7 @@ export class VentasService {
           caja_turno_id: cajaTurno.id,
           total: 0,
           usuario_id: userId,
+          fecha: fechaVenta,
         },
       });
 

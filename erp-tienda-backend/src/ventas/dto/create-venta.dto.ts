@@ -2,8 +2,10 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsInt,
   IsNumber,
+  IsOptional,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -24,4 +26,11 @@ export class CreateVentaDto {
   @ValidateNested({ each: true })
   @Type(() => DetalleVentaInputDto)
   detalles: DetalleVentaInputDto[];
+
+  // Modo contingencia (Bloque 3.D, ítem 14): fecha/hora real de una venta hecha
+  // durante un apagón, capturada al volver la conexión. Si se omite, es now().
+  // La venta pertenece al turno abierto actual; el backend rechaza fechas futuras.
+  @IsOptional()
+  @IsDateString()
+  fecha?: string;
 }

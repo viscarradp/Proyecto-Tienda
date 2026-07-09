@@ -9,7 +9,7 @@
 `feature/bloque3-operacion` — ver [`bloque3-plan.md`](bloque3-plan.md). El `db push` a
 Supabase real sigue siendo paso manual del usuario.
 
-**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ✅ · 3.D ⬜ · 3.E ⬜.
+**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ✅ · 3.D ✅ · 3.E ⬜.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -34,6 +34,18 @@ Supabase real sigue siendo paso manual del usuario.
 ---
 
 ## Entradas
+
+### 2026-07-08 — Bloque 3 · Sub-fase 3.D: modo contingencia (fecha manual) ✅
+- **`CreateVentaDto.fecha`** opcional (ISO); `ventas.service.create` la usa si viene y
+  **rechaza fechas futuras** (400). Sin cambios de schema (la venta ya tiene `fecha`).
+  La venta pertenece al turno abierto actual; el efectivo entra ahora.
+- **Frontend** (`CheckoutSection` + POS): toggle "Venta durante un apagón" que revela un
+  selector `datetime-local` (max = ahora); "Procesar pago" se bloquea si falta la fecha.
+- **Doc**: proceso de contingencia (hoja física + captura en lote) en
+  [`../domain/modo-contingencia.md`](../domain/modo-contingencia.md).
+- **Verificación**: backend build+lint limpios; **e2e 29/29** (2 nuevos: venta con fecha
+  pasada queda con esa fecha en el turno actual; fecha futura → 400). Frontend build+lint
+  limpios. **Flujo real en el POS**: venta con fecha 2026-07-06 registrada (efectivo al día).
 
 ### 2026-07-08 — Bloque 3 · Sub-fase 3.C: higiene (FIFO, historial de precios) ✅
 - **Desempate FIFO determinista**: el motor ordena `fecha_ingreso ASC, id ASC`;
