@@ -107,6 +107,9 @@ export default function POSPage() {
   const [checkoutSuccess, setCheckoutSuccess] = React.useState(false)
   const [checkoutError, setCheckoutError] = React.useState("")
   const [pagoCliente, setPagoCliente] = React.useState<string>("")
+  // Modo contingencia (Bloque 3.D): registrar una venta de apagón con su hora real.
+  const [contingencia, setContingencia] = React.useState(false)
+  const [fechaContingencia, setFechaContingencia] = React.useState<string>("")
   const [ultimoCierreFondo, setUltimoCierreFondo] = React.useState<number | null>(null)
 
   // ─── Filtros ───
@@ -246,14 +249,22 @@ export default function POSPage() {
       cantidad: item.cantidad,
     }))
 
+    // Contingencia (3.D): si está activa y hay fecha, se envía la hora real.
+    const fechaReal =
+      contingencia && fechaContingencia
+        ? new Date(fechaContingencia).toISOString()
+        : undefined
+
     try {
       await apiFetch("/ventas", {
         method: "POST",
-        body: JSON.stringify({ detalles }),
+        body: JSON.stringify(fechaReal ? { detalles, fecha: fechaReal } : { detalles }),
       })
 
       clearCart()
       setPagoCliente("")
+      setContingencia(false)
+      setFechaContingencia("")
       setCartOpen(false)
       setCheckoutSuccess(true)
       // Recargar datos para actualizar stock
@@ -515,6 +526,10 @@ export default function POSPage() {
             hasCaja={!!cajaActiva}
             checkoutSuccess={checkoutSuccess}
             checkoutError={checkoutError}
+            contingencia={contingencia}
+            setContingencia={setContingencia}
+            fechaContingencia={fechaContingencia}
+            setFechaContingencia={setFechaContingencia}
           />
         </div>
       </aside>
@@ -570,6 +585,10 @@ export default function POSPage() {
                 hasCaja={!!cajaActiva}
                 checkoutSuccess={checkoutSuccess}
                 checkoutError={checkoutError}
+                contingencia={contingencia}
+                setContingencia={setContingencia}
+                fechaContingencia={fechaContingencia}
+                setFechaContingencia={setFechaContingencia}
               />
             </div>
           )}
