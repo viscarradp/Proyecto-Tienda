@@ -1,78 +1,173 @@
-# Documento de Especificación de Requerimientos (SRS) — v2.0
+# Documento de Especificación de Requerimientos (SRS) — v3.0
 
-> **Estado (2026-07-04):** este documento quedó **detrás del código**. Se escribió en fase de diseño, pero el sistema ya está construido (backend NestJS + Prisma completo, frontend en rediseño). Varias cosas que aquí figuran como pendientes ya están decididas o implementadas (backend Node/NestJS, utilidad neta, anulación de ventas, usuarios/roles, caja general), y la [auditoría de negocio del 2026-07-04](../auditorias/2026-07-04-auditoria-negocio-contable.md) identificó correcciones al modelo conceptual (retiro personal de dueños, traslados gaveta↔bóveda, origen/destino de movimientos). **Pendiente: reescribir como v3.0** incorporando esas decisiones. Mientras tanto, si este documento contradice al código, el código manda.
+> **Estado (2026-07-08):** este documento **refleja el sistema construido**. Reemplaza a
+> la v2.0 (que describía una fase de diseño ya superada) e incorpora las decisiones de la
+> [auditoría técnica](../auditorias/2026-07-02-auditoria-tecnica.md) y la
+> [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md),
+> más los Bloques 1–3 de endurecimiento. Fuente de verdad viva del **qué** y el **porqué**;
+> el detalle de implementación está en [`../architecture/`](../architecture/),
+> [`../domain/`](../domain/), [`../modelo-contable/`](../modelo-contable/) y los
+> [ADRs](../decisions/). Si el código contradice a este documento, gana el código y se
+> actualiza aquí.
 
-**Proyecto:** Sistema ERP (POS, Inventario FIFO y Contabilidad) para Tienda de Colonia
+**Proyecto:** Sistema ERP (POS, Inventario FIFO y Contabilidad) para una tienda de colonia
+**Ubicación:** El Salvador · **Usuaria:** dueña no-contadora; la meta es llevar el negocio
+más fácil y saber si es rentable — no un ERP enterprise.
+**Fase actual:** construido y en endurecimiento; pre primera venta real.
 
-**Ubicación:** El Salvador
+## 1. Visión general y arquitectura
 
-**Fase Actual:** Diseño Arquitectónico Finalizado
+### 1.1 Propósito
 
-## 1. Visión General y Arquitectura
+Gestión integral para la alta transaccionalidad de una tienda de colonia: automatizar el
+Punto de Venta (POS), resolver el fraccionamiento de inventario (fardos↔unidades, y venta
+por peso) con lotes **FIFO**, y producir números **reales y verificables** — utilidad,
+patrimonio y flujo de efectivo — para responder la pregunta central de la dueña:
+**"¿dónde está mi dinero y estoy ganando?"**.
 
-## 1.1 Propósito
+### 1.2 Stack tecnológico (decidido)
 
-Desarrollar un sistema de gestión integral adaptado a la alta transaccionalidad de una tienda de colonia. El sistema automatiza el Punto de Venta (POS), resuelve el fraccionamiento de inventario (fardos a unidades) mediante control de lotes FIFO, y genera estados financieros reales (Patrimonio, Ganancias y Flujo de Efectivo).
+* **Backend:** **NestJS + Prisma** (TypeScript) sobre **PostgreSQL**. La "decisión pendiente
+  Python vs Node" de la v2.0 ya no existe: hay un backend completo con transacciones, locks
+  y ADRs. Relitigarlo sería tirar el activo más valioso del proyecto.
+* **Frontend:** **Next.js (React)**, mobile-first (la pantalla estrella es el POS).
+* **Base de datos:** PostgreSQL en **Supabase**.
+* **Despliegue:** **agnóstico de proveedor** — todo por variables de entorno (se evalúa GCP
+  para el API; Supabase para la BD). Ver [`../operations/configuration.md`](../operations/configuration.md).
+* **Hardware en sitio:** laptop reutilizada + lector de código de barras (USB/Bluetooth).
+* **Talón de Aquiles conocido:** 100% cloud → cada venta necesita internet. No se hace
+  offline-first (sobreingeniería); en su lugar hay un **modo contingencia** diseñado
+  (ver §2.1 y [`../domain/modo-contingencia.md`](../domain/modo-contingencia.md)).
 
-## 1.2 Infraestructura y Stack Tecnológico
+## 2. Lógica de negocio y requerimientos
 
-* **Arquitectura:** 100% Cloud (Nube) para permitir acceso remoto en tiempo real (ej. desde la universidad).
-* **Hardware en Sitio:** Laptop (reutilizada) conectada a lector de código de barras vía USB/Bluetooth.
-* **Frontend:** React (Alojado en Vercel - Capa gratuita). Prioridad en UI minimalista y rápida.
-* **Base de Datos:** PostgreSQL (Alojada en Supabase).
-* **Backend:** API REST *(Lenguaje pendiente de definición final: Python/FastAPI o Node.js)*.
+### 2.1 Módulo POS y control de caja
 
----
+La caja (turno) es una entidad temporal que **audita a los cajeros**, no la cuenta del
+negocio. Solo **efectivo**, a propósito (sin tarjeta, transferencia ni fiado — decisión de
+producto, [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md)).
 
-## 2. Lógica de Negocios y Requerimientos Críticos
+* **REQ-POS-01 (Ventas):** registro rápido por código de barras o botón. Cantidades
+  **fraccionables** (`Decimal`): media libra de queso, granel. Motor FIFO con bloqueo
+  pesimista (`FOR UPDATE`) que evita sobreventa concurrente ([ADR 0001](../decisions/0001-concurrencia-for-update.md)).
+* **REQ-POS-02 (Apertura):** cada turno es independiente; se ingresa el fondo inicial físico.
+  Opcionalmente se toma fondo **de la bóveda** (`TRASLADO_DESDE_BOVEDA`). La apertura ya
+  **no** inventa faltantes/inyecciones comparando contra el último cierre (fuga corregida en
+  Bloque 1.E).
+* **REQ-POS-03 ("Sacar dinero"):** un solo botón con tres opciones contablemente distintas:
+  *Guardar en bóveda* (`RETIRO_BOVEDA`, traslado entre activos), *Pagar algo*
+  (`EGRESO_OPERATIVO`, gasto del P&L) y *Retiro personal* (`RETIRO_PERSONAL`, **débito a
+  patrimonio** — no es gasto ni infla la bóveda). Reemplaza el concepto ambiguo de "sangría".
+* **REQ-POS-04 (Cierre / Corte Z):** el sistema calcula el efectivo esperado; la cajera
+  declara el contado. El **excedente se traslada a bóveda** (`TRASLADO_A_BOVEDA`) y el resto
+  queda como fondo del próximo turno. El descuadre real se registra como `AJUSTE_FALTANTE`/
+  `AJUSTE_SOBRANTE`.
+* **REQ-POS-05 (Umbral de tolerancia):** un descuadre **≥ $1.00** (configurable) exige
+  justificación; por debajo, ajuste automático sin fricción. La diferencia **siempre** se
+  registra (para detectar faltantes chiquitos diarios). Reemplaza la exigencia hostil "por
+  $0.01" de la v2.0.
+* **REQ-POS-06 (Cierre forzado):** un ADMIN puede cerrar un turno abandonado declarando el
+  efectivo contado + justificación → estado `CERRADA_FORZADA`.
+* **REQ-POS-07 (Contingencia):** una venta puede registrarse con su **fecha/hora real**
+  (apagón) contra el turno actual; el backend rechaza fechas futuras.
+* **REQ-POS-08 (Trazabilidad):** cada turno, venta, movimiento y ajuste guarda el
+  `usuario_id` autor (con dos cajeras, se sabe en el turno *de quién* pasó algo).
 
-## 2.1 Módulo 1: Punto de Venta (POS) y Control de Caja
+### 2.2 Módulo de inventario (el core)
 
-La caja es una entidad temporal que audita a los cajeros, no la cuenta bancaria del negocio.
+Separa el producto conceptual, su presentación comercial y su existencia física.
 
-* **REQ-POS-01 (Transacciones):** Registro rápido de ventas escaneando códigos de barras o mediante botones de acceso rápido para productos sin código (ej. pan, verduras). Solo se acepta **efectivo**. No hay módulo de créditos (fiado).
-* **REQ-POS-02 (Apertura Independiente):** Cada turno de caja es independiente. El usuario debe ingresar explícitamente el "Fondo Inicial" físico al abrir la caja.
-* **REQ-POS-03 (Sangrías / Retiros):** Permite registrar retiros de efectivo durante el turno (ej. para guardar ganancias en la casa o pagar un recibo). Esto resta el efectivo esperado del turno, pero pasa a la contabilidad general.
-* **REQ-POS-04 (Corte Z estricto):** Al cerrar, el sistema calcula el "Efectivo Esperado" (Fondo + Ventas - Retiros). El usuario ingresa el "Efectivo Declarado" (lo que contó físicamente). El sistema calcula la diferencia.
-* **REQ-POS-05 (Auditoría):** Si hay un faltante o sobrante en el cierre, el sistema exige una justificación escrita obligatoria para poder guardar el turno. Turnos anteriores no cerrados bloquean nuevas operaciones.
+* **REQ-INV-01 (Unidad mínima):** el stock se rastrea en la unidad base más pequeña.
+* **REQ-INV-02 (Presentaciones):** un producto tiene varias presentaciones (código de barras
+  y precio propios); la venta del fardo descuenta las unidades base equivalentes. Cada
+  presentación lleva **historial de precios** (Bloque 3.C).
+* **REQ-INV-03 (Lotes FIFO):** el stock se divide en lotes de compra; la venta descarga del
+  más antiguo primero (`fecha_ingreso`, desempate determinista por `id`), congelando el costo
+  real (COGS) en `detalle_venta_lotes`.
+* **REQ-INV-04 (Mermas y ajustes):** merma (`MERMA_INVENTARIO`) descuenta del lote e impacta
+  el P&L como pérdida, **sin depender de un turno abierto** (Bloque 2.A). Ajustes **positivos**
+  (`CONTEO_SOBRANTE`, conteo físico) que **incrementan** el lote (Bloque 2.D).
+* **REQ-INV-05 (Carga inicial):** flujo guiado de "inventario inicial" — una compra con origen
+  `CAPITAL_DUEÑOS` (aporte en especie, sin salida de caja).
+* **REQ-INV-06 (Devoluciones):** una devolución de cliente **post-turno** ligada a la venta
+  original revierte el costo FIFO al lote exacto y reembolsa del turno actual; por línea se
+  elige **reingresar** al stock (revendible) o **merma** (descartado) — Bloque 3.B.
 
-## 2.2 Módulo 2: Inventario Complejo y Catálogo (El Core del Sistema)
+### 2.3 Módulo de compras y proveedores
 
-El inventario separa el producto conceptual de su presentación comercial y de su existencia física.
+* **REQ-COM-01 (Ingreso de mercadería):** registra la compra creando lotes con cantidad,
+  costo exacto y fecha; el `monto_total` se calcula en el backend (no se confía en el cliente).
+* **REQ-COM-02 (Origen de fondos):** *Caja POS* (egreso del turno, `PAGO_PROVEEDOR`
+  GAVETA→PROVEEDOR), *Bóveda* (BOVEDA→PROVEEDOR, sin turno) o *Capital dueños* (aporte en
+  especie). Cada rama valida fondos bajo lock.
+* **REQ-COM-03 (Cuentas por pagar):** compras `AL_CREDITO` generan una deuda con saldo
+  pendiente (gestionable a futuro).
 
-* **REQ-INV-01 (Unidad Mínima):** El sistema rastrea todo el stock en la unidad matemática más pequeña posible (ej. unidades individuales, no fardos).
-* **REQ-INV-02 (Escalas y Presentaciones):** Un mismo producto puede tener múltiples códigos de barras y precios según cómo se venda (ej. Unidad a $0.15, Fardo de 25 a $3.00). El sistema traduce la venta del fardo restando 25 unidades del stock base.
-* **REQ-INV-03 (Lotes y Trazabilidad FIFO):** **Punto Crítico.** El stock no es un número global. Se divide en "Lotes de Compra". Al vender, el sistema descarga unidades del lote más antiguo primero (FIFO - *First In, First Out*), garantizando que el costo de venta (COGS) refleje exactamente lo que costó esa unidad específica.
-* **REQ-INV-04 (Mermas y Ajustes):** Permite registrar pérdidas (producto quebrado, vencido o robado) descontándolo directamente del lote específico e impactando la contabilidad como un "Gasto/Pérdida", sin ensuciar el historial de ventas.
+### 2.4 Módulo de contabilidad y finanzas
 
-## 2.3 Módulo 3: Compras y Proveedores
+Contabilidad administrativa real, no un simple flujo de caja.
 
-* **REQ-COM-01 (Ingreso de Mercadería):** Permite registrar la compra a proveedores (ej. ruteros), creando un nuevo Lote de Inventario con su cantidad, costo de adquisición exacto y fecha.
-* **REQ-COM-02 (Origen de Fondos para Compras):** Al registrar una compra de inventario, el sistema debe permitir seleccionar tres orígenes de fondos, ejecutando lógicas distintas en el backend:
-  - **Caja POS:** Vincula el egreso al turno actual (reduce el efectivo esperado en gaveta).
-  - **Bóveda / General:** Registra el egreso sin afectar la caja del turno activo.
-  - **Bolsillo Dueños (Capital):** Genera automáticamente un movimiento previo de "Ingreso de Capital" antes de registrar el egreso por la compra, para mantener el balance patrimonial correcto.
+* **REQ-FIN-01 (Modelo origen→destino):** **todo** movimiento de efectivo declara
+  `cuenta_origen` y `cuenta_destino` de un catálogo cerrado (`GAVETA`, `BOVEDA`, `DUEÑOS`,
+  `GASTO`, `PROVEEDOR`). Es la "partida doble mínima": el efectivo se conserva por
+  construcción. La **bóveda es derivada** del libro (se eliminó la tabla `caja_general`).
+* **REQ-FIN-02 (Gastos operativos):** categorizados; pagables desde **gaveta o bóveda**.
+* **REQ-FIN-03 (Capital y retiros):** inyección de capital (`INGRESO_CAPITAL`, con su asiento);
+  retiro personal como distribución de patrimonio (no baja la utilidad, se reporta aparte).
+* **REQ-FIN-04 (Arqueo de bóveda):** el ADMIN declara el efectivo físico contado en la bóveda;
+  si difiere del derivado, registra un ajuste que lo reconcilia (respuesta *verificable*, no
+  solo calculada).
+* **REQ-FIN-05 (Estado de resultados):** utilidad bruta y **neta** reales en tiempo real:
+  `ingreso − devoluciones − COGS(FIFO) − gastos − mermas − faltantes + sobrantes`; los retiros
+  de dueños se muestran aparte. Faltantes/sobrantes **sí** afectan la utilidad (señal de robo
+  hormiga) — corregido en Bloque 2.A.
+* **REQ-FIN-06 (Patrimonio):** foto de balance al instante:
+  `Inventario + Efectivo(gaveta+bóveda) + Activos fijos − Deudas`. Los activos fijos se valúan
+  a su valor estimado, **sin depreciación** (decisión consciente a esta escala).
+* **REQ-FIN-07 (Flujo de efectivo):** entradas y salidas por cuenta (gaveta, bóveda) y período,
+  derivadas del modelo origen/destino + ventas y devoluciones.
 
-* **REQ-COM-03 (Cuentas por Pagar):** Permite registrar facturas "Al crédito" y gestionar abonos futuros a esa deuda. (no necesario a este punto)
+## 3. Modelo de datos (entidades principales)
 
-## 2.4 Módulo 4: Contabilidad y Finanzas
+* **Catálogo:** `productos`, `categorias`, `presentaciones` (+ `historial_precios_presentaciones`).
+* **Inventario:** `lotes_inventario` (stock físico, costo real, `fecha_ingreso` NOT NULL).
+* **Caja/ventas:** `cajas_turnos` (con `CERRADA_FORZADA`), `ventas` / `detalle_ventas` /
+  `detalle_venta_lotes` (puente costo FIFO), `devoluciones` / `detalle_devoluciones`.
+* **Inventario ajustes:** `ajustes_inventario` (mermas y conteos).
+* **Compras:** `compras_inventario`, `cuentas_por_pagar`.
+* **Finanzas:** `movimientos_financieros` (libro origen→destino; la bóveda se deriva de aquí),
+  `categorias_gastos`, `activos_fijos`.
+* **Seguridad:** `usuarios` (roles ADMIN/CAJERO); `usuario_id` en las tablas transaccionales.
+* **Nota:** la tabla `caja_general` de la v2.0 **ya no existe** — el saldo de bóveda se deriva.
 
-Abandona el simple flujo de caja para implementar contabilidad administrativa real.
+## 4. Requisitos no funcionales
 
-* **REQ-FIN-01 (Gastos Operativos):** Registro de pagos de servicios (luz, agua, alcaldía, ayudantes), categorizados como fijos o variables.
-* **REQ-FIN-02 (Movimientos de Capital):** Registro de inyecciones de dinero (los dueños ponen plata) o retiro de dividendos (los dueños sacan ganancia limpia).
-* **REQ-FIN-03 (Activos Fijos):** Catálogo de inmobiliario (vitrinas, refrigeradoras) con su valor estimado.
-* **REQ-FIN-04 (Estados Financieros):** El sistema es capaz de calcular en tiempo real:
-  * *Utilidad Bruta:* Suma de Ventas - Suma de Costos de Venta (basado en el costo histórico de los lotes descargados).
-  * *Valor del Inventario:* Suma de (Cantidad disponible por lote × Costo de adquisición de ese lote).
-  * *Patrimonio Total:* (Valor del Inventario + Efectivo + Activos Fijos) - (Deudas por Pagar).
+* **Concurrencia:** bloqueo pesimista (`FOR UPDATE` / advisory locks), orden
+  lock-antes-de-INSERT ([ADR 0001](../decisions/0001-concurrencia-for-update.md)).
+* **Seguridad:** JWT con roles, rate-limiting, Helmet, CORS por allowlist, seed de admin por
+  env ([`../architecture/security.md`](../architecture/security.md)).
+* **Índices** por patrón de consulta real ([ADR 0005](../decisions/0005-indices-bd.md));
+  filtro global de excepciones Prisma ([ADR 0006](../decisions/0006-filtro-excepciones-prisma.md)).
+* **Testing/CI:** suite e2e sobre las invariantes críticas (FIFO, turnos, bóveda, P&L,
+  devoluciones, contingencia) + CI en cada push ([ADR 0009](../decisions/0009-testing-docker-ci.md)).
+* **Precisión monetaria:** `Decimal` en dinero y cantidades (nunca floats).
 
-## 3. Modelo de Datos Definido (Entidades Principales)
+## 5. Decisiones y alcance diferido (consciente)
 
-* Productos / Categorias / Presentaciones (Catálogo y conversión matemática).
-* Lotes_Inventario (Stock físico con costo real y fechas).
-* Cajas_Turnos (Gaveta diaria).
-* Ventas / Detalle_Ventas / Detalle_Venta_Lotes (El puente transaccional que une la venta con el lote específico).
-* Ajustes_Inventario (Mermas).
-* Compras_Inventario / Cuentas_Por_Pagar.
-* Movimientos_Financieros / Categorias_Gastos / Activos_Fijos.
+* **Sin migraciones Prisma hasta producción** ([ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md));
+  hoy el schema se sincroniza con `db push`.
+* **Constraints e inmutabilidad a nivel BD** (CHECK de stock, unicidad de turno abierto,
+  `REVOKE UPDATE/DELETE` sobre tablas de libro): documentadas, se aplican con el baseline de
+  producción ([`../roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md)).
+* **Backup automatizado (`pg_dump`) + hosting sin cold starts:** pendiente antes de la primera
+  venta real (Bloque 2.E, diferido por decisión de nube/secrets).
+* **Fuera de alcance salvo que el negocio lo pida:** depreciación de activos, módulo fiscal/DTE
+  (El Salvador), multi-tienda (`tienda_id`), offline-first real.
+
+## 6. Historial de versiones
+
+* **v3.0 (2026-07-08):** reescritura para reflejar el sistema construido (NestJS/Prisma) y los
+  Bloques 1–3 (modelo de efectivo origen/destino, retiro personal, traslados, faltantes al
+  P&L, umbral y cierre forzado, arqueo, ajustes positivos, patrimonio, flujo de efectivo,
+  devoluciones, historial de precios, contingencia, trazabilidad de autor).
+* **v2.0:** documento de diseño (quedó detrás del código); congelado en el historial de git.
