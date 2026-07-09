@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateVentaDto } from './dto/create-venta.dto';
+import { CreateDevolucionDto } from './dto/create-devolucion.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
@@ -283,6 +284,136 @@ export class VentasService {
       });
 
       return ventaAnulada;
+    });
+  }
+
+  /**
+   * Devolución de cliente post-turno (Bloque 3.B, ítem 13). Ligada a la venta
+   * original: por cada línea devuelta se revierte el costo FIFO al lote exacto a
+   * su costo congelado (proporcional en devoluciones parciales) y se reembolsa
+   * desde el turno ACTUAL. La venta original permanece COMPLETADA.
+   *  - REINGRESO: el producto vuelve al lote (revendible).
+   *  - MERMA: se descarta (no reingresa stock; su costo queda como pérdida).
+   */
+  async devolver(ventaId: number, dto: CreateDevolucionDto, userId?: number) {
+    const venta = await this.prisma.ventas.findUnique({
+      where: { id: ventaId },
+      include: {
+        detalle_ventas: {
+          include: { detalle_venta_lotes: true, detalle_devoluciones: true },
+        },
+      },
+    });
+
+    if (!venta) {
+      throw new NotFoundException(`Venta con ID ${ventaId} no encontrada`);
+    }
+    if (venta.estado !== 'COMPLETADA') {
+      throw new BadRequestException(
+        'Solo se pueden devolver ventas completadas',
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // El reembolso sale de la gaveta del turno ACTUAL. Se bloquea el turno
+      // ANTES de insertar la devolución que lo referencia por FK (orden
+      // lock-antes-de-INSERT, ver docs/decisions/0001-concurrencia-for-update.md).
+      const [turno] = await tx.$queryRaw<CajaTurnoRow[]>`
+        SELECT id, estado, efectivo_esperado
+        FROM cajas_turnos
+        WHERE estado = 'ABIERTA'
+        FOR UPDATE
+      `;
+      if (!turno) {
+        throw new BadRequestException(
+          'No hay turno de caja abierto para registrar la devolución ' +
+            '(el reembolso sale de la caja actual)',
+        );
+      }
+
+      let totalReembolsado = new Prisma.Decimal(0);
+      const detalleRows: Prisma.detalle_devolucionesCreateManyDevolucionesInput[] =
+        [];
+
+      for (const item of dto.detalles) {
+        const detalle = venta.detalle_ventas.find(
+          (d) => d.id === item.detalle_venta_id,
+        );
+        if (!detalle) {
+          throw new BadRequestException(
+            `La línea ${item.detalle_venta_id} no pertenece a la venta ${ventaId}`,
+          );
+        }
+
+        const cantidadVendida = new Prisma.Decimal(detalle.cantidad);
+        const yaDevuelto = detalle.detalle_devoluciones.reduce(
+          (acc, d) => acc.add(d.cantidad),
+          new Prisma.Decimal(0),
+        );
+        const cantidadDevolver = new Prisma.Decimal(item.cantidad);
+        const disponibleDevolver = cantidadVendida.sub(yaDevuelto);
+        if (cantidadDevolver.greaterThan(disponibleDevolver)) {
+          throw new BadRequestException(
+            `No se puede devolver ${cantidadDevolver.toFixed(3)} de la línea ` +
+              `${detalle.id}: vendidas ${cantidadVendida.toFixed(3)}, ya ` +
+              `devueltas ${yaDevuelto.toFixed(3)}`,
+          );
+        }
+
+        // Proporción devuelta de la línea (sobre lo vendido).
+        const proporcion = cantidadDevolver.div(cantidadVendida);
+        // Monto a reembolsar = subtotal congelado × proporción.
+        const subtotalReembolsado = new Prisma.Decimal(detalle.subtotal)
+          .mul(proporcion)
+          .toDecimalPlaces(2);
+
+        // Reversión FIFO: cada lote de la línea recupera (descargado × proporción)
+        // a su costo congelado. REINGRESO devuelve el stock; MERMA no.
+        let costoRevertido = new Prisma.Decimal(0);
+        for (const dvl of detalle.detalle_venta_lotes) {
+          const cantidadLote = new Prisma.Decimal(dvl.cantidad_descargada).mul(
+            proporcion,
+          );
+          costoRevertido = costoRevertido.add(
+            cantidadLote.mul(dvl.costo_aplicado),
+          );
+          if (item.destino === 'REINGRESO') {
+            await tx.lotes_inventario.update({
+              where: { id: dvl.lote_id },
+              data: { cantidad_disponible: { increment: cantidadLote } },
+            });
+          }
+        }
+
+        detalleRows.push({
+          detalle_venta_id: detalle.id,
+          cantidad: cantidadDevolver,
+          destino: item.destino,
+          subtotal_reembolsado: subtotalReembolsado,
+          costo_revertido: costoRevertido.toDecimalPlaces(2),
+        });
+        totalReembolsado = totalReembolsado.add(subtotalReembolsado);
+      }
+
+      const devolucion = await tx.devoluciones.create({
+        data: {
+          venta_id: ventaId,
+          caja_turno_id: turno.id,
+          usuario_id: userId,
+          total_reembolsado: totalReembolsado,
+          justificacion: dto.justificacion?.trim() || null,
+          detalle_devoluciones: { create: detalleRows },
+        },
+        include: { detalle_devoluciones: true },
+      });
+
+      // El reembolso baja el efectivo esperado del turno actual (sale de la gaveta).
+      await tx.cajas_turnos.update({
+        where: { id: turno.id },
+        data: { efectivo_esperado: { decrement: totalReembolsado } },
+      });
+
+      return devolucion;
     });
   }
 }

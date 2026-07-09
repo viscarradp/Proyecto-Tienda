@@ -9,7 +9,7 @@
 `feature/bloque3-operacion` — ver [`bloque3-plan.md`](bloque3-plan.md). El `db push` a
 Supabase real sigue siendo paso manual del usuario.
 
-**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ⬜ · 3.C ⬜ · 3.D ⬜ · 3.E ⬜.
+**Bloque 3 (sistema ya operando):** 3.A ✅ · 3.B ✅ · 3.C ⬜ · 3.D ⬜ · 3.E ⬜.
 
 | Sub-fase | Estado | Notas |
 |---|---|---|
@@ -34,6 +34,25 @@ Supabase real sigue siendo paso manual del usuario.
 ---
 
 ## Entradas
+
+### 2026-07-08 — Bloque 3 · Sub-fase 3.B: devolución de cliente post-turno ✅
+- **Schema**: nuevas tablas `devoluciones` (venta_id, caja_turno_id, usuario_id,
+  total_reembolsado, justificacion) y `detalle_devoluciones` (detalle_venta_id,
+  cantidad, destino REINGRESO/MERMA, subtotal_reembolsado, costo_revertido) +
+  back-relations e índices. Ligada a la venta original (que sigue COMPLETADA).
+- **`ventas.service.devolver`**: reversión FIFO **proporcional al lote exacto** a su
+  costo congelado; REINGRESO incrementa `cantidad_disponible`, MERMA no; reembolso
+  desde el turno actual (baja `efectivo_esperado`) bajo `FOR UPDATE` + orden
+  lock-antes-de-INSERT. Valida cantidad ≤ vendida − ya devuelta. `POST /ventas/:id/devolucion`.
+- **`reportes`**: `getEstadoResultados` netea ingreso (− devoluciones) y costo
+  (− costo revertido de REINGRESO; MERMA deja el costo como pérdida); expone
+  `devoluciones`. `getFlujoEfectivo` resta las devoluciones de la gaveta.
+- **Frontend**: `components/movimientos/DevolucionDialog.tsx` (cantidad + destino por
+  línea, total dinámico) + botón "Devolver" en el historial de ventas (Movimientos).
+- **Verificación**: backend build+lint limpios; **e2e 24/24** (4 nuevos: REINGRESO al
+  lote exacto + reembolso, MERMA sin reingreso, sobre-devolución → 400, neteo del P&L).
+  Frontend build+lint limpios. **Flujo real en navegador**: devolver 2 uds reingresó el
+  lote 18→20 y bajó el efectivo 92→68; la venta sigue COMPLETADA.
 
 ### 2026-07-08 — Bloque 3 · Sub-fase 3.A: patrimonio + flujo de efectivo ✅
 - **`reportes.service`**: `getPatrimonio()` = inventario (Σ disponible × costo FIFO) +

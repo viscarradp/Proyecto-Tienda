@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   TrendingDown,
   TrendingUp,
+  Undo2,
   XCircle,
 } from "lucide-react"
 
@@ -28,6 +29,7 @@ import { MoneyValue } from "@/components/money-value"
 import { formatMoney } from "@/lib/format"
 import { StatePill } from "@/components/state-pill"
 import { StatCard } from "@/components/stat-card"
+import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch } from "@/lib/api"
 import { format, differenceInDays } from "date-fns"
@@ -87,6 +89,10 @@ export default function MovimientosPage() {
   const [ventaAAnular, setVentaAAnular] = React.useState<number | null>(null)
   const [motivoAnulacion, setMotivoAnulacion] = React.useState("")
   const [anularLoading, setAnularLoading] = React.useState(false)
+
+  // Devolución de cliente (Bloque 3.B)
+  const [ventaADevolver, setVentaADevolver] = React.useState<Venta | null>(null)
+  const [devolverOpen, setDevolverOpen] = React.useState(false)
 
   // Cierre forzado (ADMIN) — §7 Bloque 2
   const { user } = useCurrentUser()
@@ -484,9 +490,17 @@ export default function MovimientosPage() {
                                         ))}
                                       </div>
 
-                                      {/* Anular */}
+                                      {/* Devolver / Anular */}
                                       {venta.estado === 'COMPLETADA' && (
-                                        <div className="mt-3 flex justify-end border-t border-border pt-3">
+                                        <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary"
+                                            onClick={() => { setVentaADevolver(venta); setDevolverOpen(true) }}
+                                          >
+                                            <Undo2 className="h-4 w-4" /> Devolver
+                                          </Button>
                                           <Button
                                             variant="outline"
                                             size="sm"
@@ -594,6 +608,14 @@ export default function MovimientosPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ════════ DIALOG: DEVOLUCIÓN DE CLIENTE (3.B) ════════ */}
+      <DevolucionDialog
+        venta={ventaADevolver}
+        open={devolverOpen}
+        onOpenChange={setDevolverOpen}
+        onDone={loadData}
+      />
     </div>
   )
 }

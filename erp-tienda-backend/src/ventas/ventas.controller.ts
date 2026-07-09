@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { VentasService } from './ventas.service';
 import { CreateVentaDto } from './dto/create-venta.dto';
+import { CreateDevolucionDto } from './dto/create-devolucion.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -44,5 +45,14 @@ export class VentasController {
       throw new BadRequestException('Debe proporcionar una justificación');
     }
     return this.ventasService.anular(+id, justificacion_nula);
+  }
+
+  @Post(':id/devolucion')
+  devolver(
+    @Param('id') id: string,
+    @Body() createDevolucionDto: CreateDevolucionDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.ventasService.devolver(+id, createDevolucionDto, userId);
   }
 }

@@ -49,6 +49,7 @@ model cajas_turnos {
   usuario_id              Int?
   movimientos_financieros movimientos_financieros[]
   ventas                  ventas[]
+  devoluciones            devoluciones[]
   usuarios                usuarios?                 @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_caja_turno")
 
   // Casi toda operación de escritura (ventas, compras, egresos, ajustes,
@@ -119,14 +120,15 @@ model detalle_venta_lotes {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model detalle_ventas {
-  id                  Int                   @id @default(autoincrement())
-  venta_id            Int
-  presentacion_id     Int
-  cantidad            Decimal               @db.Decimal(12, 3)
-  subtotal            Decimal               @db.Decimal(10, 2)
-  detalle_venta_lotes detalle_venta_lotes[]
-  presentaciones      presentaciones        @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction, map: "fk_presentacion")
-  ventas              ventas                @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venta")
+  id                   Int                    @id @default(autoincrement())
+  venta_id             Int
+  presentacion_id      Int
+  cantidad             Decimal                @db.Decimal(12, 3)
+  subtotal             Decimal                @db.Decimal(10, 2)
+  detalle_venta_lotes  detalle_venta_lotes[]
+  detalle_devoluciones detalle_devoluciones[]
+  presentaciones       presentaciones         @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction, map: "fk_presentacion")
+  ventas               ventas                 @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venta")
 
   @@index([venta_id])
   @@index([presentacion_id])
@@ -228,6 +230,7 @@ model usuarios {
   ventas                  ventas[]
   movimientos_financieros movimientos_financieros[]
   ajustes_inventario      ajustes_inventario[]
+  devoluciones            devoluciones[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -242,6 +245,7 @@ model ventas {
   fecha_anulacion    DateTime?        @db.Timestamptz(6)
   usuario_id         Int?
   detalle_ventas     detalle_ventas[]
+  devoluciones       devoluciones[]
   cajas_turnos       cajas_turnos     @relation(fields: [caja_turno_id], references: [id], onUpdate: NoAction, map: "fk_caja_venta")
   usuarios           usuarios?        @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_venta")
 
@@ -255,3 +259,45 @@ model ventas {
 // La tabla caja_general se eliminó en el Bloque 1.C: el saldo de bóveda se
 // DERIVA del libro de movimientos_financieros vía (cuenta_origen, cuenta_destino).
 // Ver docs/modelo-contable/00-especificaciones.md §5.1.
+
+// Devolución de cliente post-turno (Bloque 3.B, ítem 13). Ligada a la venta
+// original: revierte el costo FIFO al lote exacto y reembolsa desde el turno
+// actual. La venta original permanece COMPLETADA (fue una venta real); la
+// devolución vive en su propia tabla. Ver docs/modelo-contable/bloque3-especificaciones.md §3.
+model devoluciones {
+  id                   Int                    @id @default(autoincrement())
+  venta_id             Int
+  caja_turno_id        Int
+  usuario_id           Int?
+  fecha                DateTime?              @default(now()) @db.Timestamptz(6)
+  total_reembolsado    Decimal                @db.Decimal(10, 2)
+  justificacion        String?
+  ventas               ventas                 @relation(fields: [venta_id], references: [id], onUpdate: NoAction, map: "fk_venta_devolucion")
+  cajas_turnos         cajas_turnos           @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_devolucion")
+  usuarios             usuarios?              @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_devolucion")
+  detalle_devoluciones detalle_devoluciones[]
+
+  @@index([venta_id])
+  @@index([caja_turno_id])
+  @@index([usuario_id])
+  @@index([fecha])
+}
+
+// Detalle de una devolución: cuánto se devolvió de cada línea de la venta, su
+// destino (REINGRESO al lote / MERMA descartada), el monto reembolsado y el
+// costo FIFO revertido (para el P&L: REINGRESO baja el costo de ventas; MERMA
+// lo deja como pérdida).
+model detalle_devoluciones {
+  id                   Int            @id @default(autoincrement())
+  devolucion_id        Int
+  detalle_venta_id     Int
+  cantidad             Decimal        @db.Decimal(12, 3)
+  destino              String         @db.VarChar(20)
+  subtotal_reembolsado Decimal        @db.Decimal(10, 2)
+  costo_revertido      Decimal        @db.Decimal(10, 2)
+  devoluciones         devoluciones   @relation(fields: [devolucion_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_devolucion")
+  detalle_ventas       detalle_ventas @relation(fields: [detalle_venta_id], references: [id], onUpdate: NoAction, map: "fk_detalle_venta_devolucion")
+
+  @@index([devolucion_id])
+  @@index([detalle_venta_id])
+}

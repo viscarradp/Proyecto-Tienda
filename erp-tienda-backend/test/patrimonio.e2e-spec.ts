@@ -22,8 +22,16 @@ interface PatrimonioBody {
 }
 interface FlujoBody {
   ventas_efectivo: string | number;
-  gaveta: { entradas: string | number; salidas: string | number; neto: string | number };
-  boveda: { entradas: string | number; salidas: string | number; neto: string | number };
+  gaveta: {
+    entradas: string | number;
+    salidas: string | number;
+    neto: string | number;
+  };
+  boveda: {
+    entradas: string | number;
+    salidas: string | number;
+    neto: string | number;
+  };
 }
 
 /**
@@ -96,7 +104,11 @@ describe('Reportes — patrimonio y flujo de efectivo (e2e, 3.A)', () => {
         estado_pago: 'PAGADO',
         origen_fondos: 'CAPITAL_DUEÑOS',
         detalles_lotes: [
-          { producto_id: prodId, costo_unitario_adquisicion: 2, cantidad_inicial: 10 },
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 2,
+            cantidad_inicial: 10,
+          },
         ],
       });
 
@@ -109,14 +121,20 @@ describe('Reportes — patrimonio y flujo de efectivo (e2e, 3.A)', () => {
         estado_pago: 'AL_CREDITO',
         origen_fondos: 'CAPITAL_DUEÑOS',
         detalles_lotes: [
-          { producto_id: prodId, costo_unitario_adquisicion: 3, cantidad_inicial: 10 },
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 3,
+            cantidad_inicial: 10,
+          },
         ],
       });
 
     const p1 = await patrimonio();
 
     // Bóveda subió 100 (la inyección).
-    expect(Number(p1.efectivo.boveda)).toBeCloseTo(Number(p0.efectivo.boveda) + 100);
+    expect(Number(p1.efectivo.boveda)).toBeCloseTo(
+      Number(p0.efectivo.boveda) + 100,
+    );
     // Inventario subió 50 (20 en especie + 30 a crédito).
     expect(Number(p1.inventario)).toBeCloseTo(Number(p0.inventario) + 50);
     // Deudas subieron 30 (la compra a crédito).
@@ -158,7 +176,11 @@ describe('Reportes — patrimonio y flujo de efectivo (e2e, 3.A)', () => {
         estado_pago: 'PAGADO',
         origen_fondos: 'CAPITAL_DUEÑOS',
         detalles_lotes: [
-          { producto_id: prodId, costo_unitario_adquisicion: 5, cantidad_inicial: 10 },
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 5,
+            cantidad_inicial: 10,
+          },
         ],
       });
 
@@ -175,7 +197,11 @@ describe('Reportes — patrimonio y flujo de efectivo (e2e, 3.A)', () => {
     const f1 = await flujo();
 
     // La venta de 30 entra a la gaveta y a ventas_efectivo.
-    expect(Number(f1.ventas_efectivo)).toBeCloseTo(Number(f0.ventas_efectivo) + 30);
-    expect(Number(f1.gaveta.entradas)).toBeCloseTo(Number(f0.gaveta.entradas) + 30);
+    expect(Number(f1.ventas_efectivo)).toBeCloseTo(
+      Number(f0.ventas_efectivo) + 30,
+    );
+    expect(Number(f1.gaveta.entradas)).toBeCloseTo(
+      Number(f0.gaveta.entradas) + 30,
+    );
   });
 });
