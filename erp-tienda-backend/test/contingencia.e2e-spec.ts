@@ -41,7 +41,10 @@ describe('Contingencia — venta con fecha manual (e2e, 3.D)', () => {
     const prod = await request(app.getHttpServer())
       .post('/productos')
       .set(auth())
-      .send({ nombre: 'Pan-Conting-E2E', categoria_id: (cat.body as WithId).id });
+      .send({
+        nombre: 'Pan-Conting-E2E',
+        categoria_id: (cat.body as WithId).id,
+      });
     const prodId = (prod.body as WithId).id;
     const pres = await request(app.getHttpServer())
       .post('/presentaciones')
@@ -61,7 +64,11 @@ describe('Contingencia — venta con fecha manual (e2e, 3.D)', () => {
         estado_pago: 'PAGADO',
         origen_fondos: 'CAPITAL_DUEÑOS',
         detalles_lotes: [
-          { producto_id: prodId, costo_unitario_adquisicion: 2, cantidad_inicial: 20 },
+          {
+            producto_id: prodId,
+            costo_unitario_adquisicion: 2,
+            cantidad_inicial: 20,
+          },
         ],
       });
     await request(app.getHttpServer())
