@@ -13,6 +13,11 @@ module.exports = async function globalSetup() {
   process.env.NODE_ENV ??= 'test';
   process.env.DATABASE_URL ??=
     'postgresql://postgres:postgres@localhost:5432/erp_tienda_dev';
+  // SEGURIDAD: el `db push --force-reset` de abajo es DESTRUCTIVO. DIRECT_URL se
+  // ancla a la MISMA URL local que DATABASE_URL para que, aunque un .env de
+  // producción defina DIRECT_URL (Supabase), la suite e2e NUNCA resetee la base
+  // real. (prisma.config.ts usa DIRECT_URL para DDL.)
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
   process.env.JWT_SECRET ??= 'e2e-test-secret-no-usar-en-produccion';
   process.env.INITIAL_ADMIN_PASSWORD ??= 'E2eTestAdmin123!';
 
