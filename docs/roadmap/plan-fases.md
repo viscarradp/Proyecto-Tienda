@@ -384,6 +384,7 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    | L5a | Tabla `pendientes_stock` (+ índices); `productos.por_revisar` (boolean, default `false`) |
    | L7 | `usuarios.activo` (default `true`); `ventas.anulada_por_id` y `cajas_turnos.cerrado_por_id` (FK a `usuarios`, con índice) |
    | L8 | `compras_inventario.usuario_id` (FK, con índice); tabla `abonos_cuentas_por_pagar` (+ índices) |
+   | L11 | `productos.activo` (boolean, default `true`) |
 
 2. **Activar el respaldo nocturno.** Cargar en GitHub los secretos `BACKUP_DATABASE_URL` (conexión directa) y
    `BACKUP_PASSPHRASE` (clave de cifrado, **guardada también fuera de GitHub**), lanzar *Respaldo nocturno* a mano y
