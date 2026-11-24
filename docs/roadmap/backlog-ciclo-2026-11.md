@@ -142,9 +142,10 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L1b | ✅ 2026-11-24 — verificado en navegador (precio editable, Estadísticas cuadra, Movimientos) | `feature/l1b-inventario-estadisticas` |
 | L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
-| L3b | ⏳ Ola 5 (decidido: respaldo propio con `pg_dump`) | — |
+| L3b | ✅ 2026-11-24 — scripts + job nocturno + guía; ensayo de restauración local con conteos iguales. **Falta activarlo:** cargar secretos `BACKUP_DATABASE_URL` y `BACKUP_PASSPHRASE` en GitHub (ver `operations/respaldos.md`) | `feature/l3b-respaldo-nocturno` |
 | L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
 | L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
 | L5b | ✅ 2026-11-24 — verificado en navegador (alta rápida, cantidad decimal, venta por monto, avisos de stock al cobrar, "7 Six-pack + 2") | `feature/l5b-mostrador-pantalla` |
 | L6 | ✅ 2026-11-24 — 125 e2e; verificado en navegador (pregunta de diferencia de apertura → INGRESO_CAPITAL; gasto mayor al esperado pasa con aviso y cae en "Otros"; asistente de bóveda) | `feature/l6-fondos-apertura` |
-| L7, L8 | ⏳ Ola 5 (decisiones tomadas el 2026-11-24) | — |
+| L7 | ✅ 2026-11-24 — verificado en navegador como dueña y como cajera (pantalla Usuarios, opciones de Sacar dinero, 403 con mensaje). **Cambios de schema:** `usuarios.activo`, `ventas.anulada_por_id`, `cajas_turnos.cerrado_por_id` | `feature/l7-permisos-trazabilidad` |
+| L8 | ✅ 2026-11-24 — 156 e2e; verificado en navegador (abono parcial desde la gaveta con autor y aviso). **Cambios de schema:** `compras_inventario.usuario_id`, tabla `abonos_cuentas_por_pagar` | `feature/l8-deudas-proveedores` |
