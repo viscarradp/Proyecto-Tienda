@@ -78,4 +78,4 @@ que en un cierre normal, y el turno se ve como tal en Movimientos.
 - `GET /cajas-turnos/activa` (404 si no hay turno abierto), `GET /cajas-turnos/ultimo-cierre` (trae `fondo_siguiente`).
 - `GET /cajas-turnos`: historial **paginado por cursor** (`antes_de=<id>`, `limit` 7 por defecto, máx. 50), devuelve
   `{ items, hay_mas }` con el nombre de quien abrió y cerró.
-- `GET /cajas-turnos/:id` y `/:id/resumen` (ventas, egresos, pagos a proveedores, mermas, ingresos de capital y traslados).
+- `GET /cajas-turnos/:id` y `/:id/resumen` (ventas completadas —las anuladas solo se cuentan aparte—, devoluciones hechas en el turno, ventas netas, egresos, pagos a proveedores, mermas, ingresos de capital y traslados).

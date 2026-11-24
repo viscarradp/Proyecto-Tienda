@@ -412,14 +412,28 @@ export class CajasTurnosService {
       throw new NotFoundException(`Turno de caja con ID ${id} no encontrado.`);
     }
 
-    const { _sum: sumVentas, _count: countVentas } =
-      await this.prisma.ventas.aggregate({
-        where: { caja_turno_id: id },
+    // Solo ventas COMPLETADAS (mismo criterio que reportes); las anuladas se
+    // cuentan aparte. Las devoluciones son las hechas EN este turno (efectivo
+    // que salió de esta gaveta), aunque la venta original sea de otro turno.
+    const [ventasCompletadas, countAnuladas, devoluciones] = await Promise.all([
+      this.prisma.ventas.aggregate({
+        where: { caja_turno_id: id, estado: 'COMPLETADA' },
         _sum: { total: true },
         _count: { id: true },
-      });
+      }),
+      this.prisma.ventas.count({
+        where: { caja_turno_id: id, estado: 'ANULADA' },
+      }),
+      this.prisma.devoluciones.aggregate({
+        where: { caja_turno_id: id },
+        _sum: { total_reembolsado: true },
+      }),
+    ]);
 
-    const total_ventas = sumVentas.total ?? new Prisma.Decimal(0);
+    const total_ventas = ventasCompletadas._sum.total ?? new Prisma.Decimal(0);
+    const total_devoluciones =
+      devoluciones._sum.total_reembolsado ?? new Prisma.Decimal(0);
+    const ventas_netas = total_ventas.sub(total_devoluciones);
 
     // Sum egresos operativos (gastos del negocio, excluye retiros a bóveda)
     const egresos = turno.movimientos_financieros
@@ -473,7 +487,10 @@ export class CajasTurnosService {
       total_mermas_inventario: mermas_inventario,
       total_ingresos_capital: ingresos,
       total_retiros_boveda: retiros,
-      count_ventas: countVentas.id,
+      count_ventas: ventasCompletadas._count.id,
+      count_ventas_anuladas: countAnuladas,
+      total_devoluciones,
+      ventas_netas,
     };
   }
 }
