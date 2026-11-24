@@ -159,11 +159,11 @@ describe('Cuadre del efectivo — un día completo (e2e, ARQ-19)', () => {
   async function saldoBovedaLibro(): Promise<number> {
     const [entra, sale] = await Promise.all([
       prisma.movimientos_financieros.aggregate({
-        where: { cuenta_destino: 'BOVEDA' },
+        where: { cuenta_destino: 'BOVEDA', anulado: false },
         _sum: { monto: true },
       }),
       prisma.movimientos_financieros.aggregate({
-        where: { cuenta_origen: 'BOVEDA' },
+        where: { cuenta_origen: 'BOVEDA', anulado: false },
         _sum: { monto: true },
       }),
     ]);
@@ -211,13 +211,11 @@ describe('Cuadre del efectivo — un día completo (e2e, ARQ-19)', () => {
         _sum: { total_reembolsado: true },
       }),
       prisma.movimientos_financieros.findMany({
-        where: { caja_turno_id: turnoId },
+        where: { caja_turno_id: turnoId, anulado: false },
       }),
     ]);
     // El asiento de la apertura ya está dentro del fondo (D-15): no se vuelve a sumar.
-    const delLibro = movs.filter(
-      (m) => !m.descripcion.startsWith('Aporte de la dueña al abrir la caja'),
-    );
+    const delLibro = movs.filter((m) => !m.es_apertura);
     const entradas = delLibro
       .filter((m) => m.cuenta_destino === 'GAVETA')
       .reduce((a, m) => a + dinero(m.monto), 0);
@@ -358,7 +356,7 @@ describe('Cuadre del efectivo — un día completo (e2e, ARQ-19)', () => {
     capitalNeto += aporteApertura; // aporte de la dueña: patrimonio sube $100
 
     const asiento = await prisma.movimientos_financieros.findMany({
-      where: { caja_turno_id: turnoId },
+      where: { caja_turno_id: turnoId, anulado: false },
     });
     expect(asiento).toHaveLength(1);
     expect(asiento[0].tipo_movimiento).toBe('INGRESO_CAPITAL');
