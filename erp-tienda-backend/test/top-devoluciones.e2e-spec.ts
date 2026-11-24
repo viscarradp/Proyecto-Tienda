@@ -96,7 +96,9 @@ describe('Productos top neto de devoluciones (e2e, L1b)', () => {
 
   async function fila(ruta: string): Promise<FilaTop | undefined> {
     const res = await request(app.getHttpServer())
-      .get(`/reportes/${ruta}?${RANGO}`)
+      // limit alto: la BD de e2e es compartida y otras suites también venden;
+      // con el default (10) este producto podría quedar fuera del top.
+      .get(`/reportes/${ruta}?${RANGO}&limit=1000`)
       .set(auth());
     return (res.body as FilaTop[]).find((f) => f.producto_id === productoId);
   }

@@ -31,6 +31,8 @@ interface DevolucionBody {
 interface ProductoBody {
   id: number;
   lotes_inventario: { id: number; cantidad_disponible: string | number }[];
+  stock_total: string;
+  pendiente_total: string;
 }
 interface CompraBody {
   id: number;
@@ -358,13 +360,19 @@ describe('Integridad de dinero y stock (e2e, lote L2)', () => {
   });
 
   // ───────────────────────── 5. Merma vs venta ─────────────────────────
+  // L5a (D-01): la venta ya no se rechaza por falta de stock; lo que se
+  // serializa es el lote. La merma sí puede fallar (400) si la venta llegó
+  // primero. Invariantes: el lote nunca queda negativo y, si la merma se hizo,
+  // la venta quedó con su deuda de stock (y viceversa).
   it('merma y venta concurrentes sobre el mismo lote: nunca queda negativo', async () => {
-    const { productoId, presentacionId } = await crearProducto(
-      'Concurrente-L2',
-      'Unidad',
-      3,
-    );
     for (let i = 0; i < 6; i++) {
+      // Producto nuevo por vuelta: así la deuda de una vuelta no la cubre la
+      // compra de la siguiente.
+      const { productoId, presentacionId } = await crearProducto(
+        `Concurrente-L2-${i}`,
+        'Unidad',
+        3,
+      );
       const loteId = await comprar(productoId, 5, 1);
       const [venta, merma] = await Promise.all([
         http()
@@ -381,17 +389,21 @@ describe('Integridad de dinero y stock (e2e, lote L2)', () => {
         }),
       ]);
 
-      const exitos = [venta, merma].filter((r) => r.status === 201);
-      const fallos = [venta, merma].filter((r) => r.status !== 201);
-      expect(exitos).toHaveLength(1);
-      expect(fallos).toHaveLength(1);
-      expect(fallos[0].status).toBe(400);
-      expect(mensaje(fallos[0])).toMatch(/No hay suficiente|supera/i);
+      expect(venta.status).toBe(201);
+      expect([201, 400]).toContain(merma.status);
+      if (merma.status === 400) {
+        expect(mensaje(merma)).toMatch(/supera/i);
+      }
 
       const res = await http().get('/productos').set(auth());
       const p = (res.body as ProductoBody[]).find((x) => x.id === productoId)!;
-      const lote = p.lotes_inventario.find((l) => l.id === loteId)!;
-      expect(Number(lote.cantidad_disponible)).toBe(0);
+      // El lote agotado ya no se lista; nunca aparece uno negativo.
+      expect(
+        p.lotes_inventario.every((l) => Number(l.cantidad_disponible) > 0),
+      ).toBe(true);
+      expect(Number(p.stock_total)).toBe(0);
+      // Merma primero → la venta no encontró stock y quedó pendiente de 5.
+      expect(Number(p.pendiente_total)).toBe(merma.status === 201 ? 5 : 0);
     }
   });
 
@@ -518,8 +530,10 @@ describe('Integridad de dinero y stock (e2e, lote L2)', () => {
     });
   });
 
-  // ───────────────────────── 7. Mensaje de stock ─────────────────────────
-  it('el mensaje de stock insuficiente nombra el producto y no muestra IDs', async () => {
+  // ───────────────────────── 7. Aviso de stock ─────────────────────────
+  // L5a (D-01): antes era un 400 «No hay suficiente…»; ahora es un aviso con
+  // la venta ya hecha. Debe nombrar producto y presentación y no mostrar IDs.
+  it('el aviso de venta sin stock nombra el producto y no muestra IDs', async () => {
     const { productoId, presentacionId } = await crearProducto(
       'Coca-Cola 355ml',
       'Six-pack',
@@ -532,12 +546,12 @@ describe('Integridad de dinero y stock (e2e, lote L2)', () => {
       .post('/ventas')
       .set(auth())
       .send({ detalles: [{ presentacion_id: presentacionId, cantidad: 8 }] });
-    expect(res.status).toBe(400);
-    const msg = mensaje(res);
-    expect(msg).toContain('Coca-Cola 355ml');
-    expect(msg).toContain('Six-pack');
-    expect(msg).toContain('quedan 7');
-    expect(msg).toContain('vendiendo 8');
-    expect(msg).not.toMatch(/ID/);
+    expect(res.status).toBe(201);
+    const avisos = (res.body as { avisos: string[] }).avisos;
+    expect(avisos).toHaveLength(1);
+    // Faltó 1 six-pack (6 unidades base de 6 por presentación).
+    expect(avisos[0]).toContain('Vendiste 1 "Coca-Cola 355ml (Six-pack)"');
+    expect(avisos[0]).toContain('sin stock registrado');
+    expect(avisos[0]).not.toMatch(/\bID\b/);
   });
 });

@@ -8,6 +8,7 @@ import { CreateCompraDto } from './dto/create-compra.dto';
 import { Prisma } from '@prisma/client';
 import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
 import { TX_OPTIONS } from '../common/transaccion';
+import { resolverPendientesConLote } from '../common/pendientes-stock';
 import { redondearDinero } from '../common/redondeo';
 import {
   BOVEDA_LEDGER_LOCK,
@@ -50,47 +51,16 @@ export class ComprasService {
     );
 
     return await this.prisma.$transaction(async (tx) => {
-      // Paso 1: Crear el registro de compra usando el monto calculado
-      const compra = await tx.compras_inventario.create({
-        data: {
-          proveedor: compraData.proveedor,
-          monto_total: montoCalculado, // ← monto real, no el del cliente
-          estado_pago: compraData.estado_pago,
-          origen_fondos: compraData.origen_fondos,
-        },
-      });
+      // Orden global de locks: turno → venta → lotes → pendientes (ver
+      // docs/decisions/0001-concurrencia-for-update.md). Esta compra resuelve
+      // pendientes de stock AL FINAL, así que los locks de fondos (turno o
+      // bóveda) y su validación van PRIMERO: si se tomaran después de crear
+      // lotes y pendientes, una anulación (turno → … → pendientes) podría
+      // deadlockear con esta compra.
 
-      // Paso 2: Crear los lotes de inventario
-      for (const lote of detalles_lotes) {
-        await tx.lotes_inventario.create({
-          data: {
-            producto_id: lote.producto_id,
-            compra_id: compra.id,
-            costo_unitario_adquisicion: lote.costo_unitario_adquisicion,
-            cantidad_inicial: lote.cantidad_inicial,
-            cantidad_disponible: lote.cantidad_inicial, // Regla de oro
-            fecha_vencimiento: lote.fecha_vencimiento
-              ? new Date(lote.fecha_vencimiento)
-              : null,
-          },
-        });
-      }
-
-      // Paso 3: Cuentas por Pagar
-      // Gracias a la validación del Bug 2, si llegamos aquí con AL_CREDITO,
-      // el origen_fondos es CAPITAL_DUEÑOS → no habrá doble impacto financiero.
-      if (compraData.estado_pago === 'AL_CREDITO') {
-        await tx.cuentas_por_pagar.create({
-          data: {
-            compra_id: compra.id,
-            acreedor: compraData.proveedor,
-            monto_deuda: montoCalculado,
-            saldo_pendiente: montoCalculado,
-          },
-        });
-      }
-
-      // Paso 4: Impacto en Caja
+      // Paso 1: Fondos. Se bloquea el origen del dinero y se valida ANTES de
+      // crear nada (la política de bloquear vs. avisar no cambia aquí).
+      let cajaActivaId: number | null = null;
       if (compraData.origen_fondos === 'CAJA_POS') {
         // Bloquea la fila del turno abierto: evita que dos compras concurrentes
         // lean el mismo efectivo_esperado y ambas pasen la validación de fondos
@@ -119,26 +89,7 @@ export class ComprasService {
               `Requerido: $${montoCalculado.toFixed(2)}`,
           );
         }
-
-        await tx.movimientos_financieros.create({
-          data: {
-            caja_turno_id: cajaActiva.id,
-            tipo_movimiento: 'PAGO_PROVEEDOR',
-            monto: montoCalculado,
-            descripcion: `Pago a proveedor ${compraData.proveedor} por compra ID ${compra.id}`,
-            usuario_id: userId,
-            cuenta_origen: 'GAVETA',
-            cuenta_destino: 'PROVEEDOR',
-          },
-        });
-
-        // Actualizar el efectivo esperado en la caja (se resta la compra)
-        await tx.cajas_turnos.update({
-          where: { id: cajaActiva.id },
-          data: {
-            efectivo_esperado: { decrement: montoCalculado },
-          },
-        });
+        cajaActivaId = cajaActiva.id;
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
         // El saldo de bóveda es un agregado derivado del libro (no una fila
         // bloqueable con FOR UPDATE). Un advisory lock serializa esta sección
@@ -153,7 +104,72 @@ export class ComprasService {
               `Requerido: $${montoCalculado.toFixed(2)}`,
           );
         }
+      }
 
+      // Paso 2: Crear el registro de compra usando el monto calculado
+      const compra = await tx.compras_inventario.create({
+        data: {
+          proveedor: compraData.proveedor,
+          monto_total: montoCalculado, // ← monto real, no el del cliente
+          estado_pago: compraData.estado_pago,
+          origen_fondos: compraData.origen_fondos,
+        },
+      });
+
+      // Paso 3: Crear los lotes de inventario
+      const lotesCreados: { id: number; producto_id: number }[] = [];
+      for (const lote of detalles_lotes) {
+        const creado = await tx.lotes_inventario.create({
+          data: {
+            producto_id: lote.producto_id,
+            compra_id: compra.id,
+            costo_unitario_adquisicion: lote.costo_unitario_adquisicion,
+            cantidad_inicial: lote.cantidad_inicial,
+            cantidad_disponible: lote.cantidad_inicial, // Regla de oro
+            fecha_vencimiento: lote.fecha_vencimiento
+              ? new Date(lote.fecha_vencimiento)
+              : null,
+          },
+        });
+        lotesCreados.push({ id: creado.id, producto_id: creado.producto_id });
+      }
+
+      // Paso 4: Cuentas por Pagar
+      // Gracias a la validación del Bug 2, si llegamos aquí con AL_CREDITO,
+      // el origen_fondos es CAPITAL_DUEÑOS → no habrá doble impacto financiero.
+      if (compraData.estado_pago === 'AL_CREDITO') {
+        await tx.cuentas_por_pagar.create({
+          data: {
+            compra_id: compra.id,
+            acreedor: compraData.proveedor,
+            monto_deuda: montoCalculado,
+            saldo_pendiente: montoCalculado,
+          },
+        });
+      }
+
+      // Paso 5: Impacto en Caja (los locks ya se tomaron en el paso 1)
+      if (cajaActivaId !== null) {
+        await tx.movimientos_financieros.create({
+          data: {
+            caja_turno_id: cajaActivaId,
+            tipo_movimiento: 'PAGO_PROVEEDOR',
+            monto: montoCalculado,
+            descripcion: `Pago a proveedor ${compraData.proveedor} por compra ID ${compra.id}`,
+            usuario_id: userId,
+            cuenta_origen: 'GAVETA',
+            cuenta_destino: 'PROVEEDOR',
+          },
+        });
+
+        // Actualizar el efectivo esperado en la caja (se resta la compra)
+        await tx.cajas_turnos.update({
+          where: { id: cajaActivaId },
+          data: {
+            efectivo_esperado: { decrement: montoCalculado },
+          },
+        });
+      } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
         // Pago desde bóveda: BOVEDA→PROVEEDOR (no requiere turno abierto).
         await tx.movimientos_financieros.create({
           data: {
@@ -166,6 +182,13 @@ export class ComprasService {
             cuenta_destino: 'PROVEEDOR',
           },
         });
+      }
+
+      // Paso 6: Deuda de stock (D-01). Entró stock nuevo: se cubren los
+      // pendientes abiertos de cada producto, del más viejo al más nuevo, con
+      // cada lote recién creado (que es privado de esta transacción).
+      for (const lote of lotesCreados) {
+        await resolverPendientesConLote(tx, lote.producto_id, lote.id);
       }
 
       return compra;

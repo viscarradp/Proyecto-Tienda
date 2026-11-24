@@ -60,13 +60,40 @@ export class ReportesService {
       },
     });
 
-    const costo_de_ventas_bruto = costosRaw.reduce(
-      (acc, row) =>
-        acc.add(
-          new Prisma.Decimal(row.cantidad_descargada).mul(row.costo_aplicado),
+    // Ventas sin stock registrado (L5a · D-01): su costo quedó congelado al
+    // estimado (cantidad_base × costo_unitario_estimado) y cuenta como costo de
+    // ventas aunque el pendiente se cubra después.
+    const pendientesRaw = await this.prisma.pendientes_stock.findMany({
+      where: {
+        detalle_ventas: {
+          ventas: {
+            estado: 'COMPLETADA',
+            fecha: { gte: desde, lte: hasta },
+          },
+        },
+      },
+      select: { cantidad_base: true, costo_unitario_estimado: true },
+    });
+
+    const costo_de_ventas_bruto = costosRaw
+      .reduce(
+        (acc, row) =>
+          acc.add(
+            new Prisma.Decimal(row.cantidad_descargada).mul(row.costo_aplicado),
+          ),
+        new Prisma.Decimal(0),
+      )
+      .add(
+        pendientesRaw.reduce(
+          (acc, row) =>
+            acc.add(
+              new Prisma.Decimal(row.cantidad_base).mul(
+                row.costo_unitario_estimado,
+              ),
+            ),
+          new Prisma.Decimal(0),
         ),
-      new Prisma.Decimal(0),
-    );
+      );
 
     // ── 3.5. Devoluciones de clientes del período (Bloque 3.B, ítem 13) ──
     // Reversan ingreso; las de destino REINGRESO además devuelven su costo al
@@ -362,6 +389,7 @@ export class ReportesService {
           include: { productos: true },
         },
         detalle_venta_lotes: true,
+        pendientes_stock: true,
       },
     });
 
@@ -384,13 +412,29 @@ export class ReportesService {
         .mul(det.presentaciones.factor_conversion)
         .toNumber();
 
-      const costoDetalles = det.detalle_venta_lotes.reduce(
-        (acc, dvl) =>
-          acc.add(
-            new Prisma.Decimal(dvl.cantidad_descargada).mul(dvl.costo_aplicado),
+      // Costo FIFO de los lotes + costo estimado de lo vendido sin stock
+      // registrado (L5a · D-01).
+      const costoDetalles = det.detalle_venta_lotes
+        .reduce(
+          (acc, dvl) =>
+            acc.add(
+              new Prisma.Decimal(dvl.cantidad_descargada).mul(
+                dvl.costo_aplicado,
+              ),
+            ),
+          new Prisma.Decimal(0),
+        )
+        .add(
+          det.pendientes_stock.reduce(
+            (acc, p) =>
+              acc.add(
+                new Prisma.Decimal(p.cantidad_base).mul(
+                  p.costo_unitario_estimado,
+                ),
+              ),
+            new Prisma.Decimal(0),
           ),
-        new Prisma.Decimal(0),
-      );
+        );
 
       const existing = productosMap.get(prodId);
       if (existing) {

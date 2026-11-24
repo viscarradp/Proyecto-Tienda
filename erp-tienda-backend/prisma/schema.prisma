@@ -127,6 +127,7 @@ model detalle_ventas {
   subtotal             Decimal                @db.Decimal(10, 2)
   detalle_venta_lotes  detalle_venta_lotes[]
   detalle_devoluciones detalle_devoluciones[]
+  pendientes_stock     pendientes_stock[]
   presentaciones       presentaciones         @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction, map: "fk_presentacion")
   ventas               ventas                 @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venta")
 
@@ -149,6 +150,7 @@ model lotes_inventario {
   fecha_vencimiento          DateTime?             @db.Date
   ajustes_inventario         ajustes_inventario[]
   detalle_venta_lotes        detalle_venta_lotes[]
+  pendientes_resueltos       pendientes_stock[]
   compras_inventario         compras_inventario    @relation(fields: [compra_id], references: [id], onUpdate: NoAction, map: "fk_compra_lote")
   productos                  productos             @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto_lote")
 
@@ -213,8 +215,11 @@ model productos {
   nombre           String             @db.VarChar(150)
   categoria_id     Int
   created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  // L5a (D-02): alta rápida de la cajera; la dueña lo revisa y lo apaga.
+  por_revisar      Boolean            @default(false)
   lotes_inventario lotes_inventario[]
   presentaciones   presentaciones[]
+  pendientes_stock pendientes_stock[]
   categorias       categorias         @relation(fields: [categoria_id], references: [id], onUpdate: NoAction, map: "fk_categoria")
 
   @@index([categoria_id])
@@ -325,4 +330,29 @@ model historial_precios_presentaciones {
 
   @@index([presentacion_id])
   @@index([usuario_id])
+}
+
+/// L5a (D-01): "deuda de stock". Lo que se vendió sin que el sistema tuviera
+/// stock registrado. El costo de la venta queda congelado al estimado; cuando
+/// entra stock real (compra o conteo sobrante) se cubre del lote sin tocar ese
+/// costo. Ver docs/domain/caja-y-ventas.md.
+model pendientes_stock {
+  id                      Int               @id @default(autoincrement())
+  detalle_venta_id        Int
+  producto_id             Int
+  // Lo que faltó al vender (unidades base). No cambia.
+  cantidad_base           Decimal           @db.Decimal(12, 3)
+  // Lo que aún no se ha cubierto con stock real.
+  cantidad_pendiente      Decimal           @db.Decimal(12, 3)
+  costo_unitario_estimado Decimal           @db.Decimal(10, 4)
+  fecha                   DateTime          @default(now()) @db.Timestamptz(6)
+  resuelto_en             DateTime?         @db.Timestamptz(6)
+  // Último lote que cubrió parte (o todo) de este pendiente.
+  lote_resuelto_id        Int?
+  detalle_ventas          detalle_ventas    @relation(fields: [detalle_venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pendiente_detalle_venta")
+  productos               productos         @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_pendiente_producto")
+  lotes_inventario        lotes_inventario? @relation(fields: [lote_resuelto_id], references: [id], onUpdate: NoAction, map: "fk_pendiente_lote")
+
+  @@index([producto_id, resuelto_en])
+  @@index([detalle_venta_id])
 }
