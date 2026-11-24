@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { centavosAMonto, totalLineaCentavos } from '@/lib/format'
+import {
+  aNumero,
+  cantidadDesdeMonto,
+  centavosAMonto,
+  montoACentavos,
+  redondear3,
+  totalLineaCentavos,
+} from '@/lib/format'
 
 export interface CartItem {
   id: string
@@ -8,16 +15,32 @@ export interface CartItem {
   producto_nombre?: string
   presentacion_nombre?: string
   precio: number
+  /** En línea "por monto" es la cantidad estimada (monto ÷ precio); el servidor la recalcula. */
   cantidad: number
+  /** "cantidad" (por defecto) o "monto" ("dame $1 de queso"). */
+  modo: 'cantidad' | 'monto'
+  /** Dólares exactos de la línea; solo en modo "monto". */
+  monto?: number
 }
 
 interface CartStore {
   items: CartItem[]
-  addItem: (item: Omit<CartItem, 'cantidad'>) => void
+  addItem: (item: Omit<CartItem, 'cantidad' | 'modo' | 'monto'>) => void
   removeItem: (id: string) => void
+  /** Fija la cantidad (hasta 3 decimales). Si es ≤ 0 quita la línea. Vuelve la línea a modo cantidad. */
   updateQuantity: (id: string, cantidad: number) => void
+  /** Pasa la línea a "por monto" con ese monto en dólares (> 0). */
+  setMonto: (id: string, monto: number) => void
+  /** Vuelve la línea a "por cantidad", conservando la cantidad estimada. */
+  quitarMonto: (id: string) => void
   clearCart: () => void
   getTotal: () => number
+}
+
+/** Total de una línea en centavos: el monto exacto en líneas por monto; precio × cantidad en las demás. */
+export function totalItemCentavos(item: Pick<CartItem, 'precio' | 'cantidad' | 'modo' | 'monto'>): number {
+  if (item.modo === 'monto' && item.monto !== undefined) return montoACentavos(item.monto)
+  return totalLineaCentavos(item.precio, item.cantidad)
 }
 
 // localStorage puede no existir o lanzar (modo privado, datos bloqueados):
@@ -41,40 +64,77 @@ export const useCartStore = create<CartStore>()(persist((set, get) => ({
     const existingItem = items.find((i) => i.id === product.id)
     if (existingItem) {
       set({
-        items: items.map((i) =>
-          i.id === product.id ? { ...i, cantidad: i.cantidad + 1 } : i
-        ),
+        items: items.map((i) => {
+          if (i.id !== product.id) return i
+          // Línea por monto: otra unidad suma el precio de una unidad al monto.
+          if (i.modo === 'monto' && i.monto !== undefined) {
+            const monto = centavosAMonto(montoACentavos(i.monto) + montoACentavos(i.precio))
+            return { ...i, monto, cantidad: cantidadDesdeMonto(monto, i.precio) }
+          }
+          return { ...i, cantidad: redondear3(i.cantidad + 1) }
+        }),
       })
     } else {
-      set({ items: [...items, { ...product, cantidad: 1 }] })
+      set({ items: [...items, { ...product, cantidad: 1, modo: 'cantidad' }] })
     }
   },
   removeItem: (id) => {
     set({ items: get().items.filter((i) => i.id !== id) })
   },
   updateQuantity: (id, cantidad) => {
-    if (cantidad <= 0) {
+    const q = redondear3(cantidad)
+    if (!(q > 0)) {
       get().removeItem(id)
       return
     }
     set({
       items: get().items.map((i) =>
-        i.id === id ? { ...i, cantidad } : i
+        i.id === id ? { ...i, cantidad: q, modo: 'cantidad', monto: undefined } : i
+      ),
+    })
+  },
+  setMonto: (id, monto) => {
+    const m = centavosAMonto(montoACentavos(monto))
+    if (!(m > 0)) return
+    set({
+      items: get().items.map((i) =>
+        i.id === id && i.precio > 0
+          ? { ...i, modo: 'monto', monto: m, cantidad: cantidadDesdeMonto(m, i.precio) }
+          : i
+      ),
+    })
+  },
+  quitarMonto: (id) => {
+    set({
+      items: get().items.map((i) =>
+        i.id === id ? { ...i, modo: 'cantidad', monto: undefined } : i
       ),
     })
   },
   clearCart: () => set({ items: [] }),
   getTotal: () => {
     // Cada línea se redondea a centavos antes de sumar, igual que el servidor.
-    const centavos = get().items.reduce(
-      (acc, item) => acc + totalLineaCentavos(item.precio, item.cantidad),
-      0
-    )
+    const centavos = get().items.reduce((acc, item) => acc + totalItemCentavos(item), 0)
     return centavosAMonto(centavos)
   },
 }), {
   name: 'tienda-carrito',
-  version: 1,
+  version: 2,
   storage: createJSONStorage(() => safeStorage),
   partialize: (state) => ({ items: state.items }),
+  // v1 → v2: las líneas guardadas no tenían modo; todas eran por cantidad.
+  migrate: (persisted) => {
+    const items = (persisted as { items?: Partial<CartItem>[] } | null)?.items
+    if (!Array.isArray(items)) return { items: [] }
+    return {
+      items: items
+        .filter((i) => i && typeof i.id === 'string')
+        .map((i) => ({
+          ...(i as CartItem),
+          precio: aNumero(i.precio),
+          cantidad: aNumero(i.cantidad) || 1,
+          modo: i.modo === 'monto' && i.monto !== undefined ? 'monto' : 'cantidad',
+        })),
+    }
+  },
 }))

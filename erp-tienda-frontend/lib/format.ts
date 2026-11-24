@@ -51,3 +51,40 @@ export function centavosAMonto(centavos: number): number {
 export function montoACentavos(monto: number | string): number {
   return Math.round(aNumero(monto) * 100)
 }
+
+/** Redondea a 3 decimales (half-up), como el servidor para las cantidades. */
+export function redondear3(value: number): number {
+  return Math.round(Number((value * 1000).toFixed(6))) / 1000
+}
+
+/** Lo que escribe la cajera ("1,5", ".5") → número, o null si no es un número válido. */
+export function parseDecimal(texto: string): number | null {
+  const limpio = texto.trim().replace(",", ".")
+  if (limpio === "" || !/^\d*\.?\d*$/.test(limpio) || limpio === ".") return null
+  const n = parseFloat(limpio)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Cantidad estimada de una venta por monto: monto ÷ precio, 3 decimales. 0 si el precio es 0. */
+export function cantidadDesdeMonto(monto: number, precio: number | string): number {
+  const p = aNumero(precio)
+  if (p <= 0) return 0
+  return redondear3(monto / p)
+}
+
+/**
+ * Stock (en unidades base) expresado en la unidad de una presentación.
+ * Factor 1 → el número tal cual. Factor > 1 → paquetes enteros y unidades
+ * sueltas que sobran (44 latas en six-packs de 6 → 7 paquetes + 2 sueltas).
+ */
+export function stockEnPresentacion(
+  stockBase: number | string,
+  factor: number | string,
+): { enteras: number; sueltas: number; haySueltas: boolean } {
+  const stock = redondear3(aNumero(stockBase))
+  const f = aNumero(factor)
+  if (f <= 1) return { enteras: stock, sueltas: 0, haySueltas: false }
+  const enteras = Math.max(0, Math.floor(stock / f + 1e-9))
+  const sueltas = redondear3(Math.max(0, stock - enteras * f))
+  return { enteras, sueltas, haySueltas: sueltas > 0 }
+}

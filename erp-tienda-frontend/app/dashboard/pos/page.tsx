@@ -13,6 +13,7 @@ import {
   DoorOpen,
   DoorClosed,
   HandCoins,
+  PackagePlus,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -38,9 +39,10 @@ import { CartLines } from "@/components/pos/CartLines"
 import { CheckoutSection } from "@/components/pos/CheckoutSection"
 import { SacarDineroDialog } from "@/components/pos/SacarDineroDialog"
 import { AbrirCajaDialog } from "@/components/pos/AbrirCajaDialog"
+import { AltaRapidaDialog, type ProductoRapido } from "@/components/pos/AltaRapidaDialog"
 import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
-import { useInventoryStore } from "../../../src/store/inventoryStore"
+import { useInventoryStore, stockTotalDe, pendienteTotalDe } from "../../../src/store/inventoryStore"
 import { apiFetch, tipoDeError } from "@/lib/api"
 import {
   aNumero,
@@ -48,6 +50,7 @@ import {
   formatCantidad,
   formatMoney,
   montoACentavos,
+  stockEnPresentacion,
 } from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 
@@ -69,7 +72,10 @@ interface PresentacionRow {
   factor_conversion: number
   precio_venta: number
   categoria: string
+  /** Stock del producto en unidades base (puede ser <= 0: se vende igual y se avisa). */
   stock: number
+  /** Unidades base vendidas sin stock registrado. */
+  pendiente: number
 }
 
 interface CajaTurno {
@@ -80,12 +86,38 @@ interface CajaTurno {
   efectivo_esperado: string | null
 }
 
+/** Stock en la unidad de la presentación: "7 Six-pack + 2" en vez de 44 latas. Sin stock: se puede vender igual. */
+function StockCelda({ row }: { row: PresentacionRow }) {
+  if (row.stock <= 0) {
+    return (
+      <div className="w-24 shrink-0 text-right leading-tight">
+        <span className="text-xs font-medium text-warning">Sin stock registrado</span>
+        {row.pendiente > 0 && <p className="text-[10px] text-muted-foreground">vendido sin registrar</p>}
+      </div>
+    )
+  }
+  const { enteras, sueltas, haySueltas } = stockEnPresentacion(row.stock, row.factor_conversion)
+  const empaque = row.factor_conversion > 1
+  return (
+    <div className="w-24 shrink-0 text-right leading-tight">
+      <span className="font-mono text-sm font-medium tabular-nums text-success">{formatCantidad(enteras)}</span>
+      <p className="truncate text-[10px] text-muted-foreground">
+        {empaque ? row.presentacion_desc : "stock"}
+        {empaque && haySueltas ? ` + ${formatCantidad(sueltas)}` : ""}
+      </p>
+      {row.pendiente > 0 && <p className="text-[10px] text-warning">vendido sin registrar</p>}
+    </div>
+  )
+}
+
 export default function POSPage() {
-  const { addItem, items, updateQuantity, removeItem, clearCart, getTotal } = useCartStore(
+  const { addItem, items, updateQuantity, setMonto, quitarMonto, removeItem, clearCart, getTotal } = useCartStore(
     useShallow((state) => ({
       addItem: state.addItem,
       items: state.items,
       updateQuantity: state.updateQuantity,
+      setMonto: state.setMonto,
+      quitarMonto: state.quitarMonto,
       removeItem: state.removeItem,
       clearCart: state.clearCart,
       getTotal: state.getTotal,
@@ -134,6 +166,11 @@ export default function POSPage() {
   // ─── Filtros ───
   const [categoriaActiva, setCategoriaActiva] = React.useState("Todos")
   const [searchTerm, setSearchTerm] = React.useState("")
+
+  // ─── Alta rápida de producto (D-02) ───
+  const [altaRapida, setAltaRapida] = React.useState(false)
+  // Valores con los que se abre el diálogo (lo buscado o el código escaneado).
+  const [altaRapidaInicial, setAltaRapidaInicial] = React.useState({ nombre: "", codigo: "" })
 
   React.useEffect(() => { setMounted(true) }, [])
 
@@ -247,10 +284,13 @@ export default function POSPage() {
     setCheckoutError("")
 
     // Transformar carrito de Zustand al DTO del backend
-    const detalles = items.map(item => ({
-      presentacion_id: parseInt(item.id.replace("pres-", "")),
-      cantidad: item.cantidad,
-    }))
+    // Línea por monto -> { monto } (el servidor calcula la cantidad); las demás -> { cantidad }.
+    const detalles = items.map(item => {
+      const presentacion_id = parseInt(item.id.replace("pres-", ""))
+      return item.modo === "monto" && item.monto !== undefined
+        ? { presentacion_id, monto: Number(item.monto.toFixed(2)) }
+        : { presentacion_id, cantidad: item.cantidad }
+    })
 
     // Contingencia (3.D): si está activa y hay fecha, se envía la hora real.
     const fechaReal =
@@ -267,7 +307,7 @@ export default function POSPage() {
     const idemKey = idemRef.current.key
 
     try {
-      const venta = await apiFetch<{ total?: number | string }>("/ventas", {
+      const venta = await apiFetch<{ total?: number | string; avisos?: string[] }>("/ventas", {
         method: "POST",
         headers: { "Idempotency-Key": idemKey },
         body: JSON.stringify(fechaReal ? { detalles, fecha: fechaReal } : { detalles }),
@@ -284,6 +324,10 @@ export default function POSPage() {
       toast.success(`Venta registrada · Total: ${formatMoney(centavosAMonto(totalCobrado))}${textoCambio}`, {
         duration: 8000,
       })
+      // Vendido sin stock registrado: la venta vale igual, solo se avisa (D-01).
+      if (Array.isArray(venta?.avisos)) {
+        venta.avisos.forEach((aviso) => toast.warning(aviso, { duration: 15000 }))
+      }
 
       idemRef.current = null
       clearCart()
@@ -307,7 +351,8 @@ export default function POSPage() {
 
   // ─── Aplanar productos → filas de presentaciones ───
   const allRows: PresentacionRow[] = productos.flatMap(prod => {
-    const stock = prod.lotes_inventario.reduce((s, l) => s + aNumero(l.cantidad_disponible), 0)
+    const stock = stockTotalDe(prod)
+    const pendiente = pendienteTotalDe(prod)
     return prod.presentaciones.map(pres => ({
       presentacion_id: pres.id,
       producto_id: prod.id,
@@ -318,6 +363,7 @@ export default function POSPage() {
       precio_venta: aNumero(pres.precio_venta),
       categoria: prod.categorias.nombre,
       stock,
+      pendiente,
     }))
   })
 
@@ -344,15 +390,49 @@ export default function POSPage() {
     })
   }, [addItem])
 
+  const abrirAltaRapida = React.useCallback((nombre: string, codigo: string) => {
+    setAltaRapidaInicial({ nombre, codigo })
+    setAltaRapida(true)
+  }, [])
+
+  // Lo buscado: si parece un código de barras (solo números, 6 o más), va al código; si no, al nombre.
+  const abrirAltaDesdeBusqueda = () => {
+    const t = searchTerm.trim()
+    if (/^\d{6,}$/.test(t)) abrirAltaRapida("", t)
+    else abrirAltaRapida(t, "")
+  }
+
+  // Producto recién creado: entra al ticket (cantidad 1) y se refresca el catálogo.
+  const handleAltaCreada = async (prod: ProductoRapido) => {
+    const pres = prod.presentaciones?.[0]
+    if (pres) {
+      addItem({
+        id: `pres-${pres.id}`,
+        producto_nombre: prod.nombre,
+        presentacion_nombre: pres.descripcion,
+        nombre: aNumero(pres.factor_conversion) === 1
+          ? prod.nombre
+          : `${prod.nombre} (${pres.descripcion})`,
+        precio: aNumero(pres.precio_venta),
+      })
+    }
+    setSearchTerm("")
+    toast.success(`«${prod.nombre}» agregado al ticket. Después se revisa en Inventario.`)
+    await loadData(true)
+  }
+
   // ─── Lector de Código de Barras Global ───
   const onBarcodeScanned = React.useCallback((barcode: string) => {
     const targetRow = allRows.find(r => r.codigo_barras === barcode)
     if (targetRow) {
       handleAddToCart(targetRow)
     } else {
-      toast.warning(`Código no encontrado en el catálogo: ${barcode}`)
+      toast.warning(`Código no encontrado en el catálogo: ${barcode}`, {
+        duration: 12000,
+        action: { label: "Agregar como producto nuevo", onClick: () => abrirAltaRapida("", barcode) },
+      })
     }
-  }, [allRows, handleAddToCart])
+  }, [allRows, handleAddToCart, abrirAltaRapida])
 
   useBarcodeScanner({ onScan: onBarcodeScanned, enabled: mounted })
 
@@ -496,7 +576,10 @@ export default function POSPage() {
               <div className="flex flex-col items-center justify-center gap-2 py-24 text-center text-muted-foreground">
                 <Search className="h-8 w-8 opacity-30" />
                 <p className="text-sm font-medium text-foreground">No se encontraron productos</p>
-                <p className="text-xs">Verifica que los productos tengan presentaciones creadas</p>
+                <p className="text-xs">¿No está en el catálogo? Agrégalo y véndelo ahora.</p>
+                <Button type="button" className="mt-2 h-11 gap-2" onClick={abrirAltaDesdeBusqueda}>
+                  <PackagePlus className="h-4 w-4" /> Agregar como producto nuevo
+                </Button>
               </div>
             ) : (
               <ul className="divide-y divide-border pb-36 lg:pb-6">
@@ -514,15 +597,7 @@ export default function POSPage() {
                         <p className="truncate text-sm font-medium text-foreground">{row.producto_nombre}</p>
                         <p className="truncate text-xs text-muted-foreground">{row.presentacion_desc}</p>
                       </div>
-                      <div className="w-14 shrink-0 text-right">
-                        <span className={cn(
-                          "font-mono text-sm font-medium tabular-nums",
-                          row.stock > 0 ? "text-success" : "text-destructive",
-                        )}>
-                          {formatCantidad(row.stock)}
-                        </span>
-                        <p className="text-[10px] text-muted-foreground">stock</p>
-                      </div>
+                      <StockCelda row={row} />
                       <div className="w-20 shrink-0 text-right">
                         <MoneyValue value={row.precio_venta} className="text-base font-semibold" />
                       </div>
@@ -552,7 +627,7 @@ export default function POSPage() {
         </div>
         <div className="flex-1 overflow-y-auto px-4">
           {items.length === 0 ? emptyTicket : (
-            <CartLines items={items} updateQuantity={updateQuantity} removeItem={removeItem} />
+            <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={removeItem} />
           )}
         </div>
         <div className="border-t border-border p-4">
@@ -614,7 +689,7 @@ export default function POSPage() {
           </BottomSheetHeader>
           {items.length === 0 ? emptyTicket : (
             <div className="flex flex-col gap-4">
-              <CartLines items={items} updateQuantity={updateQuantity} removeItem={removeItem} />
+              <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={removeItem} />
               <CheckoutSection
                 total={total}
                 itemCount={itemCount}
@@ -634,6 +709,15 @@ export default function POSPage() {
           )}
         </BottomSheetContent>
       </BottomSheet>
+
+      {/* ════════ DIALOG: ALTA RÁPIDA DE PRODUCTO ════════ */}
+      <AltaRapidaDialog
+        open={altaRapida}
+        onOpenChange={setAltaRapida}
+        nombreInicial={altaRapidaInicial.nombre}
+        codigoInicial={altaRapidaInicial.codigo}
+        onCreado={handleAltaCreada}
+      />
 
       {/* ════════ DIALOG: ABRIR CAJA ════════ */}
       <AbrirCajaDialog<CajaTurno>

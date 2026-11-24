@@ -15,6 +15,8 @@ import {
   Trash2,
   Pencil,
   PackagePlus,
+  CheckCheck,
+  Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,7 +39,7 @@ import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/Pr
 import { CompraForm } from "@/components/inventario/CompraForm"
 import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventarioDialog"
 import { EditProductDialog } from "@/components/inventario/EditProductDialog"
-import { useInventoryStore, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
+import { useInventoryStore, stockTotalDe, pendienteTotalDe, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
 
 interface Compra {
   id: number
@@ -83,6 +85,8 @@ export default function InventarioPage() {
   const [editProductTarget, setEditProductTarget] = React.useState<Producto | null>(null)
   const [expandedProduct, setExpandedProduct] = React.useState<number | null>(null)
   const [expandedCompra, setExpandedCompra] = React.useState<number | null>(null)
+  const [soloPorRevisar, setSoloPorRevisar] = React.useState(false)
+  const [revisandoId, setRevisandoId] = React.useState<number | null>(null)
 
   // ─── Add Presentacion dialog state ───
   const [presDialogOpen, setPresDialogOpen] = React.useState(false)
@@ -123,8 +127,27 @@ export default function InventarioPage() {
   }, [mounted, loadData])
 
   // ─── Stock calculator ───
-  const getStock = (prod: Producto): number => {
-    return prod.lotes_inventario.reduce((sum, l) => sum + aNumero(l.cantidad_disponible), 0)
+  const getStock = (prod: Producto): number => stockTotalDe(prod)
+
+  // ─── Productos creados con alta rápida en el POS ───
+  const porRevisar = productos.filter(p => p.por_revisar)
+  const productosVisibles = soloPorRevisar ? porRevisar : productos
+
+  const handleYaRevise = async (prod: Producto) => {
+    setRevisandoId(prod.id)
+    setGlobalError("")
+    try {
+      await apiFetch(`/productos/${prod.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ por_revisar: false }),
+      })
+      if (porRevisar.length <= 1) setSoloPorRevisar(false)
+      await loadData(true)
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : "No se pudo marcar como revisado. Intenta de nuevo.")
+    } finally {
+      setRevisandoId(null)
+    }
   }
 
   // ─── Category create handler ───
@@ -246,6 +269,26 @@ export default function InventarioPage() {
                     )}
                   </div>
                 ) : (
+                  <>
+                  {porRevisar.length > 0 && (
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-2.5">
+                      <p className="flex items-center gap-2 text-sm font-medium text-warning">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        {porRevisar.length === 1
+                          ? "1 producto por revisar (lo dieron de alta en caja)"
+                          : `${porRevisar.length} productos por revisar (los dieron de alta en caja)`}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                        onClick={() => setSoloPorRevisar(v => !v)}
+                      >
+                        {soloPorRevisar ? "Ver todos" : "Ver solo los por revisar"}
+                      </Button>
+                    </div>
+                  )}
                   <div className="overflow-hidden rounded-sm border border-border">
                     {/* Encabezado de tabla (solo desktop) */}
                     <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
@@ -257,8 +300,9 @@ export default function InventarioPage() {
                       <div className="w-24 text-right">Present.</div>
                     </div>
 
-                    {productos.map(prod => {
+                    {productosVisibles.map(prod => {
                       const stock = getStock(prod)
+                      const pendiente = pendienteTotalDe(prod)
                       const isOpen = expandedProduct === prod.id
                       return (
                         <div key={prod.id} className="border-b border-border last:border-b-0">
@@ -280,6 +324,14 @@ export default function InventarioPage() {
                               <p className="truncate text-xs text-muted-foreground sm:hidden">
                                 {prod.categorias.nombre} · {prod.presentaciones.length} pres.
                               </p>
+                              {(prod.por_revisar || pendiente > 0) && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {prod.por_revisar && <StatePill tone="warning">Por revisar</StatePill>}
+                                  {pendiente > 0 && (
+                                    <StatePill tone="warning">Vendido sin registrar: {formatCantidad(pendiente)}</StatePill>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="hidden w-32 text-right sm:block">
                               <Badge variant="outline" className="text-xs font-normal">{prod.categorias.nombre}</Badge>
@@ -298,6 +350,36 @@ export default function InventarioPage() {
                           {isOpen && (
                             <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
                               <div className="flex flex-col gap-4">
+                                {prod.por_revisar && (
+                                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3">
+                                    <p className="text-xs text-warning">
+                                      Producto creado en caja. Completa precio y categoría con «Editar» y luego márcalo como revisado.
+                                    </p>
+                                    {!esCajero && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-9 gap-1.5"
+                                        disabled={revisandoId === prod.id}
+                                        onClick={(e) => { e.stopPropagation(); handleYaRevise(prod) }}
+                                      >
+                                        {revisandoId === prod.id
+                                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                                          : <CheckCheck className="h-4 w-4" />}
+                                        Ya lo revisé
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                                {pendiente > 0 && (
+                                  <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <p>
+                                      <strong>Vendido sin registrar: {formatCantidad(pendiente)} uds.</strong>{" "}
+                                      Se vendió sin stock en el sistema. Registra la compra o un conteo y se cuadra solo.
+                                    </p>
+                                  </div>
+                                )}
                                 {/* Presentaciones */}
                                 <div>
                                   <div className="mb-2 flex items-center justify-between">
@@ -378,6 +460,7 @@ export default function InventarioPage() {
                       )
                     })}
                   </div>
+                  </>
                 )}
               </TabsContent>
 
