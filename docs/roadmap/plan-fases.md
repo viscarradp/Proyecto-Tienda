@@ -345,18 +345,17 @@ congelado en `../auditorias/`.
 |---|---|---|
 | 0 | Banco de pruebas: dependencias, Postgres local, línea base verde (29 e2e) | ✅ 2026-11-24 |
 | 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente). Ramas `feature/1a-anulacion-con-devoluciones` y `feature/1b-reportes-zona-horaria`; master con 38 e2e en verde y 1A verificado en navegador | ✅ 2026-11-24 |
-| 2 | Auditorías en paralelo (solo lectura): arquitectura, código, reglas de negocio (incl. reglas faltantes), interfaz/UX | ⏳ |
-| 3 | Consolidación: verificar hallazgos, deduplicar, backlog único 🔴/🟡/⚪ y decisiones de negocio con el usuario | ⏳ |
-| 4 | Implementación por lotes (máx. 2 subagentes a la vez, áreas sin archivos en común) | ⏳ |
+| 2 | Auditorías en paralelo (solo lectura): arquitectura (20 hallazgos), código (25), reglas de negocio (33 + 16 decisiones), interfaz (30) + recorrido en vivo del líder (14). Informes en `../auditorias/2026-11-24-*.md` | ✅ 2026-11-24 |
+| 3 | Consolidación: hallazgos 🔴 verificados (COD-02 reproducido), deduplicados en el **[backlog consolidado](backlog-ciclo-2026-11.md)** con lotes, olas y decisiones del negocio | ✅ 2026-11-24 — decisiones del negocio pendientes |
+| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común) | ⏳ |
 | 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema, proyectos cerrados a historial), SRS v3.1, README | ⏳ |
 
 **Decisión tomada para 1A:** una venta que ya tiene devoluciones **no se puede anular**; la
 UI ofrece "Devolver el resto". El botón *Anular* solo aparece en ventas del turno abierto.
 
-**Pendientes de decisión ya identificados (se resuelven en la Fase 3):** vender sin stock
-registrado (hoy bloquea la venta completa), diferencia entre el remanente del último cierre y
-el fondo de apertura (hoy no deja rastro), CAJERO puede pagar gastos desde bóveda vía API,
-no se registra quién anula una venta.
+**Decisiones del negocio pendientes:** ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md)
+(vender sin stock, fuera de catálogo, venta por peso, política de fondos, diferencia de
+apertura, dos cajas simultáneas, permisos de la cajera, compras a crédito).
 
 ---
 
