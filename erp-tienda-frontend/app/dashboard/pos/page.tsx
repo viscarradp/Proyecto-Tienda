@@ -14,6 +14,7 @@ import {
   DoorClosed,
   HandCoins,
   PackagePlus,
+  Zap,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -50,6 +51,7 @@ import {
   formatCantidad,
   formatMoney,
   montoACentavos,
+  normalizarBusqueda,
   stockEnPresentacion,
 } from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
@@ -140,6 +142,8 @@ export default function POSPage() {
   // ─── Caja/Turno ───
   const [cajaActiva, setCajaActiva] = React.useState<CajaTurno | null>(null)
   const [cajaLoading, setCajaLoading] = React.useState(true)
+  // true tras la primera respuesta: las recargas posteriores no hacen parpadear el encabezado.
+  const [cajaCargada, setCajaCargada] = React.useState(false)
   // Error al consultar la caja (red/servidor): distinto de "no hay caja abierta".
   const [cajaError, setCajaError] = React.useState(false)
   const [openCajaDialog, setOpenCajaDialog] = React.useState(false)
@@ -159,6 +163,11 @@ export default function POSPage() {
   // Modo contingencia (Bloque 3.D): registrar una venta de apagón con su hora real.
   const [contingencia, setContingencia] = React.useState(false)
   const [fechaContingencia, setFechaContingencia] = React.useState<string>("")
+  // Tras una venta de apagón la fecha se conserva: se resalta para que la cajera la ajuste.
+  const [fechaPorAjustar, setFechaPorAjustar] = React.useState(false)
+  // Resumen de la última venta (cambio visible hasta que empiece la siguiente).
+  const [ultimaVenta, setUltimaVenta] = React.useState<{ total: number; pago: number | null; cambio: number | null } | null>(null)
+  const [vaciarOpen, setVaciarOpen] = React.useState(false)
   // Clave de idempotencia del intento de cobro en curso: se reutiliza si la
   // cajera reintenta el mismo carrito y se descarta al cobrar o al cambiar el carrito.
   const idemRef = React.useRef<{ key: string; firma: string } | null>(null)
@@ -179,7 +188,10 @@ export default function POSPage() {
   }, [fetchInventory])
 
   // Un error de cobro queda visible hasta la siguiente acción: al cambiar el ticket se limpia.
-  React.useEffect(() => { setCheckoutError("") }, [items])
+  React.useEffect(() => {
+    setCheckoutError("")
+    if (items.length > 0) setUltimaVenta(null)
+  }, [items])
 
   const loadCaja = React.useCallback(async () => {
     setCajaLoading(true)
@@ -197,6 +209,7 @@ export default function POSPage() {
       setCajaActiva(null)
     } finally {
       setCajaLoading(false)
+      setCajaCargada(true)
     }
   }, [])
 
@@ -329,11 +342,16 @@ export default function POSPage() {
         venta.avisos.forEach((aviso) => toast.warning(aviso, { duration: 15000 }))
       }
 
+      setUltimaVenta({
+        total: centavosAMonto(totalCobrado),
+        pago: pagoCentavos !== null ? centavosAMonto(pagoCentavos) : null,
+        cambio: cambioCentavos !== null && cambioCentavos >= 0 ? centavosAMonto(cambioCentavos) : null,
+      })
       idemRef.current = null
       clearCart()
       setPagoCliente("")
-      setContingencia(false)
-      setFechaContingencia("")
+      // Modo apagón: sigue activo con su fecha hasta que la cajera lo apague; solo se pide ajustar la hora.
+      if (contingencia) setFechaPorAjustar(true)
       setCartOpen(false)
       setCheckoutSuccess(true)
       // Recargar inventario (forzado: el caché de 3 min mostraría stock viejo)
@@ -369,12 +387,13 @@ export default function POSPage() {
 
   const categoryNames = ["Todos", ...categorias.map(c => c.nombre)]
 
+  const busqueda = normalizarBusqueda(searchTerm)
   const filteredRows = allRows.filter(row => {
     const matchCategoria = categoriaActiva === "Todos" || row.categoria === categoriaActiva
-    const matchSearch = searchTerm === "" ||
-      row.producto_nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.presentacion_desc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.codigo_barras?.includes(searchTerm)
+    const matchSearch = busqueda === "" ||
+      normalizarBusqueda(row.producto_nombre).includes(busqueda) ||
+      normalizarBusqueda(row.presentacion_desc).includes(busqueda) ||
+      row.codigo_barras?.includes(searchTerm.trim())
     return matchCategoria && matchSearch
   })
 
@@ -421,11 +440,35 @@ export default function POSPage() {
     await loadData(true)
   }
 
+  // Aviso breve de lectura: mismo id, así cada uno reemplaza al anterior y no se acumulan.
+  const avisarAgregado = (row: PresentacionRow) => {
+    const nombre = row.factor_conversion === 1 ? row.producto_nombre : `${row.producto_nombre} (${row.presentacion_desc})`
+    toast.success(`Agregado: ${nombre}`, { id: "agregado-rapido", duration: 1500, position: "top-center" })
+  }
+
+  // Enter en el buscador: agrega si hay un solo resultado (o si lo escrito es justo un código de barras).
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return
+    e.preventDefault()
+    const t = searchTerm.trim()
+    if (!t) return
+    const porCodigo = allRows.find(r => r.codigo_barras === t)
+    const elegido = porCodigo ?? (filteredRows.length === 1 ? filteredRows[0] : undefined)
+    if (elegido) {
+      handleAddToCart(elegido)
+      avisarAgregado(elegido)
+      setSearchTerm("")
+    } else if (filteredRows.length > 1) {
+      toast.info("Hay varios resultados: toca el producto que quieres.", { id: "agregado-rapido", duration: 2500, position: "top-center" })
+    }
+  }
+
   // ─── Lector de Código de Barras Global ───
   const onBarcodeScanned = React.useCallback((barcode: string) => {
     const targetRow = allRows.find(r => r.codigo_barras === barcode)
     if (targetRow) {
       handleAddToCart(targetRow)
+      avisarAgregado(targetRow)
     } else {
       toast.warning(`Código no encontrado en el catálogo: ${barcode}`, {
         duration: 12000,
@@ -437,9 +480,22 @@ export default function POSPage() {
   useBarcodeScanner({ onScan: onBarcodeScanned, enabled: mounted })
 
   if (!mounted) return null
+  const mostrandoCarga = cajaLoading && !cajaCargada
 
   const total = getTotal()
-  const itemCount = items.reduce((acc, i) => acc + i.cantidad, 0)
+  const pedirVaciar = () => {
+    if (items.length > 1) setVaciarOpen(true)
+    else clearCart()
+  }
+  // Cierre de caja: diferencia en vivo entre lo contado y lo esperado (centavos enteros).
+  const contadoTexto = efectivoDeclarado.trim()
+  const difCierre = cajaActiva && contadoTexto !== "" && !isNaN(parseFloat(contadoTexto))
+    ? montoACentavos(contadoTexto) - montoACentavos(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial)
+    : null
+  const exigeExplicacion = difCierre !== null && Math.abs(difCierre) >= 100
+  const faltaExplicacion = exigeExplicacion && !observacionesCierre.trim()
+  // Número de productos distintos (líneas), no la suma de cantidades (que puede ser fraccionada).
+  const itemCount = items.length
 
   const emptyTicket = (
     <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
@@ -455,14 +511,22 @@ export default function POSPage() {
       <section className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
         {/* Encabezado (pegajoso) */}
         <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 lg:px-6">
             <div className="min-w-0">
               <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Nueva venta</h1>
-              <p className="text-xs text-muted-foreground">Terminal 01 · POS</p>
+              {mostrandoCarga ? (
+                <p className="text-xs text-muted-foreground">Revisando caja…</p>
+              ) : cajaActiva ? (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-success">
+                  <span className="h-2 w-2 rounded-full bg-success" /> Caja abierta
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Caja cerrada</p>
+              )}
             </div>
 
-            {cajaLoading ? (
-              <div className="flex h-10 items-center px-3 text-muted-foreground">
+            {mostrandoCarga ? (
+              <div className="flex h-11 min-w-32 items-center justify-center px-3 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
             ) : cajaActiva ? (
@@ -470,38 +534,51 @@ export default function POSPage() {
                 <Button
                   variant="outline"
                   onClick={() => setSacarDineroOpen(true)}
-                  className="h-10 gap-2"
+                  aria-label="Sacar dinero de la gaveta"
+                  className="h-11 gap-2"
                 >
                   <HandCoins className="h-4 w-4" />
+                  <span className="sm:hidden">Sacar</span>
                   <span className="hidden sm:inline">Sacar dinero</span>
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
-                  className="h-10 gap-2 border-success/40 text-success hover:bg-success/10 hover:text-success"
+                  className="h-11 gap-2"
                 >
                   <DoorClosed className="h-4 w-4" />
-                  <span className="hidden sm:inline">Caja abierta</span>
-                  <span className="sm:hidden">Caja</span>
+                  Cerrar caja
                 </Button>
               </div>
             ) : cajaError ? (
               <Button
                 variant="outline"
                 onClick={() => loadCaja()}
-                className="h-10 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="h-11 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <RefreshCw className="h-4 w-4" /> Sin conexión · Reintentar
               </Button>
             ) : (
               <Button
                 onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
-                className="h-10 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
+                className="h-11 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
               >
                 <DoorOpen className="h-4 w-4" /> Abrir caja
               </Button>
             )}
           </div>
+
+          {/* Modo apagón: visible mientras esté encendido */}
+          {contingencia && (
+            <div className="flex items-center justify-between gap-2 border-t border-warning/30 bg-warning/15 px-4 py-2 text-xs font-medium text-warning lg:px-6">
+              <span className="flex items-center gap-2">
+                <Zap className="h-4 w-4 shrink-0" /> Modo apagón activo: las ventas se guardan con la fecha y hora que pongas
+              </span>
+              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => { setContingencia(false); setFechaContingencia(""); setFechaPorAjustar(false) }}>
+                Apagar
+              </Button>
+            </div>
+          )}
 
           {/* Búsqueda + escaneo */}
           <div className="px-4 pb-3 lg:px-6">
@@ -512,6 +589,7 @@ export default function POSPage() {
                 placeholder="Buscar producto o código…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
               />
               <ScanBarcode className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             </div>
@@ -537,7 +615,7 @@ export default function POSPage() {
           </div>
 
           {/* Banner: caja cerrada */}
-          {!cajaLoading && !cajaActiva && (
+          {!mostrandoCarga && !cajaActiva && (
             cajaError ? (
               <div className="flex items-center justify-center gap-2 border-t border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -620,8 +698,8 @@ export default function POSPage() {
             <ShoppingCart className="h-5 w-5 text-primary" /> Ticket
           </h2>
           {items.length > 0 && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={clearCart}>
-              Anular
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={pedirVaciar}>
+              Vaciar
             </Button>
           )}
         </div>
@@ -645,6 +723,9 @@ export default function POSPage() {
             setContingencia={setContingencia}
             fechaContingencia={fechaContingencia}
             setFechaContingencia={setFechaContingencia}
+            fechaPorAjustar={fechaPorAjustar}
+            setFechaPorAjustar={setFechaPorAjustar}
+            ultimaVenta={ultimaVenta}
           />
         </div>
       </aside>
@@ -667,7 +748,11 @@ export default function POSPage() {
             )}
           </span>
           <span className="text-sm font-medium">
-            {itemCount > 0 ? `${itemCount} ${itemCount === 1 ? "artículo" : "artículos"}` : "Ticket vacío"}
+            {itemCount > 0
+              ? `${itemCount} ${itemCount === 1 ? "producto" : "productos"}`
+              : ultimaVenta?.cambio != null
+                ? <span className="text-success">Cambio {formatMoney(ultimaVenta.cambio)}</span>
+                : "Ticket vacío"}
           </span>
         </span>
         <span className="flex items-center gap-2">
@@ -682,8 +767,8 @@ export default function POSPage() {
           <BottomSheetHeader className="flex-row items-center justify-between p-0 pb-1">
             <BottomSheetTitle>Ticket de compra</BottomSheetTitle>
             {items.length > 0 && (
-              <Button variant="ghost" size="sm" className="mr-8 text-muted-foreground hover:text-destructive" onClick={clearCart}>
-                Anular todo
+              <Button variant="ghost" size="sm" className="mr-8 text-muted-foreground hover:text-destructive" onClick={pedirVaciar}>
+                Vaciar
               </Button>
             )}
           </BottomSheetHeader>
@@ -704,6 +789,9 @@ export default function POSPage() {
                 setContingencia={setContingencia}
                 fechaContingencia={fechaContingencia}
                 setFechaContingencia={setFechaContingencia}
+                fechaPorAjustar={fechaPorAjustar}
+                setFechaPorAjustar={setFechaPorAjustar}
+                ultimaVenta={ultimaVenta}
               />
             </div>
           )}
@@ -755,6 +843,22 @@ export default function POSPage() {
               />
             </div>
 
+            {difCierre !== null && (
+              <p
+                role="status"
+                className={cn(
+                  "rounded-sm px-3 py-2 text-center text-sm font-semibold",
+                  difCierre === 0 ? "bg-success/10 text-success" : exigeExplicacion ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning",
+                )}
+              >
+                {difCierre === 0
+                  ? "Cuadra"
+                  : difCierre > 0
+                    ? `Sobran ${formatMoney(centavosAMonto(difCierre))}`
+                    : `Faltan ${formatMoney(centavosAMonto(-difCierre))}`}
+              </p>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label className="text-xs font-medium text-success">Trasladar a bóveda ($)</Label>
               <Input
@@ -784,23 +888,40 @@ export default function POSPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Observaciones (opcional)</Label>
+              <Label className={cn("text-xs font-medium", exigeExplicacion ? "text-destructive" : "text-muted-foreground")}>
+                {exigeExplicacion ? "Explica la diferencia (obligatorio desde $1)" : "Observaciones (opcional)"}
+              </Label>
               <Input
                 type="text" value={observacionesCierre}
                 onChange={(e) => setObservacionesCierre(e.target.value)}
-                placeholder="Razón de descuadre o nota…"
-                className="h-10"
+                placeholder={exigeExplicacion ? "Ej. Se dio mal un vuelto" : "Razón de descuadre o nota…"}
+                aria-invalid={faltaExplicacion}
+                className="h-11"
               />
             </div>
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
-              <Button type="submit" disabled={cajaActionLoading} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
+              <Button type="submit" disabled={cajaActionLoading || faltaExplicacion} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
-                Confirmar cierre
+                {faltaExplicacion ? "Explica la diferencia para cerrar" : "Confirmar cierre"}
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════════ CONFIRMAR VACIAR TICKET ════════ */}
+      <Dialog open={vaciarOpen} onOpenChange={setVaciarOpen}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>¿Vaciar el ticket?</DialogTitle>
+            <DialogDescription>Se quitan los {items.length} productos. La venta no se registra.</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" className="h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
+            <Button type="button" variant="destructive" className="h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

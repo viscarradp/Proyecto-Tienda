@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
+import { formatMoney } from "@/lib/format"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 interface CategoriaGasto {
@@ -154,7 +155,7 @@ export function SacarDineroDialog({
         method: "POST",
         body: JSON.stringify(body),
       })
-      toast.success("Movimiento registrado")
+      toast.success(`Listo: ${modo === "traer" ? `metiste ${formatMoney(m)} a la gaveta` : `sacaste ${formatMoney(m)} de la gaveta`}`)
       for (const aviso of resp.avisos ?? []) {
         toast.warning(aviso, { duration: 12000 })
       }
@@ -169,6 +170,19 @@ export function SacarDineroDialog({
   }
 
   const opcion = OPCIONES.find((o) => o.modo === modo)
+  const montoValido = parseFloat(monto)
+  const hayMonto = !isNaN(montoValido) && montoValido > 0
+  const montoTxt = hayMonto ? formatMoney(montoValido) : ""
+  const nota = descripcion.trim()
+  const resumen = !hayMonto
+    ? ""
+    : modo === "boveda"
+      ? `Vas a pasar ${montoTxt} de la gaveta a la bóveda.`
+      : modo === "traer"
+        ? `Vas a meter ${montoTxt} a la gaveta, sacados de la bóveda.`
+        : modo === "retiro"
+          ? `Vas a sacar ${montoTxt} de la gaveta como retiro personal.`
+          : `Vas a sacar ${montoTxt} de la gaveta para: ${nota || "un gasto"}.`
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -253,13 +267,19 @@ export function SacarDineroDialog({
               />
             </div>
 
+            {resumen && (
+              <p role="status" className="rounded-sm border border-primary/30 bg-primary/5 p-3 text-sm font-medium">
+                {resumen}
+              </p>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setModo(null)}>
                 Atrás
               </Button>
               <Button type="submit" disabled={loading} className="gap-2">
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirmar
+                {hayMonto ? `Confirmar ${montoTxt}` : "Confirmar"}
               </Button>
             </div>
           </form>
