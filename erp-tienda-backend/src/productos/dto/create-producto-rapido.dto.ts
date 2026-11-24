@@ -27,4 +27,22 @@ export class CreateProductoRapidoDto {
     message: 'El código de barras no puede pasar de 50 caracteres',
   })
   codigo_barras?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Nombre de la presentación (ej. Libra). Por defecto "Unidad"',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim() === ''
+      ? undefined
+      : typeof value === 'string'
+        ? value.trim()
+        : value,
+  )
+  @IsString()
+  @MaxLength(100, {
+    message: 'La descripción no puede pasar de 100 caracteres',
+  })
+  descripcion?: string;
 }

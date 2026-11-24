@@ -54,7 +54,7 @@ export class ProductosService {
           por_revisar: true,
           presentaciones: {
             create: {
-              descripcion: 'Unidad',
+              descripcion: dto.descripcion ?? 'Unidad',
               factor_conversion: 1,
               precio_venta: dto.precio_venta,
               codigo_barras: codigo,
