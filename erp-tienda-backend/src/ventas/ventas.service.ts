@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { CreateDevolucionDto } from './dto/create-devolucion.dto';
+import { QueryVentasDto } from './dto/query-ventas.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
@@ -303,9 +304,21 @@ export class VentasService {
     }, TX_OPTIONS);
   }
 
-  findAll() {
+  /**
+   * Listado acotado, más recientes primero (cursor `antes_de`). Con
+   * `caja_turno_id` (los turnos que la pantalla tiene a la vista, máx. 50) no
+   * se aplica límite por defecto; sin él, el límite por defecto es 50.
+   */
+  findAll(query: QueryVentasDto = {}) {
+    const { caja_turno_id, limit, antes_de } = query;
+    const porTurno = !!caja_turno_id?.length;
     return this.prisma.ventas.findMany({
-      orderBy: { fecha: 'desc' },
+      where: {
+        ...(porTurno ? { caja_turno_id: { in: caja_turno_id } } : {}),
+        ...(antes_de ? { id: { lt: antes_de } } : {}),
+      },
+      orderBy: { id: 'desc' },
+      take: limit ?? (porTurno ? undefined : 50),
       include: {
         // Solo el conteo: la UI decide si ofrece «Anular» (no se puede anular
         // una venta con devoluciones).
@@ -325,18 +338,27 @@ export class VentasService {
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.ventas.findUnique({
+  async findOne(id: number) {
+    const venta = await this.prisma.ventas.findUnique({
       where: { id },
       include: {
+        // Misma forma que el listado: la pantalla Movimientos busca por número.
+        _count: { select: { devoluciones: true } },
+        devoluciones: { select: { total_reembolsado: true } },
         detalle_ventas: {
           include: {
-            presentaciones: true,
+            presentaciones: {
+              include: { productos: { select: { nombre: true } } },
+            },
             detalle_venta_lotes: true,
           },
         },
       },
     });
+    if (!venta) {
+      throw new NotFoundException(`No hay una venta con el número ${id}`);
+    }
+    return venta;
   }
 
   async anular(id: number, justificacion_nula: string) {

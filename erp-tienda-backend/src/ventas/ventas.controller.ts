@@ -8,8 +8,10 @@ import {
   Headers,
   BadRequestException,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { VentasService } from './ventas.service';
+import { QueryVentasDto } from './dto/query-ventas.dto';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { CreateDevolucionDto } from './dto/create-devolucion.dto';
 import { AnularVentaDto } from './dto/anular-venta.dto';
@@ -44,8 +46,8 @@ export class VentasController {
   }
 
   @Get()
-  findAll() {
-    return this.ventasService.findAll();
+  findAll(@Query() query: QueryVentasDto) {
+    return this.ventasService.findAll(query);
   }
 
   @Get(':id')

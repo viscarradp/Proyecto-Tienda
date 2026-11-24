@@ -22,7 +22,6 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { MoneyValue } from "@/components/money-value"
@@ -31,8 +30,8 @@ import { StatePill } from "@/components/state-pill"
 import { StatCard } from "@/components/stat-card"
 import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { apiFetch } from "@/lib/api"
-import { format, differenceInDays } from "date-fns"
+import { apiFetch, tipoDeError } from "@/lib/api"
+import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
 // ─── Tipos ───
@@ -75,6 +74,32 @@ interface CajaTurno {
   diferencia: string | null
 }
 
+interface PaginaTurnos {
+  items: CajaTurno[]
+  hay_mas: boolean
+}
+
+type BusquedaVenta =
+  | { estado: "inactiva" }
+  | { estado: "cargando" }
+  | { estado: "ok"; venta: Venta; turno: CajaTurno }
+  | { estado: "no_existe"; numero: string }
+  | { estado: "error"; mensaje: string }
+
+const TURNOS_POR_PAGINA = 7
+const TURNOS_MAX = 50
+
+/** Trae una página de turnos y las ventas de esos turnos. */
+async function cargarPagina(limit: number, antesDe?: number) {
+  const qs = new URLSearchParams({ limit: String(limit) })
+  if (antesDe) qs.set("antes_de", String(antesDe))
+  const pagina = await apiFetch<PaginaTurnos>(`/cajas-turnos?${qs}`)
+  const ventas = pagina.items.length
+    ? await apiFetch<Venta[]>(`/ventas?caja_turno_id=${pagina.items.map(t => t.id).join(",")}`)
+    : []
+  return { pagina, ventas }
+}
+
 export default function MovimientosPage() {
   const [mounted, setMounted] = React.useState(false)
   const [turnos, setTurnos] = React.useState<CajaTurno[]>([])
@@ -85,7 +110,15 @@ export default function MovimientosPage() {
   const [expandedTurno, setExpandedTurno] = React.useState<number | null>(null)
   const [expandedVenta, setExpandedVenta] = React.useState<number | null>(null)
   const [searchTerm, setSearchTerm] = React.useState("")
-  const [periodFilter, setPeriodFilter] = React.useState("ultimos_7")
+
+  // Paginación de turnos (de 7 en 7, más recientes primero)
+  const [hayMas, setHayMas] = React.useState(false)
+  const [cargandoMas, setCargandoMas] = React.useState(false)
+  const turnosCargados = React.useRef(0)
+
+  // Búsqueda de una venta por número (aunque su turno no esté cargado)
+  const [busqueda, setBusqueda] = React.useState<BusquedaVenta>({ estado: "inactiva" })
+  const [recargaKey, setRecargaKey] = React.useState(0)
 
   // Modal Anulacion State
   const [isAnulando, setIsAnulando] = React.useState(false)
@@ -112,15 +145,17 @@ export default function MovimientosPage() {
     setLoading(true)
     setError("")
     try {
-      const [turnosData, ventasData] = await Promise.all([
-        apiFetch<CajaTurno[]>("/cajas-turnos"),
-        apiFetch<Venta[]>("/ventas"),
-      ])
-      setTurnos(turnosData)
+      // Al recargar (tras anular/devolver) se conservan los turnos ya cargados.
+      const limit = Math.min(TURNOS_MAX, Math.max(TURNOS_POR_PAGINA, turnosCargados.current))
+      const { pagina, ventas: ventasData } = await cargarPagina(limit)
+      setTurnos(pagina.items)
       setVentas(ventasData)
+      setHayMas(pagina.hay_mas)
+      turnosCargados.current = pagina.items.length
+      setRecargaKey(k => k + 1)
 
       // Expand primary active turno if any
-      const activo = turnosData.find(t => t.estado === 'ABIERTA')
+      const activo = pagina.items.find(t => t.estado === 'ABIERTA')
       if (activo) setExpandedTurno(activo.id)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al cargar movimientos")
@@ -133,20 +168,60 @@ export default function MovimientosPage() {
     if (mounted) loadData()
   }, [mounted, loadData])
 
-  // Filtrado de turnos
-  const filteredTurnos = React.useMemo(() => {
-    let base = [...turnos].sort((a, b) => new Date(b.fecha_apertura).getTime() - new Date(a.fecha_apertura).getTime())
-    const now = new Date()
-
-    if (periodFilter === "ultimos_7") {
-      base = base.slice(0, 7)
-    } else if (periodFilter === "ultima_semana") {
-      base = base.filter(t => differenceInDays(now, new Date(t.fecha_apertura)) <= 7)
-    } else if (periodFilter === "ultimos_15") {
-      base = base.filter(t => differenceInDays(now, new Date(t.fecha_apertura)) <= 15)
-    } else if (periodFilter === "ultimo_mes") {
-      base = base.filter(t => differenceInDays(now, new Date(t.fecha_apertura)) <= 30)
+  // "Ver turnos anteriores": trae la página siguiente y la agrega abajo.
+  const cargarMas = async () => {
+    const ultimo = turnos[turnos.length - 1]
+    if (!ultimo) return
+    setCargandoMas(true)
+    setError("")
+    try {
+      const { pagina, ventas: ventasNuevas } = await cargarPagina(TURNOS_POR_PAGINA, ultimo.id)
+      setTurnos(prev => [...prev, ...pagina.items])
+      setVentas(prev => [...prev, ...ventasNuevas])
+      setHayMas(pagina.hay_mas)
+      turnosCargados.current += pagina.items.length
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al cargar turnos anteriores")
+    } finally {
+      setCargandoMas(false)
     }
+  }
+
+  // Buscar una venta por número: si lo escrito es solo un número, se consulta
+  // GET /ventas/:id (con espera corta para no consultar en cada tecla).
+  React.useEffect(() => {
+    const numero = searchTerm.trim()
+    if (!/^\d{1,9}$/.test(numero)) {
+      setBusqueda({ estado: "inactiva" })
+      return
+    }
+    let cancelado = false
+    setBusqueda({ estado: "cargando" })
+    const espera = setTimeout(async () => {
+      try {
+        const venta = await apiFetch<Venta>(`/ventas/${numero}`)
+        const turno = await apiFetch<CajaTurno>(`/cajas-turnos/${venta.caja_turno_id}`)
+        if (cancelado) return
+        setBusqueda({ estado: "ok", venta, turno })
+        setExpandedVenta(venta.id)
+      } catch (err: unknown) {
+        if (cancelado) return
+        setBusqueda(
+          tipoDeError(err) === "no_encontrado"
+            ? { estado: "no_existe", numero }
+            : { estado: "error", mensaje: err instanceof Error ? err.message : "Error al buscar la venta" },
+        )
+      }
+    }, 400)
+    return () => {
+      cancelado = true
+      clearTimeout(espera)
+    }
+  }, [searchTerm, recargaKey])
+
+  // Filtrado de turnos (los cargados)
+  const filteredTurnos = React.useMemo(() => {
+    let base = turnos
 
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
@@ -159,7 +234,7 @@ export default function MovimientosPage() {
     }
 
     return base
-  }, [turnos, periodFilter, searchTerm])
+  }, [turnos, searchTerm])
 
   const ventasFiltradas = ventas.filter(v => filteredTurnos.some(t => t.id === v.caja_turno_id))
   // Solo sumamos ventas que no estén anuladas, y descontamos lo devuelto
@@ -247,6 +322,103 @@ export default function MovimientosPage() {
     return "muted"
   }
 
+  // Fila de una venta (con su desglose y acciones). La usan la lista de turnos y el resultado de buscar por número.
+  const renderVenta = (venta: Venta, turnoAbierto: boolean) => {
+    const isVentaExpanded = expandedVenta === venta.id
+    const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + aNumero(d.cantidad), 0)
+    const anulada = venta.estado === 'ANULADA'
+
+    return (
+      <div key={venta.id} className="border-b border-border last:border-0">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          onClick={() => setExpandedVenta(isVentaExpanded ? null : venta.id)}
+        >
+          <div className="w-6 shrink-0">
+            {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          </div>
+          <div className="w-24 font-mono text-sm text-muted-foreground">#{String(venta.id).padStart(5, '0')}</div>
+          <div className="hidden w-28 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+            <Clock className="h-3.5 w-3.5 opacity-60" />
+            {format(new Date(venta.fecha), "HH:mm:ss")}
+          </div>
+          <div className="hidden w-24 text-right sm:block">
+            <StatePill tone="muted">{formatCantidad(totalArticulos)} uds</StatePill>
+          </div>
+          <div className="flex flex-1 items-center justify-end gap-2">
+            {anulada && <StatePill tone="destructive">Anulada</StatePill>}
+            <MoneyValue value={venta.total} tone={anulada ? "muted" : "success"} className={cn("text-sm font-semibold", anulada && "line-through")} />
+          </div>
+        </button>
+
+        {/* Detalle de Artículos */}
+        {isVentaExpanded && (
+          <div className="border-l-2 border-primary/30 bg-background/40 px-4 py-3 sm:ml-6">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Desglose de artículos</p>
+            <div className="flex flex-col gap-2">
+              {venta.detalle_ventas.map(detalle => (
+                <div key={detalle.id} className="flex items-center justify-between gap-3 rounded-sm border border-border bg-card p-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-border bg-muted text-muted-foreground">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{detalle.presentaciones
+                          ? [detalle.presentaciones.productos?.nombre, detalle.presentaciones.descripcion].filter(Boolean).join(" · ")
+                          : `Producto ID #${detalle.presentacion_id}`}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCantidad(detalle.cantidad)} uds · <MoneyValue value={aNumero(detalle.subtotal) / (aNumero(detalle.cantidad) || 1)} tone="muted" className="text-xs" /> c/u
+                      </p>
+                    </div>
+                  </div>
+                  <MoneyValue value={detalle.subtotal} className="font-semibold" />
+                </div>
+              ))}
+            </div>
+
+            {/* Devolver / Anular */}
+            {venta.estado === 'COMPLETADA' && (
+              <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary"
+                  onClick={() => { setVentaADevolver(venta); setDevolverOpen(true) }}
+                >
+                  <Undo2 className="h-4 w-4" /> Devolver
+                </Button>
+                {turnoAbierto && (venta._count?.devoluciones ?? 0) > 0 && (
+                  <p className="self-center text-xs text-muted-foreground">
+                    Ya tiene devoluciones — puedes devolver el resto
+                  </p>
+                )}
+                {turnoAbierto && (venta._count?.devoluciones ?? 0) === 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
+                  >
+                    <XCircle className="h-4 w-4" /> Anular venta
+                  </Button>
+                )}
+              </div>
+            )}
+            {venta.estado === 'ANULADA' && venta.justificacion_nula && (
+              <div className="mt-3 border-t border-border pt-3">
+                <div className="rounded-sm border border-destructive/20 bg-destructive/5 p-3 text-xs">
+                  <p className="mb-1 font-medium text-destructive">Motivo de anulación:</p>
+                  <p className="text-muted-foreground">{venta.justificacion_nula}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (!mounted) return null
 
   return (
@@ -260,23 +432,10 @@ export default function MovimientosPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="h-11 w-40 shrink-0">
-                <SelectValue placeholder="Periodo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ultimos_7">Últimos 7 turnos</SelectItem>
-                <SelectItem value="ultima_semana">Última semana</SelectItem>
-                <SelectItem value="ultimos_15">Últimos 15 días</SelectItem>
-                <SelectItem value="ultimo_mes">Último mes</SelectItem>
-                <SelectItem value="todos">Todos los turnos</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="relative flex-1 md:w-64">
+            <div className="relative flex-1 md:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar ID, fecha, estado…"
+                placeholder="Buscar turno, o nº de venta…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="h-11 pl-9"
@@ -309,7 +468,7 @@ export default function MovimientosPage() {
               </div>
             </StatCard>
 
-            <StatCard label="Ingresos del período" className="md:col-span-2" footer={`en ${ventasCompletadas.length} ventas${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}>
+            <StatCard label="Ingresos de los turnos mostrados"className="md:col-span-2" footer={`en ${ventasCompletadas.length} ventas${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}>
               <MoneyValue value={ingresosPeriodo} className="text-3xl font-bold tracking-tight" />
             </StatCard>
 
@@ -324,6 +483,37 @@ export default function MovimientosPage() {
             </StatCard>
           </div>
 
+          {/* Resultado de buscar una venta por número */}
+          {busqueda.estado === "cargando" && (
+            <p className="text-sm text-muted-foreground">Buscando la venta…</p>
+          )}
+          {busqueda.estado === "no_existe" && (
+            <div className="rounded-sm border border-dashed border-border p-4 text-sm text-muted-foreground">
+              No hay una venta con el número {busqueda.numero}
+            </div>
+          )}
+          {busqueda.estado === "error" && (
+            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+              {busqueda.mensaje}
+            </div>
+          )}
+          {busqueda.estado === "ok" && (
+            <div className="overflow-hidden rounded-sm border border-primary/40 bg-card">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 text-sm">
+                <Search className="h-4 w-4 text-primary" />
+                <span className="font-semibold">Venta #{String(busqueda.venta.id).padStart(5, '0')}</span>
+                <span className="text-muted-foreground">· Turno #{busqueda.turno.id}</span>
+                <StatePill tone={busqueda.turno.estado === 'ABIERTA' ? "success" : busqueda.turno.estado === 'CERRADA_FORZADA' ? "warning" : "muted"}>
+                  {etiquetaEstado(busqueda.turno.estado)}
+                </StatePill>
+                <span className="text-xs text-muted-foreground">
+                  {format(new Date(busqueda.venta.fecha), "dd MMM yyyy, HH:mm", { locale: es })}
+                </span>
+              </div>
+              {renderVenta(busqueda.venta, busqueda.turno.estado === 'ABIERTA')}
+            </div>
+          )}
+
           {/* Lista de Turnos */}
           {error ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-6 text-center text-destructive">
@@ -336,10 +526,20 @@ export default function MovimientosPage() {
               <p className="text-sm">Cargando historial…</p>
             </div>
           ) : filteredTurnos.length === 0 ? (
+            busqueda.estado !== "inactiva" ? null : hayMas ? (
+              <div className="flex flex-col items-center gap-3 rounded-sm border border-dashed border-border py-12 text-muted-foreground">
+                <p className="text-sm">Ningún turno cargado coincide con la búsqueda.</p>
+                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="gap-2">
+                  {cargandoMas && <RefreshCw className="h-4 w-4 animate-spin" />}
+                  Ver turnos anteriores
+                </Button>
+              </div>
+            ) : (
             <div className="flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border py-24 text-muted-foreground">
               <Filter className="h-10 w-10 opacity-20" />
               <p className="text-sm font-medium text-foreground">No se encontraron turnos de caja</p>
             </div>
+            )
           ) : (
             <div className="flex flex-col gap-3">
               {filteredTurnos.map(turno => {
@@ -449,101 +649,7 @@ export default function MovimientosPage() {
                           </div>
                         ) : (
                           <div>
-                            {ventasDelTurno.map(venta => {
-                              const isVentaExpanded = expandedVenta === venta.id
-                              const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + aNumero(d.cantidad), 0)
-                              const anulada = venta.estado === 'ANULADA'
-
-                              return (
-                                <div key={venta.id} className="border-b border-border last:border-0">
-                                  <button
-                                    type="button"
-                                    className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-                                    onClick={() => setExpandedVenta(isVentaExpanded ? null : venta.id)}
-                                  >
-                                    <div className="w-6 shrink-0">
-                                      {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                                    </div>
-                                    <div className="w-24 font-mono text-sm text-muted-foreground">#{String(venta.id).padStart(5, '0')}</div>
-                                    <div className="hidden w-28 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-                                      <Clock className="h-3.5 w-3.5 opacity-60" />
-                                      {format(new Date(venta.fecha), "HH:mm:ss")}
-                                    </div>
-                                    <div className="hidden w-24 text-right sm:block">
-                                      <StatePill tone="muted">{formatCantidad(totalArticulos)} uds</StatePill>
-                                    </div>
-                                    <div className="flex flex-1 items-center justify-end gap-2">
-                                      {anulada && <StatePill tone="destructive">Anulada</StatePill>}
-                                      <MoneyValue value={venta.total} tone={anulada ? "muted" : "success"} className={cn("text-sm font-semibold", anulada && "line-through")} />
-                                    </div>
-                                  </button>
-
-                                  {/* Detalle de Artículos */}
-                                  {isVentaExpanded && (
-                                    <div className="border-l-2 border-primary/30 bg-background/40 px-4 py-3 sm:ml-6">
-                                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Desglose de artículos</p>
-                                      <div className="flex flex-col gap-2">
-                                        {venta.detalle_ventas.map(detalle => (
-                                          <div key={detalle.id} className="flex items-center justify-between gap-3 rounded-sm border border-border bg-card p-3 text-sm">
-                                            <div className="flex items-center gap-3">
-                                              <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-border bg-muted text-muted-foreground">
-                                                <Package className="h-4 w-4" />
-                                              </div>
-                                              <div>
-                                                <p className="font-medium">{detalle.presentaciones
-                                                    ? [detalle.presentaciones.productos?.nombre, detalle.presentaciones.descripcion].filter(Boolean).join(" · ")
-                                                    : `Producto ID #${detalle.presentacion_id}`}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                  {formatCantidad(detalle.cantidad)} uds · <MoneyValue value={aNumero(detalle.subtotal) / (aNumero(detalle.cantidad) || 1)} tone="muted" className="text-xs" /> c/u
-                                                </p>
-                                              </div>
-                                            </div>
-                                            <MoneyValue value={detalle.subtotal} className="font-semibold" />
-                                          </div>
-                                        ))}
-                                      </div>
-
-                                      {/* Devolver / Anular */}
-                                      {venta.estado === 'COMPLETADA' && (
-                                        <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary"
-                                            onClick={() => { setVentaADevolver(venta); setDevolverOpen(true) }}
-                                          >
-                                            <Undo2 className="h-4 w-4" /> Devolver
-                                          </Button>
-                                          {venta.caja_turno_id === cajaActiva?.id && (venta._count?.devoluciones ?? 0) > 0 && (
-                                            <p className="self-center text-xs text-muted-foreground">
-                                              Ya tiene devoluciones — puedes devolver el resto
-                                            </p>
-                                          )}
-                                          {venta.caja_turno_id === cajaActiva?.id && (venta._count?.devoluciones ?? 0) === 0 && (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                              onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
-                                            >
-                                              <XCircle className="h-4 w-4" /> Anular venta
-                                            </Button>
-                                          )}
-                                        </div>
-                                      )}
-                                      {venta.estado === 'ANULADA' && venta.justificacion_nula && (
-                                        <div className="mt-3 border-t border-border pt-3">
-                                          <div className="rounded-sm border border-destructive/20 bg-destructive/5 p-3 text-xs">
-                                            <p className="mb-1 font-medium text-destructive">Motivo de anulación:</p>
-                                            <p className="text-muted-foreground">{venta.justificacion_nula}</p>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
+                            {ventasDelTurno.map(venta => renderVenta(venta, isAbierta))}
                           </div>
                         )}
                       </div>
@@ -551,6 +657,12 @@ export default function MovimientosPage() {
                   </div>
                 )
               })}
+              {hayMas && (
+                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="h-11 gap-2 self-center">
+                  {cargandoMas && <RefreshCw className="h-4 w-4 animate-spin" />}
+                  Ver turnos anteriores
+                </Button>
+              )}
             </div>
           )}
         </div>

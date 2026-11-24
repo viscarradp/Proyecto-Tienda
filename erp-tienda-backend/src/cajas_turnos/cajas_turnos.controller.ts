@@ -6,11 +6,13 @@ import {
   Patch,
   Param,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CajasTurnosService } from './cajas_turnos.service';
 import { CreateCajaTurnoDto } from './dto/create-caja_turno.dto';
 import { CloseCajaTurnoDto } from './dto/close-caja_turno.dto';
+import { QueryCajasTurnosDto } from './dto/query-cajas_turnos.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -76,9 +78,12 @@ export class CajasTurnosController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar historial de todos los turnos' })
-  findAll() {
-    return this.cajasTurnosService.findAll();
+  @ApiOperation({
+    summary:
+      'Historial de turnos paginado (más recientes primero): { items, hay_mas }',
+  })
+  findAll(@Query() query: QueryCajasTurnosDto) {
+    return this.cajasTurnosService.findAll(query);
   }
 
   @Get(':id')
