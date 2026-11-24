@@ -32,14 +32,16 @@ Desbloquean los lotes L5–L8. Detalle y alternativas en la auditoría de reglas
 | D-02 | ¿La cajera puede vender algo que no está en el catálogo? | **✅ Decidido 2026-11-24: alta rápida** (nombre + precio) "por revisar" | L5 |
 | D-04 | Si el sistema cree que no hay efectivo, ¿bloquear el gasto o dejar pasar con aviso? | **✅ Decidido 2026-11-24: registrar y avisar**; asistente de "efectivo guardado hoy" para la bóveda | L6 |
 | D-15 | Si el fondo de apertura difiere de lo que quedó, ¿qué hacer? | **✅ Decidido 2026-11-24: preguntar el origen** (bóveda / aporte / corrección), sin bloquear | L6 |
-| ARQ-03 | ¿Habrá **dos cajas cobrando al mismo tiempo**? | Si no: dejar un solo turno. Si sí: turno por caja (cambio grande) | — |
-| D-06 | ¿Qué puede hacer la cajera? | Vende, anula y devuelve con autor y motivo; retiro personal, capital, gastos desde bóveda y arqueo solo la dueña | L7 |
-| D-05 | ¿Se compra fiado a distribuidores? | Si sí: lista de deudas con "pagar/abonar" | L8 |
+| ARQ-03 | ¿Habrá **dos cajas cobrando al mismo tiempo**? | **✅ Decidido 2026-11-24: no, una sola gaveta** — se mantiene un turno abierto a la vez | — |
+| D-06 | ¿Qué puede hacer la cajera? | **✅ Decidido 2026-11-24: la cajera opera, la dueña controla** — cajera vende, anula, devuelve y paga gastos chicos de la gaveta (con autor y motivo); solo la dueña: retiro personal, aporte de capital, gastos y traslados desde bóveda, arqueo, compras y precios | L7 |
+| D-05 | ¿Se compra fiado a distribuidores? | **✅ Decidido 2026-11-24: sí, a veces** — lista de deudas por proveedor con "pagar/abonar" | L8 |
 
 **Pueden esperar al primer mes de uso:** D-07 resumen diario, D-08 nota obligatoria en
 descuadre, D-09 vencimientos, D-10 stock bajo, D-11 conteo físico, D-12 recargas, D-13 fiado,
 D-14 margen mínimo, D-16 desactivar usuarios (recomendado: sí), VIVO-09 conteo "a ciegas" al
 cerrar (hoy se muestra el esperado antes de contar).
+
+**✅ Backup decidido 2026-11-24:** Supabase plan gratuito + respaldo nocturno propio ( cifrado a la nube con un job programado) y ensayo de restauración — L3b.
 
 **Infraestructura (dueño del proyecto):** proveedor del API (GCP u otro) y plan de Supabase
 con backups — desbloquea L3b.
@@ -129,8 +131,7 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | 2 | **L1b** + **L3a** | Ola 1 en `master` |
 | 3 | **L4** paginación + **L5a** mostrador (backend): deuda de stock, alta rápida, venta por monto | D-01/02/03 ✅ |
 | 4 | **L5b** mostrador (frontend: ticket decimal y por monto, alta rápida, avisos de stock) + **L6** fondos y apertura | D-04/15 ✅ |
-| 5 | L7 + L8 | Decisiones D-06 y D-05 |
-| — | L3b backup | Decisión de infraestructura |
+| 5 | **L7** permisos y trazabilidad + **L8** compras a crédito y deudas + **L3b** respaldo nocturno (aislado: solo scripts, CI y docs) | D-05, D-06, ARQ-03 y backup ✅ |
 | después | Nivel 2 y 3, Fase 5 (docs) | Primera semana de uso real |
 
 ## 4. Estado
@@ -141,9 +142,9 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L1b | ✅ 2026-11-24 — verificado en navegador (precio editable, Estadísticas cuadra, Movimientos) | `feature/l1b-inventario-estadisticas` |
 | L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
-| L3b | ⏸ decisión de infraestructura | — |
+| L3b | ⏳ Ola 5 (decidido: respaldo propio con ) | — |
 | L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
 | L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
 | L5b | ✅ 2026-11-24 — verificado en navegador (alta rápida, cantidad decimal, venta por monto, avisos de stock al cobrar, "7 Six-pack + 2") | `feature/l5b-mostrador-pantalla` |
 | L6 | ✅ 2026-11-24 — 125 e2e; verificado en navegador (pregunta de diferencia de apertura → INGRESO_CAPITAL; gasto mayor al esperado pasa con aviso y cae en "Otros"; asistente de bóveda) | `feature/l6-fondos-apertura` |
-| L7, L8 | ⏸ decisiones D-06, D-05 y ARQ-03 | — |
+| L7, L8 | ⏳ Ola 5 (decisiones tomadas el 2026-11-24) | — |
