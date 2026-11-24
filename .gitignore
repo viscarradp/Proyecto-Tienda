@@ -77,3 +77,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Worktrees temporales de agentes (Claude Code)
 .claude/worktrees/
+
+# Respaldos locales de la base de datos (scripts/respaldo); nunca al repo
+respaldos/

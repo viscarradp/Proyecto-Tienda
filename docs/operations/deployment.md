@@ -82,9 +82,16 @@ Al entrar a producción con datos reales se adoptan migraciones
 de la imagen). Los catálogos base (`prisma/seed.ts`) son opcionales y no crean
 usuarios; el admin inicial lo crea el backend con `INITIAL_ADMIN_PASSWORD`.
 
+## Respaldos
+
+El respaldo nocturno cifrado (GitHub Actions + `pg_dump`) y el ensayo de
+restauración están en [`respaldos.md`](respaldos.md). Actívalo **antes** de la
+primera venta real.
+
 ## Checklist rápido
 
 1. Esquema aplicado (paso anterior).
 2. Imágenes construidas; subirlas al registro del proveedor es un paso manual.
 3. Variables definidas; backend arriba, `GET /salud` responde 200.
 4. Entrar con `admin` y **cambiar la contraseña inicial**; retirar `INITIAL_ADMIN_PASSWORD`.
+5. Respaldo nocturno activado y un ensayo de restauración hecho ([`respaldos.md`](respaldos.md)).

@@ -24,6 +24,17 @@ subas un `.env` real al repositorio (ya está en `.gitignore`).
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | No (default `http://localhost:3000`) | URL base del backend. Al llevar el prefijo `NEXT_PUBLIC_`, **se expone al navegador** — nunca poner un secreto en una variable con este prefijo. Se **incrusta en el bundle al construir**: en la imagen de producción es un `--build-arg`, no una variable de ejecución (ver [`deployment.md`](deployment.md)). |
 
+## Respaldo (secretos de GitHub Actions, no van en ningún `.env`)
+
+Los usa `.github/workflows/respaldo.yml` y `scripts/respaldo/*.sh`. Guía en [`respaldos.md`](respaldos.md).
+
+| Variable | Dónde | Descripción |
+|---|---|---|
+| `BACKUP_DATABASE_URL` | Secreto de GitHub | Cadena de **conexión directa** (puerto 5432, no el pooler) de la BD a respaldar. |
+| `BACKUP_PASSPHRASE` | Secreto de GitHub | Clave de cifrado. Guárdala también fuera de GitHub: sin ella no se restaura. |
+| `RESTORE_DATABASE_URL` | Entorno local, al restaurar | BD destino de `restaurar.sh` (vacía; se niega si el host no es local salvo `--confirmo-destino-remoto`). |
+| `BACKUP_OUT_DIR`, `BACKUP_SCHEMA` | Opcionales | Directorio de salida (default `./respaldos`) y esquema a respaldar (default `public`). |
+
 ## Notas de despliegue
 
 - El proyecto es agnóstico de proveedor: la base de datos puede vivir en
