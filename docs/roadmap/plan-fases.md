@@ -418,9 +418,9 @@ auditorías para decidir qué viene después.
    - Después, las **decisiones del primer mes** D-07…D-14, ya con datos de uso: resumen diario, nota obligatoria en
      descuadre, vencimientos, stock bajo, conteo físico, recargas, fiado a clientes, margen mínimo. También el conteo "a
      ciegas" al cerrar (VIVO-09). Ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
-   - Por último, el **Nivel 3 (pulido)**: código muerto, activos fijos sin pantalla (NEG-05), `getResumen` cuenta anuladas,
-     imagen del backend de 521 MB, hidratación de `ThemeToggle`, período "Semana" de 8 días, textos de marca del login
-     (UX-02), pulido general (UX-30) y el ticket que cuenta artículos fraccionados.
+   - Por último, el **Nivel 3 (pulido)**: código muerto, activos fijos sin pantalla (NEG-05), imagen del backend de
+     521 MB, hidratación de `ThemeToggle`, textos de marca del login (UX-02) y pulido general (UX-30). Los errores de
+     números del Nivel 3 ya están corregidos (resumen del turno, NEG-09, durante la pausa; "Semana" en L1b y el ticket en L9).
    - Si se prueba desde el celular por la red local (HTTP por IP), también el **login con cookie `secure`** (UX-01, único
      pendiente del Nivel 2). En producción con HTTPS no afecta.
 4. **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,

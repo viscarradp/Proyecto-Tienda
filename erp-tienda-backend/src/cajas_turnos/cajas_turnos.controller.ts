@@ -95,7 +95,7 @@ export class CajasTurnosController {
   @Get(':id/resumen')
   @ApiOperation({
     summary:
-      'Obtener resumen total de caja (ventas, egresos, retiros y capital)',
+      'Obtener resumen total de caja: ventas completadas (sin anuladas), devoluciones del turno, ventas netas, egresos, retiros y capital',
   })
   getResumen(@Param('id', ParseIntPipe) id: number) {
     return this.cajasTurnosService.getResumen(id);

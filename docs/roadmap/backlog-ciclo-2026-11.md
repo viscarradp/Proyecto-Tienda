@@ -113,10 +113,15 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 
 ### ⚪ Nivel 3 — Pulido e higiene
 
-Código muerto y archivos sueltos (COD-24, ARQ-20, `getResumen` cuenta anuladas — NEG-09);
-modelo de datos al adoptar migraciones (ARQ-17, backlog técnico 1–2); imagen de producción del backend pesa 521 MB (prisma, typescript y effect entran como dependencias de producción); activos fijos sin
-pantalla (NEG-05); hidratación de `ThemeToggle`; período "Semana" de 8 días; textos de marca
-del login (UX-02); pulido general (UX-30); el ticket cuenta "10.286 artículos" al sumar cantidades fraccionadas.
+Código muerto y archivos sueltos (COD-24, ARQ-20); modelo de datos al adoptar migraciones (ARQ-17, backlog técnico
+1–2); imagen de producción del backend pesa 521 MB (prisma, typescript y effect entran como dependencias de producción);
+activos fijos sin pantalla (NEG-05); hidratación de `ThemeToggle`; textos de marca del login (UX-02); pulido general
+(UX-30).
+
+**Números corregidos (2026-11-24):** `getResumen` del turno contaba las ventas anuladas y no restaba devoluciones
+(NEG-09) — ✅ ahora cuenta solo completadas y trae `total_devoluciones`, `ventas_netas` y `count_ventas_anuladas`. El
+período "Semana" de 8 días ya se había corregido en **L1b** ("7 días" = 7 días) y el ticket que sumaba cantidades
+fraccionadas ("10.286 artículos") en **L9** (cuenta productos, no unidades).
 
 **Documentación (Fase 5):** ✅ 2026-11-24 — `domain/` reorganizado por tema (NEG-06) y
 `architecture/data-model.md` al día (NEG-07); proyectos cerrados movidos a `historial/`. Queda
@@ -158,4 +163,5 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | L12 | ✅ 2026-11-24 — anular gastos, compras y mermas sin borrar (ADR 0012); verificado en navegador (gasto de $60 anulado: gaveta y estado de resultados vuelven). Ajuste en revisión: asientos de apertura marcados con `es_apertura` en vez de por texto. **Cambios de schema** en la lista de plan-fases | `feature/l12-anular-sin-borrar` |
 | L13 | ✅ 2026-11-24 — gaveta en una sola función; e2e de cuadre de un día, matriz de roles D-06 y compras. En revisión se detectó y corrigió un test dependiente del orden. Total: 284 e2e y 41 unitarios | `feature/l13-tests-gaveta-unica` |
 | L14 | ✅ 2026-11-24 — verificado en navegador: menú de usuario con «Cerrar sesión» en celular; 0 controles < 44 px a 375 px; escritorio sin cambios visuales; consola sin errores de hidratación. Etiquetas sin asociar 56 → 0 y botones de ícono sin nombre 7 → 0 | `feature/l14-accesibilidad-celular` |
+| NEG-09 · Resumen del turno | ✅ 2026-11-24 — solo ventas completadas, devoluciones del turno y ventas netas; e2e nuevo (falla sin el fix). Total: 285 e2e | `feature/neg09-resumen-turno` |
 | Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | `feature/fase5-documentacion` |
