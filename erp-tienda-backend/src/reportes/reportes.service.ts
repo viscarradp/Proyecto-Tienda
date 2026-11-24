@@ -129,6 +129,7 @@ export class ReportesService {
     const gastosAgg = await this.prisma.movimientos_financieros.aggregate({
       where: {
         tipo_movimiento: 'EGRESO_OPERATIVO',
+        anulado: false,
         fecha: { gte: desde, lte: hasta },
       },
       _sum: { monto: true },
@@ -139,6 +140,7 @@ export class ReportesService {
     const mermasAgg = await this.prisma.movimientos_financieros.aggregate({
       where: {
         tipo_movimiento: 'MERMA_INVENTARIO',
+        anulado: false,
         fecha: { gte: desde, lte: hasta },
       },
       _sum: { monto: true },
@@ -151,6 +153,7 @@ export class ReportesService {
     const retirosAgg = await this.prisma.movimientos_financieros.aggregate({
       where: {
         tipo_movimiento: 'RETIRO_PERSONAL',
+        anulado: false,
         fecha: { gte: desde, lte: hasta },
       },
       _sum: { monto: true },
@@ -164,6 +167,7 @@ export class ReportesService {
     const faltantesAgg = await this.prisma.movimientos_financieros.aggregate({
       where: {
         tipo_movimiento: { in: ['AJUSTE_FALTANTE', 'AJUSTE_BOVEDA_FALTANTE'] },
+        anulado: false,
         fecha: { gte: desde, lte: hasta },
       },
       _sum: { monto: true },
@@ -173,6 +177,7 @@ export class ReportesService {
     const sobrantesAgg = await this.prisma.movimientos_financieros.aggregate({
       where: {
         tipo_movimiento: { in: ['AJUSTE_SOBRANTE', 'AJUSTE_BOVEDA_SOBRANTE'] },
+        anulado: false,
         fecha: { gte: desde, lte: hasta },
       },
       _sum: { monto: true },
@@ -318,11 +323,11 @@ export class ReportesService {
     const flujoCuenta = async (cuenta: 'GAVETA' | 'BOVEDA') => {
       const [entradasAgg, salidasAgg] = await Promise.all([
         this.prisma.movimientos_financieros.aggregate({
-          where: { cuenta_destino: cuenta, fecha: rango },
+          where: { cuenta_destino: cuenta, anulado: false, fecha: rango },
           _sum: { monto: true },
         }),
         this.prisma.movimientos_financieros.aggregate({
-          where: { cuenta_origen: cuenta, fecha: rango },
+          where: { cuenta_origen: cuenta, anulado: false, fecha: rango },
           _sum: { monto: true },
         }),
       ]);

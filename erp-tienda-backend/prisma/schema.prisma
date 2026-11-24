@@ -19,19 +19,27 @@ model activos_fijos {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model ajustes_inventario {
-  id                Int              @id @default(autoincrement())
-  lote_id           Int
-  cantidad_ajustada Decimal          @db.Decimal(12, 3)
-  tipo_ajuste       String           @db.VarChar(50)
-  costo_asumido     Decimal          @db.Decimal(10, 2)
-  fecha             DateTime?        @default(now()) @db.Timestamptz(6)
-  justificacion     String?
-  usuario_id        Int?
-  lotes_inventario  lotes_inventario @relation(fields: [lote_id], references: [id], onUpdate: NoAction, map: "fk_lote_ajuste")
-  usuarios          usuarios?        @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_ajuste")
+  id                      Int                       @id @default(autoincrement())
+  lote_id                 Int
+  cantidad_ajustada       Decimal                   @db.Decimal(12, 3)
+  tipo_ajuste             String                    @db.VarChar(50)
+  costo_asumido           Decimal                   @db.Decimal(10, 2)
+  fecha                   DateTime?                 @default(now()) @db.Timestamptz(6)
+  justificacion           String?
+  usuario_id              Int?
+  // Anular = marcar, nunca borrar (L12 · ADR 0012). Solo mermas (ajustes negativos).
+  anulado                 Boolean                   @default(false)
+  anulado_en              DateTime?                 @db.Timestamptz(6)
+  anulado_por_id          Int?
+  motivo_anulacion        String?
+  lotes_inventario        lotes_inventario          @relation(fields: [lote_id], references: [id], onUpdate: NoAction, map: "fk_lote_ajuste")
+  usuarios                usuarios?                 @relation("AjusteAutor", fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_ajuste")
+  anulado_por             usuarios?                 @relation("AjusteAnuladoPor", fields: [anulado_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_ajuste_anulado_por")
+  movimientos_financieros movimientos_financieros[]
 
   @@index([lote_id])
   @@index([usuario_id])
+  @@index([anulado_por_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -82,19 +90,27 @@ model categorias_gastos {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model compras_inventario {
-  id                Int                 @id @default(autoincrement())
-  proveedor         String              @db.VarChar(150)
-  monto_total       Decimal             @db.Decimal(10, 2)
-  estado_pago       String              @db.VarChar(20)
-  origen_fondos     String              @db.VarChar(50)
-  fecha             DateTime?           @default(now()) @db.Timestamptz(6)
+  id                      Int                       @id @default(autoincrement())
+  proveedor               String                    @db.VarChar(150)
+  monto_total             Decimal                   @db.Decimal(10, 2)
+  estado_pago             String                    @db.VarChar(20)
+  origen_fondos           String                    @db.VarChar(50)
+  fecha                   DateTime?                 @default(now()) @db.Timestamptz(6)
   // Autor de la compra (NEG-04).
-  usuario_id        Int?
-  cuentas_por_pagar cuentas_por_pagar[]
-  lotes_inventario  lotes_inventario[]
-  usuarios          usuarios?           @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_compra")
+  usuario_id              Int?
+  // Anular = marcar, nunca borrar (L12 · ADR 0012).
+  anulado                 Boolean                   @default(false)
+  anulado_en              DateTime?                 @db.Timestamptz(6)
+  anulado_por_id          Int?
+  motivo_anulacion        String?
+  cuentas_por_pagar       cuentas_por_pagar[]
+  lotes_inventario        lotes_inventario[]
+  usuarios                usuarios?                 @relation("CompraAutor", fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_compra")
+  anulado_por             usuarios?                 @relation("CompraAnuladaPor", fields: [anulado_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_compra_anulada_por")
+  movimientos_financieros movimientos_financieros[]
 
   @@index([usuario_id])
+  @@index([anulado_por_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -194,22 +210,35 @@ model lotes_inventario {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model movimientos_financieros {
-  id                 Int                @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   caja_turno_id      Int?
-  tipo_movimiento    String             @db.VarChar(50)
-  monto              Decimal            @db.Decimal(10, 2)
+  tipo_movimiento    String              @db.VarChar(50)
+  monto              Decimal             @db.Decimal(10, 2)
   categoria_gasto_id Int?
   descripcion        String
-  fecha              DateTime?          @default(now()) @db.Timestamptz(6)
+  fecha              DateTime?           @default(now()) @db.Timestamptz(6)
   usuario_id         Int?
   // Modelo origen→destino (Bloque 1 §5.1): catálogo cerrado
   // GAVETA/BOVEDA/DUEÑOS/GASTO/PROVEEDOR. Nullable porque MERMA_INVENTARIO no es
   // un movimiento de efectivo. El saldo de bóveda se deriva de estas columnas.
-  cuenta_origen      String?            @db.VarChar(20)
-  cuenta_destino     String?            @db.VarChar(20)
-  cajas_turnos       cajas_turnos?      @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
-  categorias_gastos  categorias_gastos? @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
-  usuarios           usuarios?          @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_movimiento")
+  cuenta_origen      String?             @db.VarChar(20)
+  cuenta_destino     String?             @db.VarChar(20)
+  // Anular = marcar, nunca borrar (L12 · ADR 0012). Lo anulado no cuenta en
+  // reportes ni en el saldo de bóveda.
+  anulado            Boolean             @default(false)
+  anulado_en         DateTime?           @db.Timestamptz(6)
+  anulado_por_id     Int?
+  motivo_anulacion   String?
+  // Vínculo con el registro que generó el movimiento (PAGO_PROVEEDOR de una
+  // compra, MERMA_INVENTARIO de un ajuste) para poder anularlo junto con él.
+  compra_id          Int?
+  ajuste_id          Int?
+  cajas_turnos       cajas_turnos?       @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
+  categorias_gastos  categorias_gastos?  @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
+  usuarios           usuarios?           @relation("MovimientoAutor", fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_movimiento")
+  anulado_por        usuarios?           @relation("MovimientoAnuladoPor", fields: [anulado_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_movimiento_anulado_por")
+  compra             compras_inventario? @relation(fields: [compra_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_movimiento_compra")
+  ajuste             ajustes_inventario? @relation(fields: [ajuste_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_movimiento_ajuste")
   abonos_deuda       abono_deuda[]
 
   // reportes.service.ts filtra siempre tipo_movimiento + fecha juntos
@@ -221,20 +250,23 @@ model movimientos_financieros {
   // Saldo de bóveda derivado: Σ(destino=BOVEDA) − Σ(origen=BOVEDA).
   @@index([cuenta_destino])
   @@index([cuenta_origen])
+  @@index([anulado_por_id])
+  @@index([compra_id])
+  @@index([ajuste_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model presentaciones {
-  id                Int              @id @default(autoincrement())
+  id                Int                                @id @default(autoincrement())
   producto_id       Int
-  codigo_barras     String?          @unique @db.VarChar(50)
-  descripcion       String           @db.VarChar(100)
-  factor_conversion Decimal          @db.Decimal(12, 3)
-  precio_venta      Decimal          @db.Decimal(10, 2)
+  codigo_barras     String?                            @unique @db.VarChar(50)
+  descripcion       String                             @db.VarChar(100)
+  factor_conversion Decimal                            @db.Decimal(12, 3)
+  precio_venta      Decimal                            @db.Decimal(10, 2)
   detalle_ventas    detalle_ventas[]
   historial_precios historial_precios_presentaciones[]
-  productos         productos        @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto")
+  productos         productos                          @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto")
 
   @@index([producto_id])
 }
@@ -270,15 +302,18 @@ model usuarios {
   activo        Boolean   @default(true)
 
   // Trazabilidad de autor (Bloque 1, §5.2). Back-relations de usuario_id.
-  cajas_turnos            cajas_turnos[]            @relation("TurnoAbiertoPor")
-  turnos_cerrados         cajas_turnos[]            @relation("TurnoCerradoPor")
-  ventas                  ventas[]                  @relation("VentaUsuario")
-  ventas_anuladas         ventas[]                  @relation("VentaAnuladaPor")
-  movimientos_financieros movimientos_financieros[]
-  ajustes_inventario      ajustes_inventario[]
+  cajas_turnos            cajas_turnos[]                     @relation("TurnoAbiertoPor")
+  turnos_cerrados         cajas_turnos[]                     @relation("TurnoCerradoPor")
+  ventas                  ventas[]                           @relation("VentaUsuario")
+  ventas_anuladas         ventas[]                           @relation("VentaAnuladaPor")
+  movimientos_financieros movimientos_financieros[]          @relation("MovimientoAutor")
+  movimientos_anulados    movimientos_financieros[]          @relation("MovimientoAnuladoPor")
+  ajustes_inventario      ajustes_inventario[]               @relation("AjusteAutor")
+  ajustes_anulados        ajustes_inventario[]               @relation("AjusteAnuladoPor")
   devoluciones            devoluciones[]
   historial_precios       historial_precios_presentaciones[]
-  compras_inventario      compras_inventario[]
+  compras_inventario      compras_inventario[]               @relation("CompraAutor")
+  compras_anuladas        compras_inventario[]               @relation("CompraAnuladaPor")
   abonos_deuda            abono_deuda[]
 }
 

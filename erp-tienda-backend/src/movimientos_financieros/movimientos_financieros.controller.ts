@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Patch,
   Post,
   Body,
   Param,
@@ -16,6 +17,7 @@ import {
   type CurrentUserData,
 } from '../auth/decorators/current-user.decorator';
 import { exigirPermisoMovimiento } from '../common/permisos';
+import { AnularDto } from '../common/anular.dto';
 
 @Roles('ADMIN', 'CAJERO')
 @Controller('movimientos-financieros')
@@ -49,6 +51,21 @@ export class MovimientosFinancierosController {
       throw new BadRequestException('limit debe ser un entero entre 1 y 500');
     }
     return this.movimientosFinancierosService.findAll(tipo_movimiento, limit);
+  }
+
+  // Anular (ADR 0012): solo la dueña, siempre con motivo.
+  @Patch(':id/anular')
+  @Roles('ADMIN')
+  anular(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AnularDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return this.movimientosFinancierosService.anular(
+      id,
+      dto.motivo,
+      user.userId,
+    );
   }
 
   @Get(':id')

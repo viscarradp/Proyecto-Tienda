@@ -114,3 +114,20 @@ Consecuencias:
 | Guardar efectivo de la gaveta en la bóveda en medio del día | `RETIRO_BOVEDA` | Durante el turno (la cajera puede) |
 | Mandar el excedente a la bóveda al cerrar | `monto_a_boveda` del cierre → `TRASLADO_A_BOVEDA` | Al cerrar |
 | Traer efectivo de la bóveda a la gaveta | `TRASLADO_DESDE_BOVEDA` | Durante el turno (solo dueña) |
+
+## Corregir errores (anular)
+
+**Anular = marcar, nunca borrar** ([ADR 0012](../decisions/0012-anular-sin-borrar.md)): el registro queda con `anulado`,
+`anulado_en`, `anulado_por_id` y `motivo_anulacion`, y su efecto se revierte. Lo anulado **no cuenta** en el estado de
+resultados, el flujo de efectivo ni el saldo de bóveda; los listados lo siguen mostrando, tachado. Solo la dueña
+(ADMIN), siempre con `motivo`. Doble anulación y falta de motivo dan 400; la cajera, 403.
+
+- `PATCH /movimientos-financieros/:id/anular` `{ motivo }`: solo `EGRESO_OPERATIVO`, `RETIRO_PERSONAL` e
+  `INGRESO_CAPITAL`. Si tocó la **gaveta**, solo mientras su turno siga `ABIERTA` (un turno cerrado es un cuadre
+  inmutable, 400) y `efectivo_esperado` vuelve atrás. Si tocó la **bóveda**, en cualquier momento. No se anulan el
+  aporte/retiro de la apertura de turno, los traslados, ajustes, pagos a proveedor ni mermas: se corrigen anulando su
+  origen (compra, merma) o con el cierre/arqueo.
+- `PATCH /compras/:id/anular`: ver [`inventario.md`](inventario.md#corregir-errores-anular). Revierte el `PAGO_PROVEEDOR`
+  (a la gaveta solo si su turno sigue abierto; o a la bóveda) y salda la deuda si fue al crédito sin abonos.
+- Orden de locks (ADR 0001): turno o bóveda → lotes → cuenta por pagar. Los movimientos de una compra o merma guardan
+  `compra_id` / `ajuste_id`.

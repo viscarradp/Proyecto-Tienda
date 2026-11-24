@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Body,
   Param,
@@ -11,6 +12,7 @@ import { CreateCompraDto } from './dto/create-compra.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AnularDto } from '../common/anular.dto';
 
 @ApiTags('compras')
 @Roles('ADMIN', 'CAJERO')
@@ -28,6 +30,19 @@ export class ComprasController {
     @CurrentUser('userId') userId: number,
   ) {
     return this.comprasService.create(createCompraDto, userId);
+  }
+
+  @Patch(':id/anular')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Anula una compra sin usar (marca, no borra) y revierte su pago',
+  })
+  anular(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AnularDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.comprasService.anular(id, dto.motivo, userId);
   }
 
   @Get()

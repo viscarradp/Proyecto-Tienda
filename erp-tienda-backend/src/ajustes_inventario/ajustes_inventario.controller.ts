@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Body,
   Param,
@@ -10,6 +11,7 @@ import { AjustesInventarioService } from './ajustes_inventario.service';
 import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AnularDto } from '../common/anular.dto';
 
 @Roles('ADMIN')
 @Controller('ajustes-inventario')
@@ -31,6 +33,16 @@ export class AjustesInventarioController {
       userId,
       rol,
     );
+  }
+
+  // Anular una merma (ADR 0012): solo la dueña, siempre con motivo.
+  @Patch(':id/anular')
+  anular(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AnularDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.ajustesInventarioService.anular(id, dto.motivo, userId);
   }
 
   @Get()

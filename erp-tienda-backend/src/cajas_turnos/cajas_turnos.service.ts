@@ -399,6 +399,7 @@ export class CajasTurnosService {
           include: {
             usuarios: { select: { nombre: true } },
             categorias_gastos: { select: { nombre: true } },
+            anulado_por: { select: { nombre: true } },
           },
         },
         // Quién abrió y quién cerró: solo el nombre (trazabilidad D-06).
@@ -456,7 +457,7 @@ export class CajasTurnosService {
 
     // Sum egresos operativos (gastos del negocio, excluye retiros a bóveda)
     const egresos = turno.movimientos_financieros
-      .filter((m) => m.tipo_movimiento === 'EGRESO_OPERATIVO')
+      .filter((m) => !m.anulado && m.tipo_movimiento === 'EGRESO_OPERATIVO')
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
         new Prisma.Decimal(0),
@@ -464,7 +465,7 @@ export class CajasTurnosService {
 
     // Sum ingresos de capital
     const ingresos = turno.movimientos_financieros
-      .filter((m) => m.tipo_movimiento === 'INGRESO_CAPITAL')
+      .filter((m) => !m.anulado && m.tipo_movimiento === 'INGRESO_CAPITAL')
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
         new Prisma.Decimal(0),
@@ -472,8 +473,10 @@ export class CajasTurnosService {
 
     // Sum traslados a bóveda (RETIRO_BOVEDA manual + TRASLADO_A_BOVEDA de cierre)
     const retiros = turno.movimientos_financieros
-      .filter((m) =>
-        ['RETIRO_BOVEDA', 'TRASLADO_A_BOVEDA'].includes(m.tipo_movimiento),
+      .filter(
+        (m) =>
+          !m.anulado &&
+          ['RETIRO_BOVEDA', 'TRASLADO_A_BOVEDA'].includes(m.tipo_movimiento),
       )
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
@@ -482,7 +485,7 @@ export class CajasTurnosService {
 
     // BUG 8: Sum pagos a proveedores (egreso real de caja por compras)
     const pagos_proveedores = turno.movimientos_financieros
-      .filter((m) => m.tipo_movimiento === 'PAGO_PROVEEDOR')
+      .filter((m) => !m.anulado && m.tipo_movimiento === 'PAGO_PROVEEDOR')
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
         new Prisma.Decimal(0),
@@ -490,7 +493,7 @@ export class CajasTurnosService {
 
     // BUG 4 + BUG 8: Sum mermas de inventario (pérdida patrimonial, no salida de efectivo)
     const mermas_inventario = turno.movimientos_financieros
-      .filter((m) => m.tipo_movimiento === 'MERMA_INVENTARIO')
+      .filter((m) => !m.anulado && m.tipo_movimiento === 'MERMA_INVENTARIO')
       .reduce(
         (acc, m) => acc.add(new Prisma.Decimal(m.monto)),
         new Prisma.Decimal(0),

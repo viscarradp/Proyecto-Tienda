@@ -195,6 +195,7 @@ export class AjustesInventarioService {
               (justificacion ? ` — ${justificacion}` : ' — Sin detalle') +
               ` (Lote #${lote_id})`,
             usuario_id: userId,
+            ajuste_id: ajuste.id,
           },
         });
       }
@@ -203,10 +204,86 @@ export class AjustesInventarioService {
     }, TX_OPTIONS);
   }
 
+  /**
+   * Anula una merma (ajuste negativo): devuelve la cantidad a su lote y marca
+   * (nunca borra) el ajuste y su `MERMA_INVENTARIO`, que deja de contar como
+   * pérdida. Los conteos sobrantes no se anulan: se corrigen con otra merma o
+   * conteo. Cualquier momento (una merma no mueve efectivo). ADR 0012.
+   */
+  async anular(id: number, motivo: string, userId?: number) {
+    const ajuste = await this.prisma.ajustes_inventario.findUnique({
+      where: { id },
+    });
+    if (!ajuste) {
+      throw new NotFoundException(
+        `Ajuste de inventario con ID ${id} no encontrado`,
+      );
+    }
+    if (ajuste.anulado) {
+      throw new BadRequestException('Esta merma ya está anulada.');
+    }
+    if (ajuste.tipo_ajuste === 'CONTEO_SOBRANTE') {
+      throw new BadRequestException(
+        'Un conteo sobrante no se anula. Si te equivocaste, registra una merma o un conteo para corregirlo.',
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // Lote bajo lock (orden global: turno → venta → lotes): una venta
+      // concurrente no puede leer su cantidad a medias. Anular no inserta
+      // filas que referencien al turno, así que no necesita bloquearlo.
+      await tx.$queryRaw`
+        SELECT id FROM lotes_inventario WHERE id = ${ajuste.lote_id} FOR UPDATE
+      `;
+
+      // Se reclama bajo lock: dos anulaciones concurrentes no devuelven dos veces.
+      const marcado = await tx.ajustes_inventario.updateMany({
+        where: { id, anulado: false },
+        data: {
+          anulado: true,
+          anulado_en: new Date(),
+          anulado_por_id: userId ?? null,
+          motivo_anulacion: motivo,
+        },
+      });
+      if (marcado.count === 0) {
+        throw new BadRequestException('Esta merma ya está anulada.');
+      }
+
+      await tx.lotes_inventario.update({
+        where: { id: ajuste.lote_id },
+        data: { cantidad_disponible: { increment: ajuste.cantidad_ajustada } },
+      });
+
+      await tx.movimientos_financieros.updateMany({
+        where: {
+          ajuste_id: id,
+          tipo_movimiento: 'MERMA_INVENTARIO',
+          anulado: false,
+        },
+        data: {
+          anulado: true,
+          anulado_en: new Date(),
+          anulado_por_id: userId ?? null,
+          motivo_anulacion: motivo,
+        },
+      });
+
+      return await tx.ajustes_inventario.findUniqueOrThrow({
+        where: { id },
+        include: {
+          lotes_inventario: { include: { productos: true } },
+          anulado_por: { select: { nombre: true } },
+        },
+      });
+    }, TX_OPTIONS);
+  }
+
   findAll() {
     return this.prisma.ajustes_inventario.findMany({
       orderBy: { fecha: 'desc' },
       include: {
+        anulado_por: { select: { nombre: true } },
         lotes_inventario: {
           include: {
             productos: true,
@@ -220,6 +297,7 @@ export class AjustesInventarioService {
     const ajuste = await this.prisma.ajustes_inventario.findUnique({
       where: { id },
       include: {
+        anulado_por: { select: { nombre: true } },
         lotes_inventario: {
           include: {
             productos: true,

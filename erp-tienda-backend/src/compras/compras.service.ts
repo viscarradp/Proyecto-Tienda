@@ -15,6 +15,10 @@ import {
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
 import {
+  bloquearParaAnular,
+  marcarMovimientoAnulado,
+} from '../common/anulacion';
+import {
   avisoBovedaNegativa,
   avisoGavetaNegativa,
   soloAvisos,
@@ -152,6 +156,7 @@ export class ComprasService {
             monto: montoCalculado,
             descripcion: `Pago a proveedor ${compraData.proveedor} por compra ID ${compra.id}`,
             usuario_id: userId,
+            compra_id: compra.id,
             cuenta_origen: 'GAVETA',
             cuenta_destino: 'PROVEEDOR',
           },
@@ -173,6 +178,7 @@ export class ComprasService {
             monto: montoCalculado,
             descripcion: `Pago a proveedor ${compraData.proveedor} de compra ID ${compra.id}`,
             usuario_id: userId,
+            compra_id: compra.id,
             cuenta_origen: 'BOVEDA',
             cuenta_destino: 'PROVEEDOR',
           },
@@ -190,10 +196,136 @@ export class ComprasService {
     }, TX_OPTIONS);
   }
 
+  /**
+   * Anula una compra que nadie usó todavía (ADR 0012): los lotes quedan en 0,
+   * su pago se marca anulado (el dinero vuelve a la gaveta —solo si su turno
+   * sigue abierto— o a la bóveda) y, si fue al crédito sin abonos, la deuda
+   * queda saldada. Nunca se borra nada. Orden de locks (ADR 0001): turno /
+   * bóveda → lotes → cuenta por pagar.
+   */
+  async anular(id: number, motivo: string, userId?: number) {
+    const compra = await this.prisma.compras_inventario.findUnique({
+      where: { id },
+    });
+    if (!compra) {
+      throw new NotFoundException(`Compra con ID ${id} no encontrada`);
+    }
+    if (compra.anulado) {
+      throw new BadRequestException('Esta compra ya está anulada.');
+    }
+
+    // El pago que generó la compra (si salió de la gaveta o de la bóveda).
+    const pago = await this.prisma.movimientos_financieros.findFirst({
+      where: {
+        compra_id: id,
+        tipo_movimiento: 'PAGO_PROVEEDOR',
+        anulado: false,
+      },
+    });
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Fondos: turno (solo gaveta) o bóveda, antes que lotes.
+      if (pago) {
+        await bloquearParaAnular(
+          tx,
+          pago,
+          'Esta compra se pagó de la gaveta de un turno que ya se cerró. Un cierre no se modifica: si hubo un error, registra una merma o un conteo.',
+        );
+      }
+
+      // 2. Lotes bajo lock, en orden de id.
+      const lotes = await tx.$queryRaw<
+        {
+          id: number;
+          cantidad_inicial: Prisma.Decimal | string;
+          cantidad_disponible: Prisma.Decimal | string;
+        }[]
+      >`
+        SELECT id, cantidad_inicial, cantidad_disponible
+        FROM lotes_inventario
+        WHERE compra_id = ${id}
+        ORDER BY id
+        FOR UPDATE
+      `;
+      const loteIds = lotes.map((l) => l.id);
+      const intactos = lotes.every((l) =>
+        new Prisma.Decimal(l.cantidad_disponible).equals(l.cantidad_inicial),
+      );
+      // Con los lotes bloqueados nadie puede venderlos, cubrir deuda de stock
+      // ni ajustarlos mientras revisamos.
+      const [ventas, pendientes, ajustes] = await Promise.all([
+        tx.detalle_venta_lotes.count({ where: { lote_id: { in: loteIds } } }),
+        tx.pendientes_stock.count({
+          where: { lote_resuelto_id: { in: loteIds } },
+        }),
+        tx.ajustes_inventario.count({
+          where: { lote_id: { in: loteIds }, anulado: false },
+        }),
+      ]);
+      if (!intactos || ventas > 0 || pendientes > 0 || ajustes > 0) {
+        throw new BadRequestException(
+          'Ya se vendió o se usó mercadería de esta compra; no se puede anular. Registra una merma o un conteo.',
+        );
+      }
+
+      // 3. Deuda: si ya tiene abonos, primero se corrigen esos pagos.
+      const cuentas = await tx.$queryRaw<{ id: number }[]>`
+        SELECT id FROM cuentas_por_pagar WHERE compra_id = ${id} ORDER BY id FOR UPDATE
+      `;
+      const abonos = await tx.abono_deuda.count({
+        where: { cuenta_id: { in: cuentas.map((c) => c.id) } },
+      });
+      if (abonos > 0) {
+        throw new BadRequestException(
+          'Esta compra ya tiene pagos; primero corrige esos pagos.',
+        );
+      }
+
+      // 4. Se reclama la compra bajo lock (doble anulación → 400).
+      const marcada = await tx.compras_inventario.updateMany({
+        where: { id, anulado: false },
+        data: {
+          anulado: true,
+          anulado_en: new Date(),
+          anulado_por_id: userId ?? null,
+          motivo_anulacion: motivo,
+        },
+      });
+      if (marcada.count === 0) {
+        throw new BadRequestException('Esta compra ya está anulada.');
+      }
+
+      // 5. Efectos: lotes en 0, deuda saldada, pago revertido.
+      await tx.lotes_inventario.updateMany({
+        where: { compra_id: id },
+        data: { cantidad_disponible: 0 },
+      });
+      await tx.cuentas_por_pagar.updateMany({
+        where: { compra_id: id },
+        data: { saldo_pendiente: 0 },
+      });
+      let aviso: string | null = null;
+      if (pago) {
+        ({ aviso } = await marcarMovimientoAnulado(tx, pago, motivo, userId));
+      }
+
+      const actualizada = await tx.compras_inventario.findUniqueOrThrow({
+        where: { id },
+        include: {
+          lotes_inventario: true,
+          anulado_por: { select: { nombre: true } },
+        },
+      });
+      return { ...actualizada, avisos: soloAvisos([aviso]) };
+    }, TX_OPTIONS);
+  }
+
   async findAll() {
     return this.prisma.compras_inventario.findMany({
       include: {
         lotes_inventario: true,
+        usuarios: { select: { nombre: true } },
+        anulado_por: { select: { nombre: true } },
       },
       orderBy: { id: 'desc' },
     });

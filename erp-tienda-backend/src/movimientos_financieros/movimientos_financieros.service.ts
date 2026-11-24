@@ -18,6 +18,13 @@ import {
   soloAvisos,
 } from '../common/avisos-fondos';
 import { categoriaOtrosId } from '../common/categoria-otros';
+import {
+  bloquearParaAnular,
+  esMovimientoDeApertura,
+  marcarMovimientoAnulado,
+  TIPOS_MOVIMIENTO_ANULABLES,
+} from '../common/anulacion';
+import { TX_OPTIONS } from '../common/transaccion';
 
 @Injectable()
 export class MovimientosFinancierosService {
@@ -201,6 +208,55 @@ export class MovimientosFinancierosService {
     });
   }
 
+  /**
+   * Anula un movimiento de dinero de libre registro (gasto, retiro personal o
+   * aporte de capital): lo marca (nunca lo borra) y revierte su efecto exacto.
+   * Gaveta: solo mientras su turno siga ABIERTA. Bóveda: en cualquier momento.
+   * Los movimientos que genera el sistema se corrigen anulando su origen
+   * (compra, merma) o con el arqueo. ADR 0012.
+   */
+  async anular(id: number, motivo: string, userId?: number) {
+    const mov = await this.prisma.movimientos_financieros.findUnique({
+      where: { id },
+    });
+    if (!mov) {
+      throw new NotFoundException(
+        `Movimiento financiero con ID ${id} no encontrado`,
+      );
+    }
+    if (mov.anulado) {
+      throw new BadRequestException('Este movimiento ya está anulado.');
+    }
+    if (!TIPOS_MOVIMIENTO_ANULABLES.includes(mov.tipo_movimiento)) {
+      throw new BadRequestException(
+        mov.tipo_movimiento === 'PAGO_PROVEEDOR'
+          ? 'Un pago a proveedor se corrige anulando la compra que lo generó.'
+          : mov.tipo_movimiento === 'MERMA_INVENTARIO'
+            ? 'Una merma se corrige anulando la merma en Inventario.'
+            : 'Este movimiento lo genera el sistema (traslado, cierre o ajuste) y no se anula. Si algo no cuadra, se corrige con el cierre o el arqueo.',
+      );
+    }
+    if (esMovimientoDeApertura(mov.descripcion)) {
+      throw new BadRequestException(
+        'Este movimiento nació al abrir el turno y no se anula. Si algo no cuadra, se corrige al cerrar el turno.',
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      await bloquearParaAnular(
+        tx,
+        mov,
+        'Ese movimiento salió de la gaveta de un turno que ya se cerró. Un cierre no se modifica: si hubo un error, regístralo como un movimiento nuevo.',
+      );
+      const { aviso } = await marcarMovimientoAnulado(tx, mov, motivo, userId);
+      const actualizado = await tx.movimientos_financieros.findUniqueOrThrow({
+        where: { id },
+        include: { anulado_por: { select: { nombre: true } } },
+      });
+      return { ...actualizado, avisos: soloAvisos([aviso]) };
+    }, TX_OPTIONS);
+  }
+
   findAll(tipo_movimiento?: string, limit?: number) {
     const whereClause = tipo_movimiento ? { tipo_movimiento } : {};
 
@@ -212,6 +268,7 @@ export class MovimientosFinancierosService {
       include: {
         categorias_gastos: true,
         usuarios: { select: { nombre: true } },
+        anulado_por: { select: { nombre: true } },
       },
     });
   }
@@ -222,6 +279,7 @@ export class MovimientosFinancierosService {
       include: {
         categorias_gastos: true,
         usuarios: { select: { nombre: true } },
+        anulado_por: { select: { nombre: true } },
       },
     });
     if (!movimiento) {

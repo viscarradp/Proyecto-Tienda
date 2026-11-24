@@ -10,6 +10,7 @@ import {
   PlusCircle,
   CheckCircle2,
   Receipt,
+  Undo2,
 } from "lucide-react"
 
 import { toast } from "sonner"
@@ -31,6 +32,7 @@ import { StatCard } from "@/components/stat-card"
 import { apiFetch } from "@/lib/api"
 import { DeudasProveedores } from "@/components/gastos/DeudasProveedores"
 import { GAVETA, BOVEDA } from "@/lib/glosario"
+import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 
 /** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
 const SIN_CATEGORIA = "sin-categoria"
@@ -57,7 +59,12 @@ interface MovimientoFinanciero {
   monto: string
   descripcion: string
   fecha: string
+  caja_turno_id: number | null
+  cuenta_origen: string | null
   categorias_gastos?: CategoriaGasto
+  anulado: boolean
+  motivo_anulacion: string | null
+  anulado_por?: { nombre: string } | null
 }
 
 export default function GastosPage() {
@@ -77,6 +84,7 @@ export default function GastosPage() {
   const [categoriaId, setCategoriaId] = React.useState("")
   const [origenFondos, setOrigenFondos] = React.useState("CAJA_POS")
   const [submitLoading, setSubmitLoading] = React.useState(false)
+  const [aAnular, setAAnular] = React.useState<AnularObjetivo | null>(null)
 
   // New Category Modal State
   const [showNewCatDialog, setShowNewCatDialog] = React.useState(false)
@@ -196,6 +204,20 @@ export default function GastosPage() {
       setNewCatLoading(false)
     }
   }
+
+  const pedirAnular = (g: MovimientoFinanciero) => {
+    const monto = parseFloat(g.monto).toLocaleString("en-US", { style: "currency", currency: "USD" })
+    const lugar = g.cuenta_origen === "BOVEDA" ? `la ${BOVEDA.toLowerCase()}` : `la ${GAVETA.toLowerCase()}`
+    setAAnular({
+      endpoint: `/movimientos-financieros/${g.id}/anular`,
+      titulo: "Anular gasto",
+      efecto: `Se devolverán ${monto} a ${lugar} y el gasto «${g.descripcion}» dejará de contar. Queda marcado como anulado, no se borra.`,
+    })
+  }
+
+  // Un gasto de la gaveta solo se anula mientras su turno siga abierto.
+  const sePuedeAnular = (g: MovimientoFinanciero) =>
+    !g.anulado && (g.cuenta_origen === "BOVEDA" || (g.caja_turno_id !== null && g.caja_turno_id === cajaActiva?.id))
 
   if (!mounted) return null
 
@@ -358,22 +380,30 @@ export default function GastosPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {gastosRecientes.map(gasto => (
-                  <div key={gasto.id} className="flex flex-col justify-between gap-3 rounded-sm border border-border px-4 py-3 md:flex-row md:items-center">
+                  <div key={gasto.id} className={cn("flex flex-col justify-between gap-3 rounded-sm border border-border px-4 py-3 md:flex-row md:items-center", gasto.anulado && "bg-muted/30")}>
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary/10 font-semibold text-primary">
                         {gasto.categorias_gastos?.nombre?.charAt(0) || '-'}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{gasto.descripcion}</p>
+                        <p className={cn("truncate font-medium", gasto.anulado && "text-muted-foreground line-through")}>{gasto.descripcion}</p>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                           <span>{new Date(gasto.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                           <span>·</span>
                           <span>{gasto.categorias_gastos?.nombre || 'Sin categoría'}</span>
                         </div>
+                        {gasto.anulado && <AnuladoNota motivo={gasto.motivo_anulacion} quien={gasto.anulado_por?.nombre} />}
                       </div>
                     </div>
-                    <div className="shrink-0 self-start font-mono text-lg font-semibold text-destructive md:self-auto">
-                      -{parseFloat(gasto.monto).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    <div className="flex shrink-0 items-center gap-3 self-start md:self-auto">
+                      {sePuedeAnular(gasto) && (
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => pedirAnular(gasto)}>
+                          <Undo2 className="h-3.5 w-3.5" /> Anular
+                        </Button>
+                      )}
+                      <div className={cn("font-mono text-lg font-semibold text-destructive", gasto.anulado && "text-muted-foreground line-through")}>
+                        -{parseFloat(gasto.monto).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -382,6 +412,8 @@ export default function GastosPage() {
           </div>
         </div>
       </div>
+
+      <AnularDialog objetivo={aAnular} onClose={() => setAAnular(null)} onHecho={loadData} />
 
       {/* ════════ DIALOG: NUEVA CATEGORÍA ════════ */}
       <Dialog open={showNewCatDialog} onOpenChange={setShowNewCatDialog}>
