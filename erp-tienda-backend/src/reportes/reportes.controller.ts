@@ -1,6 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ReportesService } from './reportes.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import {
+  esFechaCalendarioValida,
+  hoyEnZona,
+  limitesDelDia,
+  primerDiaDelMesEnZona,
+  zonaHorariaNegocio,
+} from '../common/zona-horaria';
 
 @Roles('ADMIN')
 @Controller('reportes')
@@ -69,33 +76,41 @@ export class ReportesController {
   }
 
   /**
-   * Parsea los query params de fecha.
-   * Default: desde el 1ro del mes actual hasta el final de hoy.
+   * Parsea los query params de fecha ("YYYY-MM-DD", día calendario en la zona
+   * horaria del negocio) a límites UTC. Default: desde el 1ro del mes actual
+   * hasta el final de hoy, también en la zona del negocio.
    */
   private parsePeriodo(
     desdeStr?: string,
     hastaStr?: string,
   ): { desde: Date; hasta: Date } {
-    const now = new Date();
+    const zona = zonaHorariaNegocio();
+    const ahora = new Date();
+    const diaDesde =
+      this.validarDia('desde', desdeStr) ?? primerDiaDelMesEnZona(ahora, zona);
+    const diaHasta =
+      this.validarDia('hasta', hastaStr) ?? hoyEnZona(ahora, zona);
 
-    const desde = desdeStr
-      ? new Date(desdeStr + 'T00:00:00.000Z')
-      : new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    // "YYYY-MM-DD" se ordena igual como texto que como calendario.
+    if (diaDesde > diaHasta) {
+      throw new BadRequestException(
+        `"desde" (${diaDesde}) no puede ser posterior a "hasta" (${diaHasta})`,
+      );
+    }
 
-    const hasta = hastaStr
-      ? new Date(hastaStr + 'T23:59:59.999Z')
-      : new Date(
-          Date.UTC(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            23,
-            59,
-            59,
-            999,
-          ),
-        );
+    return {
+      desde: limitesDelDia(diaDesde, zona).inicio,
+      hasta: limitesDelDia(diaHasta, zona).fin,
+    };
+  }
 
-    return { desde, hasta };
+  private validarDia(nombre: string, valor?: string): string | undefined {
+    if (valor === undefined || valor === '') return undefined;
+    if (!esFechaCalendarioValida(valor)) {
+      throw new BadRequestException(
+        `"${nombre}" debe tener formato YYYY-MM-DD y ser una fecha válida`,
+      );
+    }
+    return valor;
   }
 }

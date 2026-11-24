@@ -13,6 +13,7 @@ subas un `.env` real al repositorio (ya está en `.gitignore`).
 | `INITIAL_ADMIN_PASSWORD` | No, pero recomendada | Contraseña del usuario `admin` que se crea automáticamente la primera vez que arranca con la tabla `usuarios` vacía. Si falta, **no se crea ningún admin** (ver [`../decisions/0003-admin-seed-por-env.md`](../decisions/0003-admin-seed-por-env.md)). |
 | `CORS_ORIGINS` | No (default `http://localhost:3001`) | Orígenes permitidos por CORS, separados por coma. En producción debe apuntar al dominio real del frontend. |
 | `NODE_ENV` | No | En `production`, desactiva Swagger (salvo que `ENABLE_SWAGGER=true`) y endurece la CSP de Helmet. |
+| `ZONA_HORARIA_NEGOCIO` | No (default `America/El_Salvador`) | Zona horaria de la tienda, como nombre IANA. Existe porque los reportes (`estado-resultados`, `productos-top`, `margen-por-producto`, `flujo-efectivo`) agrupan por **día en la hora de la tienda**: las fechas se guardan en UTC y, sin esta zona, una venta de las 6 pm en adelante caería en el día siguiente. Si el valor es inválido, el servidor **no arranca**. |
 | `ENABLE_SWAGGER` | No | Si es `"true"`, fuerza Swagger encendido aunque `NODE_ENV=production`. |
 
 ## Frontend (`erp-tienda-frontend/.env.local`)
