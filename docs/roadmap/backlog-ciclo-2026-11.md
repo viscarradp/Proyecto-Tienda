@@ -27,11 +27,11 @@ Desbloquean los lotes L5–L8. Detalle y alternativas en la auditoría de reglas
 
 | # | Pregunta | Recomendación | Desbloquea |
 |---|---|---|---|
-| D-03 | ¿Se vende algo por peso o suelto (queso, frijol, azúcar)? | Si sí: cantidad decimal y "por monto" en el ticket | L5 |
-| D-01 | Si un producto no tiene stock registrado, ¿se deja vender? | Sí: vender, marcar "sin stock registrado" y avisar | L5 |
-| D-02 | ¿La cajera puede vender algo que no está en el catálogo? | Sí: alta rápida (nombre + precio) "por revisar" | L5 |
-| D-04 | Si el sistema cree que no hay efectivo, ¿bloquear el gasto o dejar pasar con aviso? | Dejar pasar y avisar; asistente de "efectivo guardado hoy" para la bóveda | L6 |
-| D-15 | Si el fondo de apertura difiere de lo que quedó, ¿qué hacer? | Preguntar el origen (bóveda / aporte / corrección), sin bloquear | L6 |
+| D-03 | ¿Se vende algo por peso o suelto (queso, frijol, azúcar)? | **✅ Decidido 2026-11-24: sí** — cantidad decimal y "por monto" en el ticket | L5 |
+| D-01 | Si un producto no tiene stock registrado, ¿se deja vender? | **✅ Decidido 2026-11-24: vender y avisar** — la línea queda "sin stock registrado" | L5 |
+| D-02 | ¿La cajera puede vender algo que no está en el catálogo? | **✅ Decidido 2026-11-24: alta rápida** (nombre + precio) "por revisar" | L5 |
+| D-04 | Si el sistema cree que no hay efectivo, ¿bloquear el gasto o dejar pasar con aviso? | **✅ Decidido 2026-11-24: registrar y avisar**; asistente de "efectivo guardado hoy" para la bóveda | L6 |
+| D-15 | Si el fondo de apertura difiere de lo que quedó, ¿qué hacer? | **✅ Decidido 2026-11-24: preguntar el origen** (bóveda / aporte / corrección), sin bloquear | L6 |
 | ARQ-03 | ¿Habrá **dos cajas cobrando al mismo tiempo**? | Si no: dejar un solo turno. Si sí: turno por caja (cambio grande) | — |
 | D-06 | ¿Qué puede hacer la cajera? | Vende, anula y devuelve con autor y motivo; retiro personal, capital, gastos desde bóveda y arqueo solo la dueña | L7 |
 | D-05 | ¿Se compra fiado a distribuidores? | Si sí: lista de deudas con "pagar/abonar" | L8 |
@@ -127,8 +127,9 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 |---|---|---|
 | 1 | **L1a** + **L2** | Ninguna (contrato `Idempotency-Key` definido en ambos briefs) |
 | 2 | **L1b** + **L3a** | Ola 1 en `master` |
-| 3 | **L4** + el primer lote de decisiones respondidas (L5 o L6) | Decisiones D-01/02/03 o D-04/15 |
-| 4 | L7 + L8 | Decisiones D-06 y D-05 |
+| 3 | **L4** paginación + **L5a** mostrador (backend): deuda de stock, alta rápida, venta por monto | D-01/02/03 ✅ |
+| 4 | **L5b** mostrador (frontend: ticket decimal y por monto, alta rápida, avisos de stock) + **L6** fondos y apertura | D-04/15 ✅ |
+| 5 | L7 + L8 | Decisiones D-06 y D-05 |
 | — | L3b backup | Decisión de infraestructura |
 | después | Nivel 2 y 3, Fase 5 (docs) | Primera semana de uso real |
 
@@ -142,4 +143,5 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
 | L3b | ⏸ decisión de infraestructura | — |
 | L4 | ⏳ | — |
-| L5–L8 | ⏸ decisiones del negocio | — |
+| L5a, L5b, L6 | ⏳ decisiones tomadas el 2026-11-24 | — |
+| L7, L8 | ⏸ decisiones D-06, D-05 y ARQ-03 | — |
