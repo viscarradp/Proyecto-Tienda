@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateVentaDto } from './dto/create-venta.dto';
@@ -8,6 +9,12 @@ import { CreateDevolucionDto } from './dto/create-devolucion.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
+
+/** Fila de ventas leída con FOR UPDATE. */
+interface VentaRow {
+  id: number;
+  estado: string;
+}
 
 @Injectable()
 export class VentasService {
@@ -199,6 +206,9 @@ export class VentasService {
     return this.prisma.ventas.findMany({
       orderBy: { fecha: 'desc' },
       include: {
+        // Solo el conteo: la UI decide si ofrece «Anular» (no se puede anular
+        // una venta con devoluciones).
+        _count: { select: { devoluciones: true } },
         detalle_ventas: {
           include: {
             presentaciones: true,
@@ -223,34 +233,27 @@ export class VentasService {
   }
 
   async anular(id: number, justificacion_nula: string) {
-    const venta = await this.prisma.ventas.findUnique({
+    // Lectura previa SOLO para ubicar el turno a bloquear. Todo lo demás
+    // (estado, devoluciones, líneas y lotes) se lee y valida bajo lock dentro
+    // de la transacción.
+    const previa = await this.prisma.ventas.findUnique({
       where: { id },
-      include: {
-        detalle_ventas: {
-          include: { detalle_venta_lotes: true },
-        },
-      },
+      select: { caja_turno_id: true },
     });
 
-    if (!venta) {
+    if (!previa) {
       throw new NotFoundException(`Venta con ID ${id} no encontrada`);
     }
 
-    if (venta.estado === 'ANULADA') {
-      throw new BadRequestException('La venta ya se encuentra anulada');
-    }
-
     return await this.prisma.$transaction(async (tx) => {
-      // ── BUG 5: Verificar que el turno de caja esté abierto ──
-      // Si el turno ya fue cerrado, su cuadre histórico (diferencia) es inmutable.
-      // Modificar efectivo_esperado después del cierre corrompería ese registro.
-      // Se valida DENTRO de la tx con la fila bloqueada (FOR UPDATE): si el turno
-      // se cierra justo en este instante, esta anulación debe verlo y rechazarse
-      // (ver docs/decisions/0001-concurrencia-for-update.md).
+      // Orden de locks: TURNO primero, luego VENTA (igual que devolver(), para
+      // no crear deadlocks). Ver docs/decisions/0001-concurrencia-for-update.md.
+      // Si el turno ya fue cerrado, su cuadre histórico (diferencia) es
+      // inmutable: modificar efectivo_esperado lo corrompería.
       const [turno] = await tx.$queryRaw<CajaTurnoRow[]>`
         SELECT id, estado
         FROM cajas_turnos
-        WHERE id = ${venta.caja_turno_id}
+        WHERE id = ${previa.caja_turno_id}
         FOR UPDATE
       `;
 
@@ -260,6 +263,45 @@ export class VentasService {
             'Las anulaciones solo son posibles durante el turno activo.',
         );
       }
+
+      // Bloquea la fila de la venta y re-valida bajo lock: una segunda
+      // anulación concurrente (doble clic) espera aquí y, al continuar, ve la
+      // venta ya ANULADA y se rechaza en vez de revertir dos veces.
+      const [ventaLocked] = await tx.$queryRaw<VentaRow[]>`
+        SELECT id, estado
+        FROM ventas
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+
+      if (!ventaLocked) {
+        throw new NotFoundException(`Venta con ID ${id} no encontrada`);
+      }
+      if (ventaLocked.estado === 'ANULADA') {
+        throw new BadRequestException('La venta ya se encuentra anulada');
+      }
+
+      // Una venta con devoluciones no se anula: revertirla completa duplicaría
+      // el stock y el efectivo ya devueltos por la devolución.
+      const devoluciones = await tx.devoluciones.count({
+        where: { venta_id: id },
+      });
+      if (devoluciones > 0) {
+        throw new ConflictException(
+          'Esta venta ya tiene devoluciones registradas, así que no se puede ' +
+            'anular. Usa «Devolver» para el resto de los productos.',
+        );
+      }
+
+      // Lectura de líneas y lotes ya bajo lock.
+      const venta = await tx.ventas.findUniqueOrThrow({
+        where: { id },
+        include: {
+          detalle_ventas: {
+            include: { detalle_venta_lotes: true },
+          },
+        },
+      });
 
       // 1. Marcar como anulada
       const ventaAnulada = await tx.ventas.update({
@@ -309,22 +351,14 @@ export class VentasService {
    *  - MERMA: se descarta (no reingresa stock; su costo queda como pérdida).
    */
   async devolver(ventaId: number, dto: CreateDevolucionDto, userId?: number) {
-    const venta = await this.prisma.ventas.findUnique({
+    // Existencia previa (404 rápido); estado y cantidades ya devueltas se
+    // leen de nuevo bajo lock dentro de la transacción.
+    const existe = await this.prisma.ventas.findUnique({
       where: { id: ventaId },
-      include: {
-        detalle_ventas: {
-          include: { detalle_venta_lotes: true, detalle_devoluciones: true },
-        },
-      },
+      select: { id: true },
     });
-
-    if (!venta) {
+    if (!existe) {
       throw new NotFoundException(`Venta con ID ${ventaId} no encontrada`);
-    }
-    if (venta.estado !== 'COMPLETADA') {
-      throw new BadRequestException(
-        'Solo se pueden devolver ventas completadas',
-      );
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -343,6 +377,34 @@ export class VentasService {
             '(el reembolso sale de la caja actual)',
         );
       }
+
+      // Luego se bloquea la venta (orden turno → venta, igual que anular()).
+      // Así dos devoluciones simultáneas, o una devolución y una anulación,
+      // se serializan y la segunda ve lo que dejó la primera.
+      const [ventaLocked] = await tx.$queryRaw<VentaRow[]>`
+        SELECT id, estado
+        FROM ventas
+        WHERE id = ${ventaId}
+        FOR UPDATE
+      `;
+      if (!ventaLocked) {
+        throw new NotFoundException(`Venta con ID ${ventaId} no encontrada`);
+      }
+      if (ventaLocked.estado !== 'COMPLETADA') {
+        throw new BadRequestException(
+          'Solo se pueden devolver ventas completadas',
+        );
+      }
+
+      // Re-lectura bajo lock: líneas, lotes y lo ya devuelto por línea.
+      const venta = await tx.ventas.findUniqueOrThrow({
+        where: { id: ventaId },
+        include: {
+          detalle_ventas: {
+            include: { detalle_venta_lotes: true, detalle_devoluciones: true },
+          },
+        },
+      });
 
       let totalReembolsado = new Prisma.Decimal(0);
       const detalleRows: Prisma.detalle_devolucionesCreateManyDevolucionesInput[] =

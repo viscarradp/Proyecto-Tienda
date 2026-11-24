@@ -30,7 +30,11 @@ línea por línea (para eso está el código y `architecture/data-model.md`).
 - **Anular una venta** devuelve el stock exactamente a los lotes de donde
   salió, y reduce `efectivo_esperado` del turno — pero **solo si el turno
   sigue `ABIERTA`**. Anular una venta de un turno ya cerrado corrompería su
-  cuadre histórico, así que está bloqueado.
+  cuadre histórico, así que está bloqueado. **Una venta que ya tiene alguna
+  devolución no se puede anular** (409): revertirla completa duplicaría el
+  stock y el efectivo ya devueltos; para el resto de los productos se usa
+  «Devolver». La anulación bloquea turno y luego venta (`FOR UPDATE`) y
+  re-valida bajo lock, así que un doble clic no revierte dos veces.
 - **Decisión de producto (2026-07, Fase 3): el sistema es solo efectivo, a
   propósito.** No existe ni se planea agregar el concepto de método de pago
   (tarjeta, transferencia). Toda venta incrementa `efectivo_esperado` por el
