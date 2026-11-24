@@ -388,6 +388,68 @@ describe('Anular registros (e2e, L12)', () => {
     });
   });
 
+  describe('Asientos de apertura (es_apertura)', () => {
+    async function remanente(): Promise<number> {
+      const res = await http().get('/cajas-turnos/ultimo-cierre').set(auth());
+      return Number((res.body as { fondo_siguiente: string }).fondo_siguiente);
+    }
+
+    async function abrirCon(diferencia: number, origen: 'APORTE' | 'RETIRO') {
+      await ensureNoOpenShift(app, admin);
+      const base = await remanente();
+      await http()
+        .post('/cajas-turnos/abrir')
+        .set(auth())
+        .send({ fondo_inicial: base + diferencia, origen_diferencia: origen })
+        .expect(201);
+      const activa = await http().get('/cajas-turnos/activa').set(auth());
+      const turnoId = (activa.body as WithId).id;
+      const det = await http().get(`/cajas-turnos/${turnoId}`).set(auth());
+      const asiento = (det.body as TurnoBody).movimientos_financieros.find(
+        (m) =>
+          m.tipo_movimiento ===
+          (origen === 'APORTE' ? 'INGRESO_CAPITAL' : 'RETIRO_PERSONAL'),
+      );
+      expect(asiento).toBeDefined();
+      return asiento!;
+    }
+
+    it.each([
+      ['aporte', 20, 'APORTE'],
+      ['retiro', -5, 'RETIRO'],
+    ] as const)(
+      'el %s de la apertura no se anula y el esperado no cambia',
+      async (_nombre, diferencia, origen) => {
+        const asiento = await abrirCon(diferencia, origen);
+        const antes = await esperado();
+
+        const res = await anularMov(asiento.id);
+        expect(res.status).toBe(400);
+        expect(mensaje(res.body)).toContain('al abrir el turno');
+        expect(await esperado()).toBe(antes);
+      },
+    );
+
+    it('un gasto cuya descripción empieza como el texto viejo sí se anula', async () => {
+      await ensureNoOpenShift(app, admin);
+      await abrirTurno(100);
+      const res = await http()
+        .post('/movimientos-financieros')
+        .set(auth())
+        .send({
+          tipo_movimiento: 'EGRESO_OPERATIVO',
+          monto: 4,
+          descripcion: 'Aporte de la dueña al abrir la caja (copia)',
+          origen_fondos: 'GAVETA',
+        });
+      expect(res.status).toBe(201);
+      const antes = await esperado();
+      expect((await anularMov((res.body as WithId).id)).status).toBe(200);
+      expect(await esperado()).toBe(antes + 4);
+      await ensureNoOpenShift(app, admin);
+    });
+  });
+
   describe('Compras', () => {
     it('pagada desde la gaveta: lotes en 0, el dinero vuelve y el pago queda anulado', async () => {
       await abrirTurno(100);

@@ -80,6 +80,8 @@ interface MovimientoTurno {
   usuarios?: { nombre: string } | null
   categorias_gastos?: { nombre: string } | null
   anulado?: boolean
+  /** Asiento de la diferencia de apertura: no mueve el esperado, no se anula. */
+  es_apertura?: boolean
   motivo_anulacion?: string | null
   anulado_por?: { nombre: string } | null
 }
@@ -160,10 +162,6 @@ function MovimientoFila({ mov, onAnular }: { mov: MovimientoTurno; onAnular?: (m
 
 /** Movimientos de libre registro que la dueña puede anular (ADR 0012). */
 const TIPOS_ANULABLES = ['EGRESO_OPERATIVO', 'RETIRO_PERSONAL', 'INGRESO_CAPITAL']
-/** El aporte/retiro que genera la apertura del turno no se anula (no mueve el esperado). */
-const esDeApertura = (descripcion: string) =>
-  descripcion.startsWith('Aporte de la dueña al abrir la caja') ||
-  descripcion.startsWith('Retiro de la dueña (diferencia de apertura)')
 
 const TURNOS_POR_PAGINA = 7
 const TURNOS_MAX = 50
@@ -754,7 +752,7 @@ export default function MovimientosPage() {
                                   mov={mov}
                                   onAnular={
                                     esAdmin && isAbierta && !mov.anulado &&
-                                    TIPOS_ANULABLES.includes(mov.tipo_movimiento) && !esDeApertura(mov.descripcion)
+                                    TIPOS_ANULABLES.includes(mov.tipo_movimiento) && !mov.es_apertura
                                       ? pedirAnular
                                       : undefined
                                   }

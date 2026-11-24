@@ -125,7 +125,7 @@ resultados, el flujo de efectivo ni el saldo de bóveda; los listados lo siguen 
 - `PATCH /movimientos-financieros/:id/anular` `{ motivo }`: solo `EGRESO_OPERATIVO`, `RETIRO_PERSONAL` e
   `INGRESO_CAPITAL`. Si tocó la **gaveta**, solo mientras su turno siga `ABIERTA` (un turno cerrado es un cuadre
   inmutable, 400) y `efectivo_esperado` vuelve atrás. Si tocó la **bóveda**, en cualquier momento. No se anulan el
-  aporte/retiro de la apertura de turno, los traslados, ajustes, pagos a proveedor ni mermas: se corrigen anulando su
+  aporte/retiro de la apertura de turno (marca `es_apertura`), los traslados, ajustes, pagos a proveedor ni mermas: se corrigen anulando su
   origen (compra, merma) o con el cierre/arqueo.
 - `PATCH /compras/:id/anular`: ver [`inventario.md`](inventario.md#corregir-errores-anular). Revierte el `PAGO_PROVEEDOR`
   (a la gaveta solo si su turno sigue abierto; o a la bóveda) y salda la deuda si fue al crédito sin abonos.

@@ -28,5 +28,5 @@ ya tenían "Anular" y "Devolver".
 - Cambio de schema (sin migraciones hasta producción, ADR 0002): columnas de anulación, `compra_id`, `ajuste_id` y
   relaciones nombradas con `usuarios`.
 - Los movimientos anteriores a este cambio no tienen `compra_id`/`ajuste_id`: no se pueden revertir sus efectos.
-- El aporte/retiro de la apertura de turno no se anula; se distingue por su descripción (frágil: si cambia el texto en
-  `cajas_turnos`, hay que actualizar `common/anulacion.ts`).
+- El asiento de la diferencia de apertura de turno no se anula: lo marca `movimientos_financieros.es_apertura`
+  (la apertura lo pone en `true`), no su descripción.

@@ -20,7 +20,6 @@ import {
 import { categoriaOtrosId } from '../common/categoria-otros';
 import {
   bloquearParaAnular,
-  esMovimientoDeApertura,
   marcarMovimientoAnulado,
   TIPOS_MOVIMIENTO_ANULABLES,
 } from '../common/anulacion';
@@ -236,7 +235,9 @@ export class MovimientosFinancierosService {
             : 'Este movimiento lo genera el sistema (traslado, cierre o ajuste) y no se anula. Si algo no cuadra, se corrige con el cierre o el arqueo.',
       );
     }
-    if (esMovimientoDeApertura(mov.descripcion)) {
+    // El asiento de la diferencia de apertura no mueve el esperado: anularlo
+    // descuadraría la gaveta (marca `es_apertura`, no la descripción).
+    if (mov.es_apertura) {
       throw new BadRequestException(
         'Este movimiento nació al abrir el turno y no se anula. Si algo no cuadra, se corrige al cerrar el turno.',
       );

@@ -16,18 +16,6 @@ export const TIPOS_MOVIMIENTO_ANULABLES = [
   'INGRESO_CAPITAL',
 ];
 
-/**
- * El aporte / retiro que genera la apertura de un turno (D-15) no mueve
- * `efectivo_esperado` (el turno arrancó ya en el fondo): anularlo lo
- * descuadraría. Se reconoce por su descripción (la fija `cajas_turnos`).
- */
-export function esMovimientoDeApertura(descripcion: string): boolean {
-  return (
-    descripcion.startsWith('Aporte de la dueña al abrir la caja') ||
-    descripcion.startsWith('Retiro de la dueña (diferencia de apertura)')
-  );
-}
-
 export interface MovimientoParaAnular {
   id: number;
   monto: Prisma.Decimal | string | number;
