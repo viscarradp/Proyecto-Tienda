@@ -1,12 +1,12 @@
 import {
   IsString,
-  IsNumber,
   IsNotEmpty,
   IsIn,
-  Min,
   IsOptional,
   IsInt,
+  MaxLength,
 } from 'class-validator';
+import { IsDinero } from '../../common/validacion';
 
 export class CreateMovimientosFinancieroDto {
   @IsString()
@@ -19,13 +19,15 @@ export class CreateMovimientosFinancieroDto {
   ])
   tipo_movimiento: string;
 
-  @IsNumber()
+  @IsDinero({ min: 0.01, mensajeMin: 'El monto debe ser mayor a 0' })
   @IsNotEmpty()
-  @Min(0.01)
   monto: number;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500, {
+    message: 'La descripción no puede pasar de 500 caracteres',
+  })
   descripcion: string;
 
   @IsOptional()

@@ -14,6 +14,7 @@ import {
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
 import { TOLERANCIA_DESCUADRE } from '../common/tolerancia';
+import { TX_OPTIONS } from '../common/transaccion';
 
 @Injectable()
 export class CajasTurnosService {
@@ -252,7 +253,7 @@ export class CajasTurnosService {
       }
 
       return cajaCerrada;
-    });
+    }, TX_OPTIONS);
   }
 
   async findAll() {

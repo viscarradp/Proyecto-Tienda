@@ -35,12 +35,13 @@ describe('Reportes — día calendario en la zona del negocio (e2e)', () => {
     token = await loginAsAdmin(app);
     await ensureNoOpenShift(app, token);
 
-    // Un día local lejano (40 días atrás) para no mezclarse con ventas de
-    // otros archivos de test. El Salvador es UTC-6 fijo, sin horario de verano.
+    // Un día local lejano (20 días atrás; la contingencia admite hasta 30) para
+    // no mezclarse con ventas de otros archivos de test.
+    // El Salvador es UTC-6 fijo, sin horario de verano.
     const MS_DIA = 24 * 60 * 60 * 1000;
-    const hace40 = Date.now() - 40 * MS_DIA;
-    diaLocal = new Date(hace40 - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    diaSiguiente = new Date(hace40 + MS_DIA - 6 * 60 * 60 * 1000)
+    const hace20 = Date.now() - 20 * MS_DIA;
+    diaLocal = new Date(hace20 - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    diaSiguiente = new Date(hace20 + MS_DIA - 6 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);
 

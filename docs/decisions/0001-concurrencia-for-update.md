@@ -126,3 +126,30 @@ egresos, apertura de turno, cierre de turno) con concurrencia real. Antes del
 fix: `500 Internal Server Error` bajo carga. Después: respuestas limpias
 (`201`/`400`/`409` según corresponda), aritmética exacta (nunca stock ni
 saldo negativo) y cero deadlocks en el log del servidor.
+
+## Orden global de locks: turno → venta → lotes
+
+Para que dos transacciones nunca se esperen en círculo, **todas** las
+operaciones que toman más de un lock lo hacen siempre en este orden:
+
+1. **Turno** (`cajas_turnos`, `FOR UPDATE`).
+2. **Venta** (`ventas`, `FOR UPDATE`; solo anular y devolver).
+3. **Lotes** (`lotes_inventario`, `FOR UPDATE`).
+
+Un `INSERT` que referencia una fila por FK toma `FOR KEY SHARE` sobre ella, así
+que la regla "lock antes de INSERT" de arriba aplica a cada nivel.
+
+**Caso del ajuste de inventario (merma).** `ajustes_inventario.service.ts`
+leía el lote sin bloquearlo (una venta concurrente podía dejarlo negativo) y,
+si se hubiera arreglado bloqueando solo el lote, habría quedado en el orden
+contrario al de una venta: bloquear el lote primero y después insertar el
+movimiento `MERMA_INVENTARIO` (FK al turno) contra una venta que ya tiene el
+turno y quiere los lotes es un deadlock `40P01` seguro. El flujo correcto es:
+si hay turno `ABIERTA`, bloquearlo primero; luego el lote (`FOR UPDATE`);
+luego validar la cantidad y escribir. Un sobrante de conteo no inserta
+movimiento, así que solo bloquea el lote. Si aun así ocurre un deadlock o un
+timeout, el filtro global lo traduce a `503` (ver 0006).
+
+**Idempotencia de ventas.** `POST /ventas` con el header `Idempotency-Key`
+busca la clave **después** de bloquear el turno: una petición repetida (o
+simultánea) espera detrás del lock y encuentra la venta ya creada.

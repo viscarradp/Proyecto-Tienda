@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
 import { CajaGeneralService } from './caja_general.service';
 import { ArqueoBovedaDto } from './dto/arqueo-caja_general.dto';
+import { InyeccionCapitalDto } from './dto/inyeccion-capital.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -19,7 +20,7 @@ export class CajaGeneralController {
     summary: 'Inyectar capital del dueño a la bóveda (DUEÑOS→BOVEDA)',
   })
   inyectarCapital(
-    @Body() body: { monto: number; descripcion?: string },
+    @Body() body: InyeccionCapitalDto,
     @CurrentUser('userId') userId: number,
   ) {
     return this.cajaGeneralService.inyectarCapital(

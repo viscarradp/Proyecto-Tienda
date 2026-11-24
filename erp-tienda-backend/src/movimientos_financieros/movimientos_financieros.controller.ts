@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
 import { MovimientosFinancierosService } from './movimientos_financieros.service';
 import { CreateMovimientosFinancieroDto } from './dto/create-movimientos_financiero.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -25,16 +34,16 @@ export class MovimientosFinancierosController {
   @Get()
   findAll(
     @Query('tipo_movimiento') tipo_movimiento?: string,
-    @Query('limit') limit?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
-    return this.movimientosFinancierosService.findAll(
-      tipo_movimiento,
-      limit ? parseInt(limit, 10) : undefined,
-    );
+    if (limit !== undefined && (limit < 1 || limit > 500)) {
+      throw new BadRequestException('limit debe ser un entero entre 1 y 500');
+    }
+    return this.movimientosFinancierosService.findAll(tipo_movimiento, limit);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.movimientosFinancierosService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.movimientosFinancierosService.findOne(id);
   }
 }

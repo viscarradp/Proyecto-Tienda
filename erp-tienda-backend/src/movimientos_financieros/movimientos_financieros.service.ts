@@ -120,11 +120,19 @@ export class MovimientosFinancierosService {
       // referencia por FK) y aprovecha la lectura para validar fondos en egresos
       // (ver docs/decisions/0001-concurrencia-for-update.md).
       const [cajaLocked] = await tx.$queryRaw<CajaTurnoRow[]>`
-        SELECT id, efectivo_esperado
+        SELECT id, estado, efectivo_esperado
         FROM cajas_turnos
         WHERE id = ${cajaTurno.id}
         FOR UPDATE
       `;
+
+      // Revalida bajo lock: el turno pudo cerrarse entre la lectura previa y
+      // este punto (un cierre concurrente); no se registra en un turno cerrado.
+      if (!cajaLocked || cajaLocked.estado !== 'ABIERTA') {
+        throw new BadRequestException(
+          'El turno de caja ya se cerró. Abre un turno nuevo para registrar el movimiento.',
+        );
+      }
 
       const movimiento = await tx.movimientos_financieros.create({
         data: {

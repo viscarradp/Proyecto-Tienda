@@ -4,20 +4,19 @@ import {
   IsArray,
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
-  Min,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { IsCantidad } from '../../common/validacion';
 
 export class DetalleDevolucionInputDto {
   @IsInt()
   detalle_venta_id: number;
 
   // Cantidad a devolver, en unidades de la presentación (fraccionable, §5.3).
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
+  @IsCantidad()
   cantidad: number;
 
   // REINGRESO: el producto vuelve al lote (revendible). MERMA: se descarta.
@@ -35,5 +34,8 @@ export class CreateDevolucionDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500, {
+    message: 'La justificación no puede pasar de 500 caracteres',
+  })
   justificacion?: string;
 }

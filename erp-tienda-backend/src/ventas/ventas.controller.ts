@@ -5,13 +5,20 @@ import {
   Body,
   Param,
   Patch,
+  Headers,
   BadRequestException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { VentasService } from './ventas.service';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { CreateDevolucionDto } from './dto/create-devolucion.dto';
+import { AnularVentaDto } from './dto/anular-venta.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+/** Largo permitido del header Idempotency-Key (p. ej. un UUID mide 36). */
+const CLAVE_MIN = 8;
+const CLAVE_MAX = 64;
 
 @Roles('ADMIN', 'CAJERO')
 @Controller('ventas')
@@ -22,8 +29,18 @@ export class VentasController {
   create(
     @Body() createVentaDto: CreateVentaDto,
     @CurrentUser('userId') userId: number,
+    // Opcional. Con la misma clave, un reintento devuelve la venta ya creada.
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.ventasService.create(createVentaDto, userId);
+    if (
+      idempotencyKey !== undefined &&
+      (idempotencyKey.length < CLAVE_MIN || idempotencyKey.length > CLAVE_MAX)
+    ) {
+      throw new BadRequestException(
+        `El encabezado Idempotency-Key debe tener entre ${CLAVE_MIN} y ${CLAVE_MAX} caracteres`,
+      );
+    }
+    return this.ventasService.create(createVentaDto, userId, idempotencyKey);
   }
 
   @Get()
@@ -32,27 +49,24 @@ export class VentasController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ventasService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.ventasService.findOne(id);
   }
 
   @Patch(':id/anular')
   anular(
-    @Param('id') id: string,
-    @Body('justificacion_nula') justificacion_nula: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() anularVentaDto: AnularVentaDto,
   ) {
-    if (!justificacion_nula) {
-      throw new BadRequestException('Debe proporcionar una justificación');
-    }
-    return this.ventasService.anular(+id, justificacion_nula);
+    return this.ventasService.anular(id, anularVentaDto.justificacion_nula);
   }
 
   @Post(':id/devolucion')
   devolver(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() createDevolucionDto: CreateDevolucionDto,
     @CurrentUser('userId') userId: number,
   ) {
-    return this.ventasService.devolver(+id, createDevolucionDto, userId);
+    return this.ventasService.devolver(id, createDevolucionDto, userId);
   }
 }

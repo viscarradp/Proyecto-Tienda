@@ -1,13 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, Min, IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsDinero } from '../../common/validacion';
 
 export class CloseCajaTurnoDto {
   @ApiProperty({
     description: 'Monto de efectivo total contado al final del turno',
     minimum: 0,
   })
-  @IsNumber()
-  @Min(0, { message: 'El efectivo declarado no puede ser negativo' })
+  @IsDinero({
+    mensajeMin: 'El efectivo declarado no puede ser negativo',
+  })
   efectivo_declarado: number;
 
   @ApiProperty({
@@ -17,8 +19,7 @@ export class CloseCajaTurnoDto {
     minimum: 0,
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @IsDinero()
   monto_a_boveda?: number;
 
   @ApiProperty({
@@ -27,5 +28,8 @@ export class CloseCajaTurnoDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(500, {
+    message: 'Las observaciones no pueden pasar de 500 caracteres',
+  })
   observaciones?: string;
 }

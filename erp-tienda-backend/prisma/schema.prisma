@@ -248,6 +248,9 @@ model ventas {
   justificacion_nula String?          @db.Text
   fecha_anulacion    DateTime?        @db.Timestamptz(6)
   usuario_id         Int?
+  // Idempotencia de POST /ventas: header opcional Idempotency-Key. Un reintento
+  // con la misma clave devuelve la venta ya creada en vez de duplicarla.
+  clave_idempotencia String?          @unique @db.VarChar(64)
   detalle_ventas     detalle_ventas[]
   devoluciones       devoluciones[]
   cajas_turnos       cajas_turnos     @relation(fields: [caja_turno_id], references: [id], onUpdate: NoAction, map: "fk_caja_venta")

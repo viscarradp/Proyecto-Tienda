@@ -4,19 +4,17 @@ import {
   IsArray,
   IsDateString,
   IsInt,
-  IsNumber,
   IsOptional,
-  Min,
   ValidateNested,
 } from 'class-validator';
+import { IsCantidad } from '../../common/validacion';
 
 export class DetalleVentaInputDto {
   @IsInt()
   presentacion_id: number;
 
   // Decimal para ventas fraccionadas (media libra, granel) — Bloque 1 §5.3.
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
+  @IsCantidad()
   cantidad: number;
 }
 
@@ -29,7 +27,8 @@ export class CreateVentaDto {
 
   // Modo contingencia (Bloque 3.D, ítem 14): fecha/hora real de una venta hecha
   // durante un apagón, capturada al volver la conexión. Si se omite, es now().
-  // La venta pertenece al turno abierto actual; el backend rechaza fechas futuras.
+  // La venta pertenece al turno abierto actual; el backend rechaza fechas
+  // futuras y de más de 30 días atrás (ver ventas.service.ts).
   @IsOptional()
   @IsDateString()
   fecha?: string;
