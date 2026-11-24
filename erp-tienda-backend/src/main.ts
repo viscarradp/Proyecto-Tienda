@@ -3,8 +3,12 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { zonaHorariaNegocio } from './common/zona-horaria';
 
 async function bootstrap() {
+  // Falla rápido si ZONA_HORARIA_NEGOCIO es inválida (los reportes dependen de ella).
+  zonaHorariaNegocio();
+
   const app = await NestFactory.create(AppModule);
 
   // Swagger solo en entornos no productivos, salvo que se habilite a propósito
@@ -62,4 +66,5 @@ async function bootstrap() {
 }
 bootstrap().catch((err) => {
   console.error('Error durante el inicio de la aplicación:', err);
+  process.exit(1);
 });

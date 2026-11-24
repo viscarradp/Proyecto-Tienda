@@ -39,6 +39,7 @@ services:
       NODE_ENV: development
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Admin123!}
       CORS_ORIGINS: http://localhost:3001
+      ZONA_HORARIA_NEGOCIO: ${ZONA_HORARIA_NEGOCIO:-America/El_Salvador}
       ENABLE_SWAGGER: "true"
     ports:
       - "3000:3000"
