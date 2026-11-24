@@ -4,9 +4,9 @@
 >
 > **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-11-24 (**Ciclo 2026-11 implementado y documentado**; lo que falta antes de vender de verdad está en [Antes de la primera venta real](#antes-de-la-primera-venta-real)).
+> **Última actualización:** 2026-11-24 (**Ciclo 2026-11 terminado y ⏸ en pausa para la prueba con la tienda real**; ver [Pausa para la prueba real](#pausa-para-la-prueba-real)).
 >
-> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó su implementación (lotes L1–L8 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **Lo único que separa al sistema de la primera venta real son pasos manuales de infraestructura** (`db push` en Supabase, activar el respaldo y probar una restauración): checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después, el Nivel 2 y 3 del backlog (primer mes de uso) y la deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
+> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó los Niveles 1 y 2 de su backlog (lotes L1–L14 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **El desarrollo está en pausa a propósito** para que la tienda lo use de verdad. Antes de esa prueba solo faltan pasos manuales de infraestructura (`db push` en Supabase, activar el respaldo, ensayar una restauración y desplegar): checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después de la prueba se retoma con lo que la tienda reporte, el Nivel 3 y las decisiones del primer mes; ver [Pausa para la prueba real](#pausa-para-la-prueba-real).
 
 ---
 
@@ -327,7 +327,7 @@ Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
 
 ---
 
-## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — ✅ IMPLEMENTADO (pasos manuales pendientes)
+## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — ✅ IMPLEMENTADO · ⏸ EN PAUSA PARA LA PRUEBA REAL
 
 **Principio rector (fijado por el usuario el 2026-11-24):** el sistema debe **apoyar, no
 imponer**. La prioridad es la flexibilidad y la rapidez de uso para que la tienda no lo
@@ -347,7 +347,7 @@ congelado en `../auditorias/`.
 | 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente). Ramas `feature/1a-anulacion-con-devoluciones` y `feature/1b-reportes-zona-horaria`; master con 38 e2e en verde y 1A verificado en navegador | ✅ 2026-11-24 |
 | 2 | Auditorías en paralelo (solo lectura): arquitectura (20 hallazgos), código (25), reglas de negocio (33 + 16 decisiones), interfaz (30) + recorrido en vivo del líder (14). Informes en `../auditorias/2026-11-24-*.md` | ✅ 2026-11-24 |
 | 3 | Consolidación: hallazgos 🔴 verificados (COD-02 reproducido), deduplicados en el **[backlog consolidado](backlog-ciclo-2026-11.md)** con lotes, olas y decisiones del negocio | ✅ 2026-11-24 — decisiones del negocio pendientes |
-| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común). Seis olas: **L1a+L2** (POS e integridad de dinero y stock), **L1b+L3a** (inventario/estadísticas y despliegue seguro), **L4+L5a** (paginación, mostrador flexible en backend), **L5b+L6** (mostrador en pantalla, fondos y apertura), **L7+L8+L3b** (permisos y trazabilidad, compras a crédito y deudas, respaldo nocturno), **L9 + Fase 5** (fricción del mostrador y documentación). Cierre: 156 e2e y 35 unitarios en verde; cada ola verificada en el navegador | ✅ 2026-11-24 |
+| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común). Nueve olas: **L1a+L2** (POS e integridad de dinero y stock), **L1b+L3a** (inventario/estadísticas y despliegue seguro), **L4+L5a** (paginación, mostrador flexible en backend), **L5b+L6** (mostrador en pantalla, fondos y apertura), **L7+L8+L3b** (permisos y trazabilidad, compras a crédito y deudas, respaldo nocturno), **L9 + Fase 5** (fricción del mostrador y documentación), **L10+L11** (números de la dueña, inventario cómodo), **L12+L13** (anular sin borrar, tests y gaveta única), **L14** (accesibilidad y celular). Cierre: 284 e2e y 41 unitarios en verde; cada ola verificada en el navegador | ✅ 2026-11-24 |
 | 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema en `domain/`, proyectos cerrados a `historial/`), arquitectura al día, SRS v3.1, README | ✅ 2026-11-24 |
 
 **Decisión tomada para 1A:** una venta que ya tiene devoluciones **no se puede anular**; la
@@ -402,20 +402,32 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    guardado en la bóveda (asistente "efectivo guardado hoy") y, si hay que ordenar la bóveda, hacer un arqueo; abrir el
    primer turno (el primer fondo se registra como aporte de la dueña).
 
-**Lo que sigue abierto del backlog** (no bloquea la primera venta; detalle en [`backlog-ciclo-2026-11.md`](backlog-ciclo-2026-11.md)):
+### Pausa para la prueba real
 
-- **Nivel 2, primer mes de uso:** L9 fricción del mostrador (escáner con feedback, billetes rápidos, modo apagón
-  persistente, botón "Caja abierta" que cierra, "Sacar dinero"), L10 la dueña entiende sus números ("este mes ganaste $X",
-  un solo nombre para gaveta y bóveda), L11 inventario cómodo (buscador, cambio rápido de precio, alta de producto atómica,
-  mermas por la cajera, aviso al cambiar el factor), L12 corregir errores sin ensuciar el P&L (reversos), L13 tests
-  faltantes y una sola función para el efectivo de gaveta, L14 accesibilidad y celular, y login por HTTP con cookie `Secure`.
-- **Decisiones D-07…D-14** (resumen diario, nota obligatoria en descuadre, vencimientos, stock bajo, conteo físico,
-  recargas, fiado a clientes, margen mínimo) y el conteo "a ciegas" al cerrar (VIVO-09).
-- **Nivel 3, pulido:** código muerto, activos fijos sin pantalla, `getResumen` cuenta anuladas, imagen del backend de
-  521 MB, hidratación de `ThemeToggle`, período "Semana" de 8 días, textos de marca del login, ticket que cuenta artículos
-  fraccionados.
-- **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
-  cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia ([`hardening-backlog.md`](hardening-backlog.md)).
+**Desde el 2026-11-24 el desarrollo está en pausa a propósito.** Los Niveles 1 y 2 del backlog están implementados y
+verificados; antes de pulir más, la tienda tiene que usar el sistema de verdad. Lo que reporte la tienda pesa más que las
+auditorías para decidir qué viene después.
+
+1. **Antes de probar:** los pasos manuales de [Antes de la primera venta real](#antes-de-la-primera-venta-real). Sin
+   el `db push` la app no funciona contra Supabase, y sin respaldo activo no conviene meter datos reales.
+2. **Durante la prueba (sugerido: la primera semana o el primer mes):** anotar dónde la cajera se traba, duda o deja de
+   registrar algo, qué avisos ("registrar y avisar") aparecen seguido y si se entienden, qué descuadres salen al cerrar y
+   arquear, y qué le falta a la dueña para entender sus números.
+3. **Al retomar**, en este orden:
+   - Primero los **problemas reportados en la prueba** (bugs y fricción real).
+   - Después, las **decisiones del primer mes** D-07…D-14, ya con datos de uso: resumen diario, nota obligatoria en
+     descuadre, vencimientos, stock bajo, conteo físico, recargas, fiado a clientes, margen mínimo. También el conteo "a
+     ciegas" al cerrar (VIVO-09). Ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
+   - Por último, el **Nivel 3 (pulido)**: código muerto, activos fijos sin pantalla (NEG-05), `getResumen` cuenta anuladas,
+     imagen del backend de 521 MB, hidratación de `ThemeToggle`, período "Semana" de 8 días, textos de marca del login
+     (UX-02), pulido general (UX-30) y el ticket que cuenta artículos fraccionados.
+   - Si se prueba desde el celular por la red local (HTTP por IP), también el **login con cookie `secure`** (UX-01, único
+     pendiente del Nivel 2). En producción con HTTPS no afecta.
+4. **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
+   cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia ([`hardening-backlog.md`](hardening-backlog.md)).
+
+La forma de trabajo para retomar no cambia: un líder planea y revisa, los subagentes implementan en ramas `feature/*`, y
+cada ola se aprueba explícitamente.
 
 ---
 
