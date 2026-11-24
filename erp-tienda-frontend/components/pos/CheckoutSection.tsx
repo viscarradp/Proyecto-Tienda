@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { MoneyValue } from "@/components/money-value"
+import { centavosAMonto, montoACentavos } from "@/lib/format"
 
 /**
  * Sección de cobro: total, "paga con", cambio y botón de procesar pago.
@@ -43,7 +44,9 @@ export function CheckoutSection({
   setFechaContingencia: (v: string) => void
 }) {
   const pago = parseFloat(pagoCliente)
-  const cambio = pago >= total && total > 0 ? pago - total : null
+  // Cambio en centavos enteros para evitar errores de coma flotante.
+  const cambioCentavos = montoACentavos(pago) - montoACentavos(total)
+  const cambio = pago >= 0 && cambioCentavos >= 0 && total > 0 ? centavosAMonto(cambioCentavos) : null
   // En contingencia con fecha vacía no se puede procesar (faltaría la hora real).
   const faltaFecha = contingencia && !fechaContingencia
   const disabled = itemCount === 0 || !hasCaja || checkoutLoading || faltaFecha

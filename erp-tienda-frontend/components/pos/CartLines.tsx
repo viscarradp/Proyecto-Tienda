@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { MoneyValue } from "@/components/money-value"
+import { centavosAMonto, totalLineaCentavos } from "@/lib/format"
 import type { CartItem } from "@/src/store/cartStore"
 
 /**
@@ -70,7 +71,7 @@ export function CartLines({
               </Button>
             </div>
             <div className="flex flex-col items-end leading-tight">
-              <MoneyValue value={item.precio * item.cantidad} className="text-sm font-semibold" />
+              <MoneyValue value={centavosAMonto(totalLineaCentavos(item.precio, item.cantidad))} className="text-sm font-semibold" />
               <span className="text-xs text-muted-foreground">
                 <MoneyValue value={item.precio} className="text-xs text-muted-foreground" /> c/u
               </span>
