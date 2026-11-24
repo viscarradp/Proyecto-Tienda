@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCajaTurnoDto } from './dto/create-caja_turno.dto';
 import { CloseCajaTurnoDto } from './dto/close-caja_turno.dto';
+import { QueryCajasTurnosDto } from './dto/query-cajas_turnos.dto';
 import { Prisma } from '@prisma/client';
 import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
 import {
@@ -256,9 +257,18 @@ export class CajasTurnosService {
     }, TX_OPTIONS);
   }
 
-  async findAll() {
-    return this.prisma.cajas_turnos.findMany({
-      orderBy: { fecha_apertura: 'desc' },
+  /**
+   * Historial paginado por cursor, más recientes primero. Devuelve
+   * `{ items, hay_mas }`; para la página siguiente se pasa
+   * `antes_de = items[items.length - 1].id`. Límite por defecto 7 (máx. 50).
+   */
+  async findAll(query: QueryCajasTurnosDto = {}) {
+    const limit = query.limit ?? 7;
+    // Se pide uno de más solo para saber si queda otra página.
+    const filas = await this.prisma.cajas_turnos.findMany({
+      where: query.antes_de ? { id: { lt: query.antes_de } } : undefined,
+      orderBy: { id: 'desc' },
+      take: limit + 1,
       include: {
         movimientos_financieros: true,
         _count: {
@@ -266,6 +276,7 @@ export class CajasTurnosService {
         },
       },
     });
+    return { items: filas.slice(0, limit), hay_mas: filas.length > limit };
   }
 
   async findOne(id: number) {

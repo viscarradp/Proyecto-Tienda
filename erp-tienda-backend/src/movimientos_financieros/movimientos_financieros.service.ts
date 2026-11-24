@@ -176,7 +176,8 @@ export class MovimientosFinancierosService {
     return this.prisma.movimientos_financieros.findMany({
       where: whereClause,
       orderBy: { fecha: 'desc' },
-      take: limit ? limit : undefined,
+      // Sin `limit` explícito: 100 (el controller valida el máximo de 500).
+      take: limit ?? 100,
       include: {
         categorias_gastos: true,
       },
