@@ -1,5 +1,7 @@
 # 0004 — Endurecimiento de la superficie HTTP (rate-limit, Helmet, CORS, Swagger)
 
+> **Complementado por [ADR 0010](0010-imagenes-produccion.md):** Swagger pasó a ser opt-in (solo con `NODE_ENV=development` o `ENABLE_SWAGGER=true`), en lugar de montarse siempre salvo en producción (punto 4).
+
 **Estado:** Aceptado · **Fecha:** 2026-07 (Fase 0 de endurecimiento)
 
 ## Contexto

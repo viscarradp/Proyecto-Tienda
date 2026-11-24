@@ -3,7 +3,7 @@
 > **Estado:** Borrador para revisión conjunta · **Fecha:** 2026-07-05 · **Rama:** `feature/bloque2-confianza-numeros`
 >
 > Continúa el trabajo de [`00-especificaciones.md`](00-especificaciones.md) (Bloque 1).
-> Origen: [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10, **Bloque 2**.
+> Origen: [auditoría de negocio/contable](../../auditorias/2026-07-04-auditoria-negocio-contable.md) §10, **Bloque 2**.
 > El avance se registra en [`02-bitacora.md`](02-bitacora.md).
 
 ## 1. Propósito

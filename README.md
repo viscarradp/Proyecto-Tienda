@@ -1,218 +1,105 @@
-# Proyecto Tienda - ERP Full Stack
+# Proyecto Tienda — ERP/POS para una tienda de colonia
 
-Sistema ERP para tienda con enfoque en inventario, ventas, compras, caja y movimientos financieros.
+Micro ERP/POS en efectivo para una tienda de colonia en El Salvador: ventas con caja, inventario por lotes (FIFO),
+compras, gastos, bóveda y reportes para saber si el negocio es rentable. Principios: **apoyar, no imponer** (ante la duda,
+registrar y avisar en vez de bloquear) y **no sobreingeniería**.
 
-## Overview
+> 📖 **Toda la documentación está en [`docs/`](docs/README.md)** (índice "si quieres… ve a…"): reglas de negocio por tema,
+> arquitectura, seguridad, decisiones (ADRs), operación y el [plan de trabajo con su estado actual](docs/roadmap/plan-fases.md).
+> Este README es solo la guía rápida para instalar y arrancar. **Antes de la primera venta real** hay pasos manuales
+> (esquema en Supabase, respaldo, ensayo de restauración): [`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md#antes-de-la-primera-venta-real).
 
-Este repositorio contiene dos aplicaciones principales:
+## Stack
 
-- Backend API en NestJS + Prisma + PostgreSQL.
-- Frontend web en Next.js (App Router) + React + Tailwind CSS.
+- **Backend** (`erp-tienda-backend`): NestJS 11 + Prisma 7 + PostgreSQL (compatible con Supabase), JWT + Passport, Swagger (opt-in).
+- **Frontend** (`erp-tienda-frontend`): Next.js 16 (App Router) + React 19 + Tailwind CSS 4 + Zustand + shadcn/ui.
 
-> 📖 **Documentación completa en [`docs/`](docs/README.md)**: arquitectura, modelo de datos,
-> reglas de negocio, seguridad, configuración, decisiones técnicas (ADRs) y el
-> [plan de trabajo vigente con su estado actual](docs/roadmap/plan-fases.md). Este README
-> es solo la guía rápida de instalación/arranque; para entender el *por qué* de las cosas,
-> `docs/` es la fuente de verdad.
+## Módulos del backend
 
-## Arquitectura
-
-- `erp-tienda-backend`: API REST, autenticacion JWT, validacion, Swagger y acceso a datos con Prisma.
-- `erp-tienda-frontend`: interfaz de usuario para login, dashboard y modulos operativos.
-
-## Stack Tecnico
-
-### Backend
-
-- NestJS 11
-- Prisma 7
-- PostgreSQL (compatible con Supabase)
-- JWT + Passport
-- Swagger
-
-### Frontend
-
-- Next.js 16
-- React 19
-- Tailwind CSS 4
-- Zustand
-- shadcn/ui
-
-## Modulos Principales (Backend)
-
-- Autenticacion y usuarios
-- Productos, presentaciones y categorias
-- Compras e inventario por lotes
-- Ajustes de inventario
-- Ventas y detalle de ventas
-- Caja general y turnos de caja
-- Movimientos financieros y categorias de gastos
-
-## Estructura del Repositorio
-
-```text
-.
-├── erp-tienda-backend/
-└── erp-tienda-frontend/
-```
+- Autenticación, **usuarios** (roles `ADMIN` = la dueña y `CAJERO`; se desactivan, no se borran) y permisos.
+- Productos, presentaciones (factor decimal, historial de precios) y categorías; **alta rápida** de la cajera.
+- Compras e inventario por lotes (FIFO), **deuda de stock** al vender sin stock, ajustes de inventario (mermas y conteos).
+- **Ventas** (por cantidad o por monto, idempotentes), anulaciones y **devoluciones**.
+- Turnos de caja, **movimientos financieros** (modelo origen→destino) y **caja general (bóveda)** con arqueo.
+- **Cuentas por pagar**: compras a crédito y abonos a proveedores.
+- **Reportes**: estado de resultados, patrimonio, flujo de efectivo, productos top y margen (por día en la zona horaria de la tienda).
+- **Salud**: `GET /salud`, el health check del despliegue.
 
 ## Requisitos
 
-- Node.js 20+
-- npm 10+
-- PostgreSQL (o URL de Supabase)
+- Node.js 20+ y npm 10+
+- PostgreSQL (o una URL de Supabase) — con Docker: `docker compose up -d postgres`
 
-## Configuracion de Variables de Entorno
+## Configuración
 
-Cada app tiene un `.env.example` con todas las variables documentadas
-(`erp-tienda-backend/.env.example`, `erp-tienda-frontend/.env.example`).
-Cópialo a `.env` (backend) o `.env.local` (frontend) y completa los valores
-reales. Detalle de cada variable en
+Cada app trae su `.env.example` (`erp-tienda-backend/.env.example`, `erp-tienda-frontend/.env.example`): cópialo a `.env`
+(backend) o `.env.local` (frontend). Lo mínimo para desarrollo: `DATABASE_URL`, `JWT_SECRET` e `INITIAL_ADMIN_PASSWORD`
+(sin esta última no se crea el usuario `admin`). **Todas las variables** (producción, `CORS_ORIGINS`, `TRUST_PROXY`,
+`DB_POOL_MAX`, `ZONA_HORARIA_NEGOCIO`, `TOLERANCIA_DESCUADRE`, respaldo…) están en
 [`docs/operations/configuration.md`](docs/operations/configuration.md).
 
-### Backend (`erp-tienda-backend/.env`)
-
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/erp_tienda"
-JWT_SECRET="reemplaza-con-un-secreto-largo-y-aleatorio"
-PORT=3000
-INITIAL_ADMIN_PASSWORD="cambia-esta-contraseña"
-CORS_ORIGINS="http://localhost:3001"
-NODE_ENV=development
-```
-
-- `DATABASE_URL`, `JWT_SECRET`: obligatorias, el backend no arranca sin ellas.
-- `PORT` (opcional, por defecto 3000).
-- `INITIAL_ADMIN_PASSWORD`: contraseña del usuario `admin` que se crea automáticamente
-  la primera vez que arranca con la base de datos vacía. **Si no la defines, no se
-  crea ningún usuario admin** — no hay credencial hardcodeada por diseño.
-- `CORS_ORIGINS` (opcional, por defecto `http://localhost:3001`): orígenes permitidos, separados por coma.
-- `NODE_ENV` / `ENABLE_SWAGGER` (opcional): en `production`, Swagger se desactiva a menos que `ENABLE_SWAGGER=true`.
-
-### Frontend (`erp-tienda-frontend/.env.local`)
-
-```env
-NEXT_PUBLIC_API_URL="http://localhost:3000"
-```
-
-Variable usada en frontend:
-
-- `NEXT_PUBLIC_API_URL`
-
-## Instalacion
-
-Instala dependencias en cada proyecto:
+## Instalación y desarrollo local
 
 ```bash
-cd erp-tienda-backend
-npm install
-
-cd ../erp-tienda-frontend
-npm install
+cd erp-tienda-backend  && npm install
+cd ../erp-tienda-frontend && npm install
 ```
 
-## Desarrollo Local
-
-Abre dos terminales.
-
-### 1) Backend
+Dos terminales:
 
 ```bash
-cd erp-tienda-backend
-npm run start:dev
+cd erp-tienda-backend  && npm run start:dev   # API en http://localhost:3000 (Swagger en /api con NODE_ENV=development)
+cd erp-tienda-frontend && npm run dev         # web en http://localhost:3001
 ```
 
-Backend por defecto en `http://localhost:3000`.
-Swagger en `http://localhost:3000/api`.
+Stack completo en contenedores, con hot-reload: `./scripts/docker-dev.sh start` — ver
+[`DOCKER-QUICKSTART.md`](DOCKER-QUICKSTART.md) y [`docs/operations/docker-development.md`](docs/operations/docker-development.md).
 
-### 2) Frontend
+## Base de datos
 
-```bash
-cd erp-tienda-frontend
-npm run dev
-```
-
-Frontend por defecto en `http://localhost:3001`.
-
-## Scripts Utiles
-
-### Backend
-
-```bash
-npm run start:dev    # desarrollo
-npm run build        # build de produccion
-npm run start:prod   # ejecutar build
-npm run test         # unit tests
-npm run test:e2e     # e2e tests
-npm run lint         # lint
-```
-
-### Frontend
-
-```bash
-npm run dev          # desarrollo
-npm run build        # build de produccion
-npm run start        # ejecutar build
-npm run lint         # lint
-```
-
-## Base de Datos y Prisma
-
-⚠️ **Este proyecto todavía no usa migraciones de Prisma** (decisión deliberada
-mientras está en desarrollo activo sin instancias de producción — ver
-[`docs/decisions/0002-sin-migraciones-hasta-produccion.md`](docs/decisions/0002-sin-migraciones-hasta-produccion.md)).
-El schema se sincroniza directamente contra la base de datos:
+Todavía **no hay migraciones de Prisma** (decisión deliberada, [ADR 0002](docs/decisions/0002-sin-migraciones-hasta-produccion.md)):
+el schema se sincroniza con `db push`.
 
 ```bash
 cd erp-tienda-backend
 npx prisma generate
 npx prisma db push
-npx prisma db seed
+npx prisma db seed     # opcional: catálogos base, no crea usuarios
 ```
 
-### Postgres local con Docker (opcional, para desarrollo o para correr tests)
+## Tests y calidad
 
 ```bash
-docker compose up -d postgres
+# Backend (erp-tienda-backend)
+npm run test          # unitarios, sin base de datos
+npm run test:e2e      # e2e contra Postgres real — BORRA y recrea el schema de DATABASE_URL
+npm run lint:check && npx nest build
+
+# Frontend (erp-tienda-frontend)
+npm run lint && npm run build
 ```
 
-Levanta un Postgres 16 en `localhost:5432` (usuario/contraseña `postgres`,
-base `erp_tienda_dev`). Útil si no quieres depender de Supabase para
-desarrollar localmente, y es lo que usan los tests e2e — ver
-[`docs/operations/testing.md`](docs/operations/testing.md).
+⚠️ `npm run test:e2e` resetea la base apuntada por `DATABASE_URL`: usa **una base propia para los tests** (p. ej.
+`erp_tienda_e2e`) y nunca una con datos reales. Si lo corre un agente de IA, Prisma 7 exige el consentimiento explícito del
+usuario para `db push --force-reset`. Detalle en [`docs/operations/testing.md`](docs/operations/testing.md). CI
+(`.github/workflows/ci.yml`) corre lint, build, unitarios y e2e en cada push.
 
-### Stack completo con Docker (Postgres + Backend + Frontend)
+## Despliegue y respaldos
 
-Si prefieres no instalar Node/Postgres localmente, el mismo `docker-compose.yml`
-también levanta el backend y el frontend en contenedores, con hot-reload:
+- Imágenes de producción (`Dockerfile`), `/salud`, `TRUST_PROXY` y aplicar el esquema: [`docs/operations/deployment.md`](docs/operations/deployment.md).
+- Respaldo nocturno cifrado de la base y ensayo de restauración: [`docs/operations/respaldos.md`](docs/operations/respaldos.md).
 
-```bash
-./scripts/docker-dev.sh start
-# o: docker compose up
+## Estructura del repositorio
+
+```text
+.
+├── erp-tienda-backend/    API (NestJS + Prisma)
+├── erp-tienda-frontend/   Interfaz (Next.js)
+├── scripts/               Docker de desarrollo, respaldo y restauración
+├── docs/                  Documentación (fuente de verdad)
+└── docker-compose.yml     Postgres local (y el stack completo para desarrollo)
 ```
-
-Ver [`DOCKER-QUICKSTART.md`](DOCKER-QUICKSTART.md) y
-[`docs/operations/docker-development.md`](docs/operations/docker-development.md) para el detalle
-(logs, shells, troubleshooting, y por qué el `.env` de la raíz es
-independiente de los `.env` de `erp-tienda-backend/` y `erp-tienda-frontend/`).
-
-## Notas
-
-- CORS usa una allowlist explícita vía `CORS_ORIGINS` (ver arriba), no está abierto a cualquier origen.
-- El frontend envia JWT en header `Authorization: Bearer <token>`.
-- Swagger disponible en `http://localhost:3000/api` solo fuera de `NODE_ENV=production`
-  (o si defines `ENABLE_SWAGGER=true`).
-
-## Roadmap
-
-El roadmap vigente, con el estado detallado de cada fase (qué está hecho, qué
-falta y por qué), vive en
-[`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md). CI (lint + test +
-build en GitHub Actions, `.github/workflows/ci.yml`) y Docker para Postgres
-local ya están en su lugar — pendiente a nivel de infraestructura:
-
-- Incorporar versionado y changelog.
 
 ## Licencia
 
-Uso interno / privado (ajustar segun necesidad del proyecto).
+Uso interno / privado.

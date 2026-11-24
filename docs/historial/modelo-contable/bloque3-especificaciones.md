@@ -3,7 +3,7 @@
 > **Estado:** Borrador para revisión conjunta · **Fecha:** 2026-07-08 · **Rama:** `feature/bloque3-operacion`
 >
 > Continúa el trabajo de [`bloque2-especificaciones.md`](bloque2-especificaciones.md).
-> Origen: [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10, **Bloque 3**.
+> Origen: [auditoría de negocio/contable](../../auditorias/2026-07-04-auditoria-negocio-contable.md) §10, **Bloque 3**.
 > El avance se registra en [`02-bitacora.md`](02-bitacora.md).
 
 ## 1. Propósito
@@ -35,7 +35,7 @@ primera venta, pero completan el producto para el uso diario real —
   son *append-only* a nivel de aplicación (anular/devolver crean estado nuevo; los
   movimientos no se editan). El `REVOKE UPDATE/DELETE` es un GRANT de rol de base de datos
   que **no se puede probar en este entorno** (no hay Supabase real ni roles separados aquí),
-  igual que el backup 2.E y coherente con [ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md).
+  igual que el backup 2.E y coherente con [ADR 0002](../../decisions/0002-sin-migraciones-hasta-produccion.md).
   Se documenta el SQL exacto; no se ejecuta.
 - **Ítem 16 — Convención de signos: YA RESUELTA en el Bloque 1.C.** La tabla `caja_general`
   (que guardaba `monto` con signo) se eliminó; hoy solo existe `movimientos_financieros.monto`
@@ -92,7 +92,7 @@ primera venta, pero completan el producto para el uso diario real —
 - **Reembolso de efectivo**: decrementa `efectivo_esperado` del turno actual (mismo patrón
   que `anular`); **no** crea un `movimiento_financiero` (la devolución vive en su propia
   tabla, como la anulación vive en `ventas.estado`). Requiere `FOR UPDATE` sobre el turno
-  y orden lock-antes-de-INSERT ([ADR 0001](../decisions/0001-concurrencia-for-update.md)).
+  y orden lock-antes-de-INSERT ([ADR 0001](../../decisions/0001-concurrencia-for-update.md)).
 - **`reportes.getEstadoResultados`**: el ingreso neto **resta** `devoluciones.total_reembolsado`
   del período; el costo de ventas **resta** el `costo_revertido` de las líneas `REINGRESO`
   (el stock volvió, su costo no fue "vendido"). Las líneas `MERMA` solo revierten ingreso
@@ -132,7 +132,7 @@ primera venta, pero completan el producto para el uso diario real —
 ## 4. Restricciones (heredadas de Bloques 1–2)
 
 - Sin migraciones Prisma (`db push`); el push a Supabase real es paso manual del usuario.
-- Concurrencia: `FOR UPDATE`/advisory locks y orden lock-antes-de-INSERT ([ADR 0001](../decisions/0001-concurrencia-for-update.md)).
+- Concurrencia: `FOR UPDATE`/advisory locks y orden lock-antes-de-INSERT ([ADR 0001](../../decisions/0001-concurrencia-for-update.md)).
 - Git: rama `feature/bloque3-operacion`, merge `--no-ff` a `master` por sub-fase.
 - Tests e2e por cada invariante nuevo; `build` + `lint:check` verdes antes de cada merge.
 

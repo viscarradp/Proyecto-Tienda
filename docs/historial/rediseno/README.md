@@ -1,5 +1,8 @@
 # Rediseño UX/UI — ERP/POS Tienda Karlita
 
+> **Proyecto terminado (2026-07), archivado en [`historial/`](../README.md).** Es contexto histórico del diseño visual; los
+> pendientes de interfaz actuales están en el [backlog del ciclo 2026-11](../../roadmap/backlog-ciclo-2026-11.md).
+
 Documentación viva del rediseño de la interfaz del frontend. Es la **fuente de
 verdad** del proyecto de rediseño (no se confía en la memoria de la conversación).
 

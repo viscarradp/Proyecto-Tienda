@@ -62,7 +62,11 @@ REVOKE UPDATE, DELETE ON historial_precios_presentaciones  FROM app_role;
 
 ## Importante, no bloqueante
 
-### 3. Trazabilidad de autor en operaciones financieras (hallazgo H8)
+### 3. Trazabilidad de autor en operaciones financieras (hallazgo H8) — ✅ HECHO
+
+> **Resuelto** en los Bloques 1–3 (`usuario_id` en las tablas transaccionales) y completado en el Ciclo 2026-11 (L7/L8:
+> autor de anulación, de cierre y de compras; abonos con autor). Ver [`../domain/roles-y-permisos.md`](../domain/roles-y-permisos.md).
+> Se conserva el texto original como registro de por qué se difirió.
 
 **Por qué se difirió:** requiere agregar `usuario_id` a varias tablas
 (`ventas`, `movimientos_financieros`, `cajas_turnos`, `ajustes_inventario`),
@@ -103,9 +107,7 @@ el conteo entre instancias.
 - Enums en el schema para campos de estado (`ventas.estado`,
   `cajas_turnos.estado`, `usuarios.rol`, etc.) en vez de `String` libre —
   hoy validados solo por DTOs (`@IsIn`). Aplicar junto con el ítem 1.
-- Endpoint `POST /caja-general/inyeccion` usa un tipo inline en vez de un DTO
-  — evade el `ValidationPipe` global. Bajo riesgo (ya está tras
-  `@Roles('ADMIN')`), pero es una corrección de una sola clase DTO.
+- ~~Endpoint `POST /caja-general/inyeccion` usa un tipo inline en vez de un DTO~~ — resuelto: ya usa `InyeccionCapitalDto`.
 - **H13 — Server Components:** todas las páginas del dashboard son Client
   Components con fetch en el navegador. Aprovechar RSC requeriría rediseñar
   el data-fetching de cada página (POS, inventario, movimientos, gastos,

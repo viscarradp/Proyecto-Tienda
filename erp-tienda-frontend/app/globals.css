@@ -55,7 +55,7 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    Design tokens — Rediseño "Estación de trabajo" (funcional).
-   Ver docs/rediseno/00-especificaciones.md §5.1. Estos tokens son la ÚNICA
+   Ver docs/historial/rediseno/00-especificaciones.md §5.1. Estos tokens son la ÚNICA
    fuente de verdad de color; las pantallas no deben hardcodear bg-black/zinc.
    Radio base 2px (§5.2). Tema por defecto: oscuro (ver app/layout.tsx).
    ───────────────────────────────────────────────────────────────────────── */

@@ -1,5 +1,7 @@
 # 0001 — Concurrencia: bloqueo pesimista (FOR UPDATE / advisory lock)
 
+> **Complementado por [ADR 0011](0011-registrar-y-avisar.md):** la bóveda ya no es una tabla (`caja_general` se eliminó) y su advisory lock hoy es `boveda_ledger`; el orden de locks se amplió a turno → venta → lotes → pendientes; y los fondos insuficientes ya no se rechazan, se registran y se avisan.
+
 **Estado:** Aceptado · **Fecha:** 2026-07 (Fase 0 de endurecimiento)
 
 ## Contexto

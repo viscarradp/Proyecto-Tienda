@@ -4,9 +4,9 @@
 >
 > **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-11-24 (arranca el **Ciclo 2026-11** — ver la sección homónima abajo).
+> **Última actualización:** 2026-11-24 (**Ciclo 2026-11 implementado y documentado**; lo que falta antes de vender de verdad está en [Antes de la primera venta real](#antes-de-la-primera-venta-real)).
 >
-> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) es el trabajo activo; su estado vive en la sección "Ciclo 2026-11" de este documento. Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E: ya está **preparado** — scripts y workflow en el repo, guía en [`../operations/respaldos.md`](../operations/respaldos.md); falta activarlo cargando los secretos y hacer el primer respaldo y ensayo de restauración reales) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
+> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó su implementación (lotes L1–L8 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **Lo único que separa al sistema de la primera venta real son pasos manuales de infraestructura** (`db push` en Supabase, activar el respaldo y probar una restauración): checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después, el Nivel 2 y 3 del backlog (primer mes de uso) y la deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
 
 ---
 
@@ -327,7 +327,7 @@ Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
 
 ---
 
-## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — 🔄 EN PROGRESO
+## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — ✅ IMPLEMENTADO (pasos manuales pendientes)
 
 **Principio rector (fijado por el usuario el 2026-11-24):** el sistema debe **apoyar, no
 imponer**. La prioridad es la flexibilidad y la rapidez de uso para que la tienda no lo
@@ -347,15 +347,73 @@ congelado en `../auditorias/`.
 | 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente). Ramas `feature/1a-anulacion-con-devoluciones` y `feature/1b-reportes-zona-horaria`; master con 38 e2e en verde y 1A verificado en navegador | ✅ 2026-11-24 |
 | 2 | Auditorías en paralelo (solo lectura): arquitectura (20 hallazgos), código (25), reglas de negocio (33 + 16 decisiones), interfaz (30) + recorrido en vivo del líder (14). Informes en `../auditorias/2026-11-24-*.md` | ✅ 2026-11-24 |
 | 3 | Consolidación: hallazgos 🔴 verificados (COD-02 reproducido), deduplicados en el **[backlog consolidado](backlog-ciclo-2026-11.md)** con lotes, olas y decisiones del negocio | ✅ 2026-11-24 — decisiones del negocio pendientes |
-| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común) | ⏳ |
-| 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema, proyectos cerrados a historial), SRS v3.1, README | ⏳ |
+| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común). Cinco olas: **L1a+L2** (POS e integridad de dinero y stock), **L1b+L3a** (inventario/estadísticas y despliegue seguro), **L4+L5a** (paginación, mostrador flexible en backend), **L5b+L6** (mostrador en pantalla, fondos y apertura), **L7+L8+L3b** (permisos y trazabilidad, compras a crédito y deudas, respaldo nocturno) | ✅ 2026-11-24 |
+| 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema en `domain/`, proyectos cerrados a `historial/`), arquitectura al día, SRS v3.1, README | ✅ 2026-11-24 |
 
 **Decisión tomada para 1A:** una venta que ya tiene devoluciones **no se puede anular**; la
 UI ofrece "Devolver el resto". El botón *Anular* solo aparece en ventas del turno abierto.
 
-**Decisiones del negocio pendientes:** ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md)
-(vender sin stock, fuera de catálogo, venta por peso, política de fondos, diferencia de
-apertura, dos cajas simultáneas, permisos de la cajera, compras a crédito).
+**Decisiones del negocio (todas tomadas el 2026-11-24):** vender y avisar sin stock (D-01), alta
+rápida "por revisar" (D-02), venta por peso y por monto (D-03), registrar y avisar en los fondos
+(D-04), preguntar el origen de la diferencia de apertura (D-15), una sola gaveta (ARQ-03), la cajera
+opera y la dueña controla (D-06), compras fiadas con abonos (D-05) y respaldo nocturno propio. Cómo
+quedó cada una: [`../domain/`](../domain/caja-y-ventas.md). Siguen sin decidir las D-07…D-14
+(primer mes de uso), ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
+
+### Antes de la primera venta real
+
+Todo el código y los tests están listos; lo que falta son **pasos manuales** que este repo no puede hacer por ti (no
+tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
+
+1. **Aplicar el esquema en Supabase (`db push`).** La Supabase real nunca recibió los cambios de schema posteriores a su
+   creación (índices de Fase 1, bloques contables 1–3 y los de este ciclo). Desde tu máquina, con la URL **directa** de
+   Supabase (no la del pooler, que no soporta DDL; ver [`../operations/deployment.md`](../operations/deployment.md)):
+
+   ```bash
+   cd erp-tienda-backend
+   DATABASE_URL="<url-directa>" npx prisma db push
+   ```
+
+   Si la BD tiene datos que quieras conservar, haz antes un respaldo manual con `pg_dump`, y acepta la confirmación de
+   pérdida de datos solo si es esperada: el schema ya **no** tiene la tabla `caja_general`, así que, si todavía existe en
+   esa base, `db push` pedirá confirmación para eliminarla. Cambios de schema del ciclo 2026-11 (todos aditivos):
+
+   | Lote | Cambio |
+   |---|---|
+   | L2 | `ventas.clave_idempotencia` (texto ≤ 64, **único**, nullable) |
+   | L5a | Tabla `pendientes_stock` (+ índices); `productos.por_revisar` (boolean, default `false`) |
+   | L7 | `usuarios.activo` (default `true`); `ventas.anulada_por_id` y `cajas_turnos.cerrado_por_id` (FK a `usuarios`, con índice) |
+   | L8 | `compras_inventario.usuario_id` (FK, con índice); tabla `abonos_cuentas_por_pagar` (+ índices) |
+
+2. **Activar el respaldo nocturno.** Cargar en GitHub los secretos `BACKUP_DATABASE_URL` (conexión directa) y
+   `BACKUP_PASSPHRASE` (clave de cifrado, **guardada también fuera de GitHub**), lanzar *Respaldo nocturno* a mano y
+   confirmar que queda verde y **sin** el aviso "no configurado". Guía: [`../operations/respaldos.md`](../operations/respaldos.md).
+3. **Ensayo de restauración.** Descargar ese primer respaldo y restaurarlo en una base local vacía; comparar conteos de
+   `ventas`, `productos` y `usuarios`. Un respaldo que nunca se restauró no es un respaldo.
+4. **Desplegar** el API y el frontend con las variables de [`../operations/configuration.md`](../operations/configuration.md)
+   (`CORS_ORIGINS`, `JWT_SECRET` ≥ 32 caracteres, `TRUST_PROXY=1` en Cloud Run, `NEXT_PUBLIC_API_URL` como `--build-arg`),
+   comprobar `GET /salud` y poner un monitor externo sobre él. La decisión de proveedor del API (GCP u otro) y del plan de
+   Supabase sigue abierta (decisión 1 abajo).
+5. **Primer ingreso:** entrar como `admin`, **cambiar la contraseña inicial** y retirar `INITIAL_ADMIN_PASSWORD`; crear el
+   usuario de la cajera (rol `CAJERO`).
+6. **Carga inicial:** inventario inicial como compra con origen `CAPITAL_DUEÑOS`; en Estadísticas, declarar el efectivo
+   guardado en la bóveda (asistente "efectivo guardado hoy") y, si hay que ordenar la bóveda, hacer un arqueo; abrir el
+   primer turno (el primer fondo se registra como aporte de la dueña).
+
+**Lo que sigue abierto del backlog** (no bloquea la primera venta; detalle en [`backlog-ciclo-2026-11.md`](backlog-ciclo-2026-11.md)):
+
+- **Nivel 2, primer mes de uso:** L9 fricción del mostrador (escáner con feedback, billetes rápidos, modo apagón
+  persistente, botón "Caja abierta" que cierra, "Sacar dinero"), L10 la dueña entiende sus números ("este mes ganaste $X",
+  un solo nombre para gaveta y bóveda), L11 inventario cómodo (buscador, cambio rápido de precio, alta de producto atómica,
+  mermas por la cajera, aviso al cambiar el factor), L12 corregir errores sin ensuciar el P&L (reversos), L13 tests
+  faltantes y una sola función para el efectivo de gaveta, L14 accesibilidad y celular, y login por HTTP con cookie `Secure`.
+- **Decisiones D-07…D-14** (resumen diario, nota obligatoria en descuadre, vencimientos, stock bajo, conteo físico,
+  recargas, fiado a clientes, margen mínimo) y el conteo "a ciegas" al cerrar (VIVO-09).
+- **Nivel 3, pulido:** código muerto, activos fijos sin pantalla, `getResumen` cuenta anuladas, imagen del backend de
+  521 MB, hidratación de `ThemeToggle`, período "Semana" de 8 días, textos de marca del login, ticket que cuenta artículos
+  fraccionados.
+- **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
+  cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia ([`hardening-backlog.md`](hardening-backlog.md)).
 
 ---
 
