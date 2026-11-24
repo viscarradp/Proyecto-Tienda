@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
+import { GAVETA, BOVEDA } from "@/lib/glosario"
 
 interface Abono {
   id: number
@@ -230,8 +231,8 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GAVETA">Caja del día (requiere turno abierto)</SelectItem>
-                  <SelectItem value="BOVEDA">Bóveda</SelectItem>
+                  <SelectItem value="GAVETA">{GAVETA} (requiere turno abierto)</SelectItem>
+                  <SelectItem value="BOVEDA">{BOVEDA}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

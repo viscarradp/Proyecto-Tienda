@@ -214,7 +214,7 @@ export function CheckoutSection({
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              El modo apagón sigue encendido hasta que lo apagues. Cada venta se guarda con esta hora; el efectivo entra a la caja actual.
+              El modo apagón sigue encendido hasta que lo apagues. Cada venta se guarda con esta hora; el efectivo entra a la gaveta actual.
             </p>
           </div>
         )}

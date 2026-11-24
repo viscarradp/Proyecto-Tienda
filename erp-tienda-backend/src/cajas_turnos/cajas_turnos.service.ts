@@ -392,7 +392,15 @@ export class CajasTurnosService {
       orderBy: { id: 'desc' },
       take: limit + 1,
       include: {
-        movimientos_financieros: true,
+        // Quién hizo cada movimiento (solo el nombre) y la categoría del gasto,
+        // para que Movimientos muestre a dónde se fue el dinero del turno.
+        movimientos_financieros: {
+          orderBy: { fecha: 'asc' },
+          include: {
+            usuarios: { select: { nombre: true } },
+            categorias_gastos: { select: { nombre: true } },
+          },
+        },
         // Quién abrió y quién cerró: solo el nombre (trazabilidad D-06).
         usuarios: { select: { nombre: true } },
         cerrado_por: { select: { nombre: true } },

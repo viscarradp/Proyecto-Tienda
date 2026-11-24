@@ -38,7 +38,7 @@ const SIN_CATEGORIA = "sin-categoria"
 const OPCIONES: { modo: Modo; label: string; desc: string; icon: LucideIcon }[] = [
   {
     modo: "boveda",
-    label: "Guardar en bóveda",
+    label: "Guardar en la bóveda",
     desc: "Trasladar efectivo de la gaveta a la bóveda",
     icon: Vault,
   },
@@ -50,8 +50,8 @@ const OPCIONES: { modo: Modo; label: string; desc: string; icon: LucideIcon }[] 
   },
   {
     modo: "retiro",
-    label: "Retiro personal",
-    desc: "Dinero que toma la dueña (no es gasto del negocio)",
+    label: "Sacar para mí",
+    desc: "Dinero que sacas para ti (no es gasto del negocio)",
     icon: HandCoins,
   },
   {

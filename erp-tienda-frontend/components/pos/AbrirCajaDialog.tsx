@@ -101,7 +101,7 @@ export function AbrirCajaDialog<T>({
   const opciones: { valor: Origen; label: string }[] = sobra
     ? [
         { valor: "BOVEDA", label: "Lo saqué de la bóveda" },
-        { valor: "APORTE", label: "Aporte de la dueña" },
+        { valor: "APORTE", label: "Dinero que puse yo" },
         { valor: "NO_SE", label: "No sé" },
       ]
     : [
@@ -118,7 +118,7 @@ export function AbrirCajaDialog<T>({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fondoValido) {
-      toast.error("Por favor ingresa un fondo inicial válido (mayor o igual a 0)")
+      toast.error("Escribe con cuánto empiezas en la gaveta (desde $0)")
       return
     }
     setLoading(true)
@@ -155,21 +155,21 @@ export function AbrirCajaDialog<T>({
             <DoorOpen className="h-5 w-5 text-success" /> Abrir turno de caja
           </DialogTitle>
           <DialogDescription>
-            Ingresa el monto de efectivo con el que inicias el turno.
+            Cuenta el efectivo que hay en la gaveta y escribe con cuánto empiezas el turno.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {remanente !== null && (
             <div className="flex items-center justify-between rounded-sm border border-border bg-muted/50 p-3 text-xs">
               <span className="text-muted-foreground">
-                {primerTurno ? "Aún no hay un turno anterior" : "Total dejado en turno anterior"}
+                {primerTurno ? "Aún no hay un turno anterior" : "Lo que quedó en la gaveta al cerrar el turno anterior"}
               </span>
               <MoneyValue value={remanente} className="text-sm font-semibold" />
             </div>
           )}
 
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Fondo inicial físico ($)</Label>
+            <Label className="text-xs font-medium text-muted-foreground">Efectivo con el que empiezas en la gaveta ($)</Label>
             <Input
               type="number" min={0} step="0.01" inputMode="decimal" value={fondo}
               onChange={(e) => setFondo(e.target.value)}
@@ -210,7 +210,7 @@ export function AbrirCajaDialog<T>({
                 className="h-10 bg-background"
               />
               <p className="text-xs text-muted-foreground">
-                Puedes abrir la caja de todos modos: la diferencia queda anotada para revisarla después.
+                Puedes abrir de todos modos: la diferencia queda anotada para revisarla después.
               </p>
             </div>
           )}
