@@ -6,7 +6,7 @@
 > viven aquí; el *cómo/cuándo* en [`01-plan-implementacion.md`](01-plan-implementacion.md);
 > el avance real en [`02-bitacora.md`](02-bitacora.md).
 >
-> **Origen:** [auditoría de negocio/contable 2026-07-04](../auditorias/2026-07-04-auditoria-negocio-contable.md), sección 10 "Priorización final", **Bloque 1**.
+> **Origen:** [auditoría de negocio/contable 2026-07-04](../../auditorias/2026-07-04-auditoria-negocio-contable.md), sección 10 "Priorización final", **Bloque 1**.
 
 ---
 
@@ -14,7 +14,7 @@
 
 Cerrar las fallas del **modelo de flujo de efectivo** del ERP **antes de la primera
 venta real**, mientras la base de datos está vacía y cualquier cambio de schema es
-un `db push` barato (ADR [`0002`](../decisions/0002-sin-migraciones-hasta-produccion.md)).
+un `db push` barato (ADR [`0002`](../../decisions/0002-sin-migraciones-hasta-produccion.md)).
 Después de la primera venta, varios de estos cambios se vuelven **irreversibles**
 (la atribución por usuario) o requieren migraciones de datos dolorosas.
 

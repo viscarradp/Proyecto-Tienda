@@ -34,6 +34,11 @@ Una vez que levantaste los servicios:
 1. Abre http://localhost:3001 - deberías ver el frontend
 2. Abre http://localhost:3000/api - deberías ver Swagger UI
 3. Los logs mostrarán si todo se levantó correctamente
+4. Entra con el usuario `admin` y la contraseña `INITIAL_ADMIN_PASSWORD` (el `docker-compose.yml` trae un valor por
+   defecto **solo para desarrollo**; cámbialo en un `.env` de la raíz si quieres)
+
+> Estas imágenes (`Dockerfile.dev`) son **solo de desarrollo**: el backend corre `db push --accept-data-loss` contra la BD
+> local. Para producción usa el `Dockerfile` de cada app — ver [docs/operations/deployment.md](docs/operations/deployment.md).
 
 ## 📝 Editar código y ver cambios en vivo
 

@@ -21,14 +21,14 @@ navegación mobile-first, y el rediseño de las 6 pantallas.
 
 **No cubre:** backend/NestJS, esquema de BD, contratos de API, lógica de negocio
 (ventas, caja, FIFO), ni el *hardening* de seguridad (eso vive en
-[`docs/roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md)).
+[`docs/roadmap/hardening-backlog.md`](../../roadmap/hardening-backlog.md)).
 
 ---
 
 ## 2. Contexto de negocio y usuarios
 
 - **Producto:** POS + ERP para una tienda / puesto de mercado minorista en El Salvador.
-- **Prioridad absoluta** (heredada de [`GEMINI_FRONT.md`](../../erp-tienda-frontend/GEMINI_FRONT.md)):
+- **Prioridad absoluta** (heredada de [`GEMINI_FRONT.md`](../../../erp-tienda-frontend/GEMINI_FRONT.md)):
   **velocidad de uso en pantallas táctiles**, claridad visual y cero distracciones.
 - **Usuarios:**
   - **Cajero (`CAJERO`):** opera el POS todo el día. Ve POS, Inventario, Movimientos, Gastos.
@@ -36,7 +36,7 @@ navegación mobile-first, y el rediseño de las 6 pantallas.
 - **Entorno físico:** iluminación variable (interior con poca luz ↔ mercado a
   plena luz del día). → Justifica soportar **tema claro y oscuro**.
 - **Hardware probable:** tablets/teléfonos táctiles y, en administración, escritorio.
-  Existe **lector de código de barras** (ver [`useBarcodeScanner`](../../erp-tienda-frontend/hooks/useBarcodeScanner.ts)),
+  Existe **lector de código de barras** (ver [`useBarcodeScanner`](../../../erp-tienda-frontend/hooks/useBarcodeScanner.ts)),
   así que el foco de teclado y la captura global de escaneo deben preservarse.
 
 ---
@@ -50,11 +50,11 @@ partida que el rediseño debe corregir.
 |---|----------|-----------|---------|
 | D1 | **Design tokens muertos.** `globals.css` define un tema *claro* con variables CSS, pero la app hardcodea un tema oscuro a mano. | `text-white`×144, `bg-black`×80, `border-zinc-800`×116, cientos de `zinc/blue`. `next-themes` instalado pero **sin usar** para theming. | No hay fuente de verdad de color. Cambiar algo global exige editar 3000+ líneas. Imposible ofrecer light/dark. |
 | D2 | **`border-radius` excesivo** ("look IA"). | 200+ usos: `rounded-xl`×92, `rounded-2xl`×31, `rounded-full`×12, hasta `rounded-4xl`. | Estética genérica que el negocio quiere abandonar. |
-| D3 | **Mobile-first incumplido.** La regla declarada (bottom-nav + bottom-sheets) no se aplica. | Navegación móvil = hamburguesa + `Sheet` lateral ([`layout.tsx:146`](../../erp-tienda-frontend/app/dashboard/layout.tsx)). No hay bottom-nav en ninguna parte. | Ergonomía táctil pobre; el pulgar no alcanza la navegación superior. |
-| D4 | **Layout del POS roto en móvil.** Catálogo y carrito usan ambos `h-full` dentro de un `h-screen` en `flex-col`. | [`pos/page.tsx:317`](../../erp-tienda-frontend/app/dashboard/pos/page.tsx) | En móvil los paneles se apilan y desbordan → la pantalla más crítica es inusable en teléfono. **A verificar y corregir.** |
+| D3 | **Mobile-first incumplido.** La regla declarada (bottom-nav + bottom-sheets) no se aplica. | Navegación móvil = hamburguesa + `Sheet` lateral ([`layout.tsx:146`](../../../erp-tienda-frontend/app/dashboard/layout.tsx)). No hay bottom-nav en ninguna parte. | Ergonomía táctil pobre; el pulgar no alcanza la navegación superior. |
+| D4 | **Layout del POS roto en móvil.** Catálogo y carrito usan ambos `h-full` dentro de un `h-screen` en `flex-col`. | [`pos/page.tsx:317`](../../../erp-tienda-frontend/app/dashboard/pos/page.tsx) | En móvil los paneles se apilan y desbordan → la pantalla más crítica es inusable en teléfono. **A verificar y corregir.** |
 | D5 | **Estética "dribbble/IA".** Glows de color, blur y tipografía recargada. | `shadow-[0_0_15px_rgba(37,99,235,…)]`, `backdrop-blur-xl`, `font-black uppercase tracking-widest` omnipresentes. | Ruido visual, fatiga en jornadas largas, baja jerarquía real. |
 | D6 | **Sin capa de diseño propia.** Cada pantalla reimplementa estilos inline; los primitivos shadcn (sobrios) se ignoran o sobrescriben. | Páginas monolíticas: POS 736 LOC, Inventario 615, Movimientos 550. | Inconsistencia y coste de mantenimiento alto. Corroborado por la auditoría (§4.3: "Página POS monolítica"). |
-| D7 | **UX de rol inconsistente.** El `CAJERO` ve "Gastos" en el nav pero el backend responde 403. | [`layout.tsx:67`](../../erp-tienda-frontend/app/dashboard/layout.tsx) + auditoría H35. | El usuario llega a una pantalla que falla. Debe resolverse en UI (ocultar o estado claro), sin tocar backend. |
+| D7 | **UX de rol inconsistente.** El `CAJERO` ve "Gastos" en el nav pero el backend responde 403. | [`layout.tsx:67`](../../../erp-tienda-frontend/app/dashboard/layout.tsx) + auditoría H35. | El usuario llega a una pantalla que falla. Debe resolverse en UI (ocultar o estado claro), sin tocar backend. |
 
 ---
 
@@ -83,7 +83,7 @@ Estos principios gobiernan cada decisión del rediseño:
 
 ### 5.1 Color (tokens)
 
-Se **reconstruyen** las variables de [`globals.css`](../../erp-tienda-frontend/app/globals.css)
+Se **reconstruyen** las variables de [`globals.css`](../../../erp-tienda-frontend/app/globals.css)
 para que sean semánticas y **realmente usadas**, con `:root` (claro) y `.dark`
 (oscuro). Valores iniciales propuestos en `oklch` (afinables en Fase 0):
 
@@ -186,12 +186,12 @@ Nueva escala, drásticamente reducida:
 Detalle a nivel de objetivos y problemas; el detalle fino se aterriza en la fase
 de cada pantalla.
 
-### 7.1 Login — [`app/auth/login/page.tsx`](../../erp-tienda-frontend/app/auth/login/page.tsx)
+### 7.1 Login — [`app/auth/login/page.tsx`](../../../erp-tienda-frontend/app/auth/login/page.tsx)
 - **Objetivo:** entrada sobria y rápida. Quitar glow/blur decorativo del
-  [`auth/layout.tsx`](../../erp-tienda-frontend/app/auth/layout.tsx), card recta,
+  [`auth/layout.tsx`](../../../erp-tienda-frontend/app/auth/layout.tsx), card recta,
   branding limpio. Conservar el flujo login→cookie→`/dashboard/pos`.
 
-### 7.2 POS ("Vender") — [`app/dashboard/pos/page.tsx`](../../erp-tienda-frontend/app/dashboard/pos/page.tsx) ⭐
+### 7.2 POS ("Vender") — [`app/dashboard/pos/page.tsx`](../../../erp-tienda-frontend/app/dashboard/pos/page.tsx) ⭐
 - **Es la pantalla estrella.** Flujo: buscar/escanear → agregar al ticket →
   ajustar cantidades → cobrar; más apertura/cierre de caja.
 - **Móvil:** catálogo a pantalla completa (búsqueda + escaneo arriba, categorías
@@ -203,26 +203,26 @@ de cada pantalla.
 - **Correcciones obligatorias:** D4 (layout `h-full`/`h-screen`), quitar glows,
   botón "Procesar pago" grande pero sobrio, targets ≥44px.
 
-### 7.3 Inventario — [`app/dashboard/inventario/page.tsx`](../../erp-tienda-frontend/app/dashboard/inventario/page.tsx)
+### 7.3 Inventario — [`app/dashboard/inventario/page.tsx`](../../../erp-tienda-frontend/app/dashboard/inventario/page.tsx)
 - Listado de productos/presentaciones con estado de stock. Diálogos
-  [`ProductDialog`](../../erp-tienda-frontend/components/inventario/ProductDialog.tsx),
-  [`EditProductDialog`](../../erp-tienda-frontend/components/inventario/EditProductDialog.tsx),
-  [`AjusteInventarioDialog`](../../erp-tienda-frontend/components/inventario/AjusteInventarioDialog.tsx),
-  [`CompraForm`](../../erp-tienda-frontend/components/inventario/CompraForm.tsx).
+  [`ProductDialog`](../../../erp-tienda-frontend/components/inventario/ProductDialog.tsx),
+  [`EditProductDialog`](../../../erp-tienda-frontend/components/inventario/EditProductDialog.tsx),
+  [`AjusteInventarioDialog`](../../../erp-tienda-frontend/components/inventario/AjusteInventarioDialog.tsx),
+  [`CompraForm`](../../../erp-tienda-frontend/components/inventario/CompraForm.tsx).
 - **Objetivo:** `DataView` responsiva (tabla desktop ↔ tarjetas móvil), `StatePill`
   para stock, formularios como sheets/diálogos rectos.
 
-### 7.4 Movimientos — [`app/dashboard/movimientos/page.tsx`](../../erp-tienda-frontend/app/dashboard/movimientos/page.tsx)
+### 7.4 Movimientos — [`app/dashboard/movimientos/page.tsx`](../../../erp-tienda-frontend/app/dashboard/movimientos/page.tsx)
 - Historial de movimientos financieros/inventario. **Objetivo:** `DataView`
   responsiva; montos en `MoneyValue` (mono + color semántico entrada/salida);
   filtros por tipo/fecha accesibles en móvil.
 
-### 7.5 Gastos — [`app/dashboard/gastos/page.tsx`](../../erp-tienda-frontend/app/dashboard/gastos/page.tsx)
+### 7.5 Gastos — [`app/dashboard/gastos/page.tsx`](../../../erp-tienda-frontend/app/dashboard/gastos/page.tsx)
 - Registro y listado de gastos. **Objetivo:** formulario táctil + lista; **resolver
   D7** (rol `CAJERO`): decidir con el usuario si se oculta del nav o se muestra un
   estado "sin permiso" claro.
 
-### 7.6 Estadísticas — [`app/dashboard/stats/page.tsx`](../../erp-tienda-frontend/app/dashboard/stats/page.tsx)
+### 7.6 Estadísticas — [`app/dashboard/stats/page.tsx`](../../../erp-tienda-frontend/app/dashboard/stats/page.tsx)
 - Panel de métricas (solo `ADMIN`). **Objetivo:** `StatCard`s + visualizaciones
   sobrias, cifras en mono.
 - **Decisión pendiente:** hoy no hay librería de gráficos en `package.json`. En su
@@ -234,9 +234,9 @@ de cada pantalla.
 ## 8. Requisitos no funcionales y restricciones
 
 - **No tocar backend** ni contratos de API; preservar los payloads que consume
-  [`lib/api.ts`](../../erp-tienda-frontend/lib/api.ts).
-- **Preservar estado y lógica:** [`cartStore`](../../erp-tienda-frontend/src/store/cartStore.ts),
-  [`inventoryStore`](../../erp-tienda-frontend/src/store/inventoryStore.ts), escaneo, y flujos de caja/venta.
+  [`lib/api.ts`](../../../erp-tienda-frontend/lib/api.ts).
+- **Preservar estado y lógica:** [`cartStore`](../../../erp-tienda-frontend/src/store/cartStore.ts),
+  [`inventoryStore`](../../../erp-tienda-frontend/src/store/inventoryStore.ts), escaneo, y flujos de caja/venta.
 - **Accesibilidad:** contraste AA en ambos temas, foco visible, `label`s asociadas.
 - **Sin dependencias nuevas pesadas** sin consultar (especialmente gráficos).
 - **Sin regresiones funcionales:** vender, abrir/cerrar caja, alta/ajuste de

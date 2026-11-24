@@ -1,7 +1,10 @@
 # Modelo de Efectivo y Trazabilidad — Bloque 1
 
+> **Proyecto terminado (2026-07), archivado en [`historial/`](../README.md).** Las reglas vigentes viven en
+> [`../../domain/`](../../domain/caja-y-ventas.md); este material es contexto histórico.
+
 Remediación del modelo de flujo de efectivo del ERP (Bloque 1 de la
-[auditoría de negocio/contable 2026-07-04](../auditorias/2026-07-04-auditoria-negocio-contable.md)).
+[auditoría de negocio/contable 2026-07-04](../../auditorias/2026-07-04-auditoria-negocio-contable.md)).
 Fuente de verdad de este trabajo.
 
 ## Índice

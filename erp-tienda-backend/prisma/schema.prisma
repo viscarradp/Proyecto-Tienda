@@ -311,12 +311,12 @@ model ventas {
 
 // La tabla caja_general se eliminó en el Bloque 1.C: el saldo de bóveda se
 // DERIVA del libro de movimientos_financieros vía (cuenta_origen, cuenta_destino).
-// Ver docs/modelo-contable/00-especificaciones.md §5.1.
+// Ver docs/historial/modelo-contable/00-especificaciones.md §5.1.
 
 // Devolución de cliente post-turno (Bloque 3.B, ítem 13). Ligada a la venta
 // original: revierte el costo FIFO al lote exacto y reembolsa desde el turno
 // actual. La venta original permanece COMPLETADA (fue una venta real); la
-// devolución vive en su propia tabla. Ver docs/modelo-contable/bloque3-especificaciones.md §3.
+// devolución vive en su propia tabla. Ver docs/historial/modelo-contable/bloque3-especificaciones.md §3.
 model devoluciones {
   id                   Int                    @id @default(autoincrement())
   venta_id             Int

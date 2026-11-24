@@ -23,15 +23,21 @@ ser proporcionales a una tienda con 1-2 cajas, no a un escenario enterprise
 o multi-tenant.
 
 Alcance definido: catálogo de productos, control de caja (apertura/cierre,
-ingresos/egresos), compras e inventario por lotes, ventas con descarga FIFO,
-control de mermas, y autenticación con roles `ADMIN`/`CAJERO`.
+ingresos/egresos, bóveda y arqueo), compras e inventario por lotes (incluida la
+compra a crédito y el pago de deudas a proveedores), ventas por cantidad o por
+monto con descarga FIFO (y venta sin stock con "deuda de stock"), devoluciones,
+control de mermas, reportes (estado de resultados, patrimonio, flujo de efectivo)
+y autenticación con roles `ADMIN`/`CAJERO` (la cajera opera, la dueña controla).
 
 **Fuera de alcance a propósito** (no son omisiones, son decisiones de
-producto): módulos de Recursos Humanos, CRM complejo de clientes, cuentas por
-cobrar a largo plazo, e integración con pasarelas de pago electrónico — el
-enfoque actual es transaccional físico/efectivo (ver también
-[`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) sobre el supuesto
-de que toda venta es en efectivo).
+producto): módulos de Recursos Humanos, CRM complejo de clientes, fiado a
+clientes (cuentas por cobrar), e integración con pasarelas de pago electrónico —
+el enfoque actual es transaccional físico/efectivo (ver
+[`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md), que indexa las reglas
+de negocio, sobre el supuesto de que toda venta es en efectivo). Sí existen las
+**cuentas por pagar** (deudas con proveedores). Principio rector del ciclo
+2026-11: **apoyar, no imponer** — ante la duda se registra y se avisa, no se bloquea
+([ADR 0011](../decisions/0011-registrar-y-avisar.md)).
 
 ## Las dos aplicaciones
 
@@ -52,7 +58,8 @@ Cliente HTTP
 ThrottlerGuard      ← límite de requests por IP (incluso en rutas @Public)
    │
    ▼
-JwtAuthGuard         ← exige JWT válido, salvo rutas marcadas @Public()
+JwtAuthGuard         ← exige JWT válido, salvo rutas marcadas @Public(); JwtStrategy
+   │                    consulta la BD en cada request (usuario existente, activo, rol vigente)
    │
    ▼
 RolesGuard           ← exige un rol de @Roles(...) si el endpoint lo pide
@@ -79,12 +86,39 @@ Un módulo de NestJS por entidad de negocio, cada uno con
 Prisma) y `dto/` (validación de entrada con `class-validator`):
 
 `auth`, `usuarios`, `categorias`, `productos`, `presentaciones`, `compras`,
-`ajustes_inventario`, `ventas`, `cajas_turnos`, `caja_general`,
-`movimientos_financieros`, `categorias_gastos`, `reportes`.
+`cuentas_por_pagar` (deudas con proveedores y abonos), `ajustes_inventario`,
+`ventas` (incluye devoluciones), `cajas_turnos`, `caja_general` (la bóveda:
+saldo derivado, inyección y arqueo — ya no es una tabla), `movimientos_financieros`,
+`categorias_gastos`, `reportes`, `salud`.
+
+`salud` expone `GET /salud` (público, `SELECT 1`, sin rate-limit) como health
+check del proveedor de despliegue — ver
+[`../operations/deployment.md`](../operations/deployment.md).
 
 `prisma/` no es un módulo de negocio: expone `PrismaService`, un wrapper de
 `PrismaClient` inyectable en cualquier servicio (es `@Global()`, no hace falta
-importarlo en cada módulo).
+importarlo en cada módulo). `src/common/` agrupa lo compartido: orden de locks
+(`concurrency.ts`), cuentas de efectivo y saldo de bóveda, avisos de la política
+"registrar y avisar", redondeo, deuda de stock (`pendientes-stock.ts`), zona
+horaria del negocio, permisos por rol, validadores de DTO y el filtro de
+excepciones de Prisma.
+
+## Convenciones transversales
+
+- **Concurrencia:** bloqueo pesimista con orden fijo **turno → venta → lotes →
+  pendientes** (y el lock de bóveda después del turno). Siempre se bloquea antes de
+  insertar filas que referencien la fila bloqueada ([ADR 0001](../decisions/0001-concurrencia-for-update.md)).
+- **Transacciones:** `TX_OPTIONS` (timeout 15 s, espera de conexión 5 s) en las
+  transacciones largas; el default de Prisma (5 s) se quedaba corto contra Supabase.
+- **Dinero y cantidades:** `Decimal` (nunca floats); dinero a 2 decimales con
+  redondeo mitad hacia arriba **por línea** antes de sumar; cantidades a 3 decimales.
+  Los DTO acotan los rangos (un número enorme da 400, no un 500).
+- **Avisos en la respuesta:** las operaciones que "registran y avisan" devuelven
+  `avisos: string[]` junto al recurso creado.
+- **Zona horaria del negocio:** se guarda UTC; los reportes agrupan por día en
+  `ZONA_HORARIA_NEGOCIO` (default `America/El_Salvador`).
+- **Pool de conexiones:** `DB_POOL_MAX` por instancia; ver
+  [`../operations/configuration.md`](../operations/configuration.md).
 
 ## Frontend
 
@@ -106,5 +140,5 @@ autorización real la hace siempre el backend. Ver [`security.md`](security.md) 
 ## Ver también
 
 - [`data-model.md`](data-model.md) — tablas y el motor FIFO de inventario.
-- [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) — reglas de negocio.
+- [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md) — índice de las reglas de negocio por tema.
 - [`security.md`](security.md) — autenticación y hardening aplicado.

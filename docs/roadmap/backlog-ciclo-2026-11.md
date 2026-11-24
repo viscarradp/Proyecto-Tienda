@@ -118,8 +118,9 @@ modelo de datos al adoptar migraciones (ARQ-17, backlog técnico 1–2); imagen 
 pantalla (NEG-05); hidratación de `ThemeToggle`; período "Semana" de 8 días; textos de marca
 del login (UX-02); pulido general (UX-30); el ticket cuenta "10.286 artículos" al sumar cantidades fraccionadas.
 
-**Documentación (Fase 5):** `domain/caja-y-ventas.md` y `architecture/data-model.md`
-desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
+**Documentación (Fase 5):** ✅ 2026-11-24 — `domain/` reorganizado por tema (NEG-06) y
+`architecture/data-model.md` al día (NEG-07); proyectos cerrados movidos a `historial/`. Queda
+solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 
 ---
 
@@ -149,3 +150,4 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L6 | ✅ 2026-11-24 — 125 e2e; verificado en navegador (pregunta de diferencia de apertura → INGRESO_CAPITAL; gasto mayor al esperado pasa con aviso y cae en "Otros"; asistente de bóveda) | `feature/l6-fondos-apertura` |
 | L7 | ✅ 2026-11-24 — verificado en navegador como dueña y como cajera (pantalla Usuarios, opciones de Sacar dinero, 403 con mensaje). **Cambios de schema:** `usuarios.activo`, `ventas.anulada_por_id`, `cajas_turnos.cerrado_por_id` | `feature/l7-permisos-trazabilidad` |
 | L8 | ✅ 2026-11-24 — 156 e2e; verificado en navegador (abono parcial desde la gaveta con autor y aviso). **Cambios de schema:** `compras_inventario.usuario_id`, tabla `abonos_cuentas_por_pagar` | `feature/l8-deudas-proveedores` |
+| Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | (por commitear) |

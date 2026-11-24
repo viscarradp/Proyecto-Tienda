@@ -291,9 +291,9 @@ docker-compose exec backend npm run test:e2e
 
 ## Próximos Pasos
 
-- Leer [DATABASE-MIGRATIONS.md](./DATABASE-MIGRATIONS.md) para entender migraciones
+- Leer el [ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md) para entender por qué todavía no hay migraciones
 - Configurar en `docker-compose.yml` si necesitas agregar más servicios
-- Para producción, consultar [DEPLOYMENT.md](./DEPLOYMENT.md)
+- Para producción, consultar [deployment.md](./deployment.md)
 
 ## Comandos Útiles Rápidos
 

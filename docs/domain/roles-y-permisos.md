@@ -1,0 +1,73 @@
+# Roles y permisos
+
+> Reglas vigentes (ciclo 2026-11, lote L7). Verificadas contra los `@Roles` de cada controller,
+> `common/permisos.ts`, `jwt.strategy.ts` y `usuarios.service.ts`. Mecanismo técnico (guards, JWT, hardening):
+> [`../architecture/security.md`](../architecture/security.md).
+
+## Principio (D-06): la cajera opera, la dueña controla
+
+Hay dos roles: **`ADMIN`** (la dueña) y **`CAJERO`** (la cajera). La cajera hace todo lo que el mostrador necesita
+—vender, anular, devolver, abrir y cerrar caja, pagar gastos chicos de la gaveta— y **cada cosa queda con su nombre y su
+motivo**. Lo que mueve dinero fuera de la gaveta o cambia las reglas del negocio es de la dueña. El rol `VENDEDOR`
+(muerto) se quitó.
+
+Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administradora)."**
+
+## Matriz
+
+| Acción | CAJERO | ADMIN |
+|---|---|---|
+| Vender, anular (con motivo), devolver (con motivo) | sí | sí |
+| Abrir y cerrar caja (incluye el origen de la diferencia de apertura) | sí | sí |
+| `EGRESO_OPERATIVO` desde la gaveta; `RETIRO_BOVEDA` (guardar en bóveda) | sí | sí |
+| `RETIRO_PERSONAL`, `INGRESO_CAPITAL`, `TRASLADO_DESDE_BOVEDA`, egreso pagado desde la bóveda | 403 | sí |
+| Inyección a la bóveda, arqueo, libro de la bóveda | 403 | sí |
+| Ver el saldo de la bóveda (`GET /caja-general/saldo`) | sí | sí |
+| Categorías de gasto: leer / crear, editar, borrar | leer / 403 | todo |
+| Alta rápida de productos; ver inventario, productos y movimientos | sí | sí |
+| Crear, editar y borrar productos, presentaciones y categorías; **precios** | 403 (lectura de catálogo sí) | sí |
+| Registrar compras; ver historial de compras | 403 / sí | sí / sí |
+| Ajustes de inventario (mermas y conteos) | 403 | sí |
+| Deudas con proveedores y abonos | 403 | sí |
+| Reportes (estado de resultados, patrimonio, flujo, top, margen) | 403 | sí |
+| Cierre forzado de un turno | 403 | sí |
+| Usuarios (crear, editar, desactivar, reactivar) | 403 | sí |
+
+`POST /movimientos-financieros` no se puede resolver con un `@Roles` de clase (sirve a ambos roles): decide
+`exigirPermisoMovimiento` por `tipo_movimiento` y `origen_fondos`. Una cajera solo puede un `EGRESO_OPERATIVO` con origen
+`GAVETA` (el default) o un `RETIRO_BOVEDA`.
+
+La interfaz refleja lo mismo (`lib/navigation.ts` es la fuente única): la cajera ve **Vender, Inventario y Movimientos**;
+**Gastos, Estadísticas y Usuarios** son de la dueña. Ocultar es solo cosmético: la autorización real la hace siempre el
+backend, así que una cajera que llame la API directo sigue recibiendo 403.
+
+## Trazabilidad de autor
+
+Las operaciones guardan quién las hizo: venta (`usuario_id`), **anulación** (`ventas.anulada_por_id`, con motivo),
+turno abierto (`usuario_id`) y **cerrado** (`cajas_turnos.cerrado_por_id`, también en el cierre forzado), movimientos,
+devoluciones, ajustes de inventario, cambios de precio, **compras** (`compras_inventario.usuario_id`) y abonos a
+deudas. Movimientos muestra quién vendió, anuló, abrió y cerró.
+
+## Usuarios: se desactivan, no se borran
+
+- `DELETE /usuarios/:id` **desactiva** (`activo = false`); `PATCH /usuarios/:id/reactivar` lo reactiva. Nunca se borra
+  un usuario: así la autoría del historial se conserva (D-16).
+- **No se puede desactivar a uno mismo**, ni **dejar al sistema sin ninguna dueña activa**: desactivar o bajar de
+  `ADMIN` a `CAJERO` a la última administradora activa da 409 ("crea o reactiva a otra administradora"). Estos cambios se
+  serializan con un advisory lock para que dos dueñas no se desactiven mutuamente a la vez.
+- El login rechaza a un usuario inactivo ("Este usuario está desactivado. Habla con la dueña.") **solo después de
+  verificar la contraseña**, para no revelar a un desconocido qué usuarios existen. Ninguna respuesta incluye
+  `password_hash`.
+
+## Validación en cada request
+
+El JWT (12 h) solo identifica al usuario (`sub`). En **cada request** `JwtStrategy.validate` consulta la base: el
+usuario debe existir y estar `activo`, y el **rol que cuenta es el de la base de datos**, no el del token. Por eso
+desactivar a alguien o cambiarle el rol aplica **de inmediato** (401 "Tu sesión ya no es válida. Vuelve a iniciar
+sesión." o 403), sin esperar a que el token expire. A esta escala, una consulta por request es aceptable.
+
+## Usuario inicial
+
+Con la tabla `usuarios` vacía, el backend crea `admin` con la contraseña de `INITIAL_ADMIN_PASSWORD`
+([ADR 0003](../decisions/0003-admin-seed-por-env.md)); si la variable falta, no crea ninguno. Cambia esa contraseña en el
+primer ingreso y retira la variable.

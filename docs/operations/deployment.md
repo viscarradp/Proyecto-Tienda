@@ -90,8 +90,11 @@ primera venta real.
 
 ## Checklist rápido
 
+> El checklist completo previo a la primera venta (incluida la lista de cambios de schema del ciclo 2026-11 que Supabase
+> aún no tiene) está en [`../roadmap/plan-fases.md`](../roadmap/plan-fases.md#antes-de-la-primera-venta-real).
+
 1. Esquema aplicado (paso anterior).
 2. Imágenes construidas; subirlas al registro del proveedor es un paso manual.
 3. Variables definidas; backend arriba, `GET /salud` responde 200.
-4. Entrar con `admin` y **cambiar la contraseña inicial**; retirar `INITIAL_ADMIN_PASSWORD`.
+4. Entrar con `admin` y **cambiar la contraseña inicial**; retirar `INITIAL_ADMIN_PASSWORD`; crear el usuario de la cajera (rol `CAJERO`).
 5. Respaldo nocturno activado y un ensayo de restauración hecho ([`respaldos.md`](respaldos.md)).

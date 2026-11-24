@@ -36,7 +36,7 @@ automatizado (2.E, diferido) y correr `db push` contra la Supabase real (paso ma
 ## Entradas
 
 ### 2026-07-08 — Bloque 3 · Sub-fase 3.E: SRS v3.0 (meta-hallazgo) ✅
-- Reescrito [`../producto/srs.md`](../producto/srs.md) de v2.0 (diseño, detrás del código) a
+- Reescrito [`../producto/srs.md`](../../producto/srs.md) de v2.0 (diseño, detrás del código) a
   **v3.0**: refleja el stack real (NestJS/Prisma/Next), el modelo de efectivo origen→destino
   con bóveda derivada, y todo lo construido en los Bloques 1–3 (retiro personal, traslados,
   faltantes al P&L, umbral + cierre forzado, arqueo, ajustes positivos, patrimonio, flujo de
@@ -52,7 +52,7 @@ automatizado (2.E, diferido) y correr `db push` contra la Supabase real (paso ma
 - **Frontend** (`CheckoutSection` + POS): toggle "Venta durante un apagón" que revela un
   selector `datetime-local` (max = ahora); "Procesar pago" se bloquea si falta la fecha.
 - **Doc**: proceso de contingencia (hoja física + captura en lote) en
-  [`../domain/modo-contingencia.md`](../domain/modo-contingencia.md).
+  [`../domain/modo-contingencia.md`](../../domain/modo-contingencia.md).
 - **Verificación**: backend build+lint limpios; **e2e 29/29** (2 nuevos: venta con fecha
   pasada queda con esa fecha en el turno actual; fecha futura → 400). Frontend build+lint
   limpios. **Flujo real en el POS**: venta con fecha 2026-07-06 registrada (efectivo al día).
@@ -67,7 +67,7 @@ automatizado (2.E, diferido) y correr `db push` contra la Supabase real (paso ma
   `GET /presentaciones/:id/historial-precios`. Frontend: botón de historial por
   presentación en el diálogo de edición (panel expandible con fecha y cambio).
 - **Inmutabilidad a nivel BD**: **diferida** con el SQL de `REVOKE` documentado en
-  [`../roadmap/hardening-backlog.md`](../roadmap/hardening-backlog.md) §2b (solo tablas
+  [`../roadmap/hardening-backlog.md`](../../roadmap/hardening-backlog.md) §2b (solo tablas
   de libro append-only). Convención de signos: verificada, ya unificada en 1.C.
 - **Verificación**: backend build+lint limpios; **e2e 27/27** (3 nuevos: historial de
   precios, FIFO desempata por id con lotes del mismo instante, ultimo-cierre ve el
@@ -154,7 +154,7 @@ automatizado (2.E, diferido) y correr `db push` contra la Supabase real (paso ma
 
 ### 2026-07-05 — Arranque
 - Leído el `plan-fases.md`: Fases 0-3 del plan técnico original cerradas. El trabajo
-  abierto es el **Bloque 1** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10.
+  abierto es el **Bloque 1** de la [auditoría de negocio/contable](../../auditorias/2026-07-04-auditoria-negocio-contable.md) §10.
 - Explorado el backend (schema, servicios de movimientos/cajas/caja_general/ajustes,
   jwt.strategy). Diagnóstico F1-F7 documentado en [`00-especificaciones.md`](00-especificaciones.md) §3.
 - Decisiones del usuario: **D1 fraccionados = SÍ** (Decimal), **D2 alcance = backend + frontend**.
