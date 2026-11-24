@@ -4,6 +4,7 @@ import {
   History,
   Receipt,
   BarChart3,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 
@@ -14,10 +15,11 @@ import {
  * (@Roles en los controllers de NestJS) para evitar llevar al usuario a
  * pantallas que responderán 403.
  *
- * Nota D7: "Gastos" es solo ADMIN porque registrar un egreso toca
- * `/caja-general` (POST), que el backend restringe a ADMIN.
+ * D-06 "la cajera opera, la dueña controla": Gastos, Estadísticas y Usuarios
+ * son de la dueña (ADMIN). Lo que la cajera sí hace (pagar gastos chicos desde
+ * la gaveta, guardar en la bóveda) vive en el botón "Sacar dinero" del POS.
  */
-export type Rol = "ADMIN" | "CAJERO" | "VENDEDOR"
+export type Rol = "ADMIN" | "CAJERO"
 
 export interface NavItem {
   name: string
@@ -32,6 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { name: "Movimientos", href: "/dashboard/movimientos", icon: History, roles: ["ADMIN", "CAJERO"] },
   { name: "Gastos", href: "/dashboard/gastos", icon: Receipt, roles: ["ADMIN"] },
   { name: "Estadísticas", href: "/dashboard/stats", icon: BarChart3, roles: ["ADMIN"] },
+  { name: "Usuarios", href: "/dashboard/usuarios", icon: Users, roles: ["ADMIN"] },
 ]
 
 /** Ítems de navegación visibles para un rol dado. */

@@ -59,8 +59,13 @@ export class VentasController {
   anular(
     @Param('id', ParseIntPipe) id: number,
     @Body() anularVentaDto: AnularVentaDto,
+    @CurrentUser('userId') userId: number,
   ) {
-    return this.ventasService.anular(id, anularVentaDto.justificacion_nula);
+    return this.ventasService.anular(
+      id,
+      anularVentaDto.justificacion_nula,
+      userId,
+    );
   }
 
   @Post(':id/devolucion')

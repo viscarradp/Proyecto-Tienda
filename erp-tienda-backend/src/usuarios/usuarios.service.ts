@@ -1,8 +1,20 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { acquireAdvisoryLock } from '../common/concurrency';
+import { TX_OPTIONS } from '../common/transaccion';
 import * as bcrypt from 'bcrypt';
+
+/** Serializa los cambios que pueden dejar al sistema sin ADMIN activo. */
+const ADMINS_LOCK = 'usuarios_admins';
 
 @Injectable()
 export class UsuariosService implements OnModuleInit {
@@ -87,43 +99,102 @@ export class UsuariosService implements OnModuleInit {
     });
   }
 
+  /**
+   * Lo que la autenticación necesita en CADA request: existencia, estado y rol
+   * vigentes en la base de datos (no los del token). Nunca incluye el hash.
+   */
+  async findParaAutenticacion(id: number) {
+    return this.prisma.usuarios.findUnique({
+      where: { id },
+      select: { id: true, nombre: true, rol: true, activo: true },
+    });
+  }
+
   async update(id: number, updateUsuarioDto: UpdateUsuarioDto) {
     const { password, ...userData } = updateUsuarioDto;
 
-    // Preparar objeto de actualización con tipos parciales
-    const updateData: {
-      nombre?: string;
-      rol?: string;
-      password_hash?: string;
-    } = {
-      ...userData,
-      rol: userData.rol as 'ADMIN' | 'CAJERO' | undefined,
+    const updateData: Prisma.usuariosUpdateInput = {
+      nombre: userData.nombre,
+      rol: userData.rol,
     };
-
     if (password) {
       // Encriptar el nuevo password si viene en el request
       updateData.password_hash = await bcrypt.hash(password, this.saltRounds);
     }
 
-    try {
-      const usuario = await this.prisma.usuarios.update({
+    return await this.prisma.$transaction(async (tx) => {
+      await acquireAdvisoryLock(tx, ADMINS_LOCK);
+      const actual = await this.obtenerOFallar(tx, id);
+
+      // Bajar de ADMIN a CAJERO no puede dejar el sistema sin dueña activa.
+      if (
+        userData.rol &&
+        userData.rol !== 'ADMIN' &&
+        actual.rol === 'ADMIN' &&
+        actual.activo
+      ) {
+        await this.exigirOtroAdminActivo(tx, id, 'cambiar el rol de');
+      }
+
+      const usuario = await tx.usuarios.update({
         where: { id },
         data: updateData,
       });
-
       return this.excludePasswordHash(usuario);
-    } catch {
-      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
-    }
+    }, TX_OPTIONS);
   }
 
-  async remove(id: number) {
-    try {
-      return await this.prisma.usuarios.delete({
+  /**
+   * Desactiva (nunca borra: la autoría del historial se conserva). El usuario
+   * deja de poder entrar y su token vigente deja de servir de inmediato.
+   */
+  async desactivar(id: number, actorId: number) {
+    if (id === actorId) {
+      throw new BadRequestException('No puedes desactivar tu propio usuario.');
+    }
+    return await this.prisma.$transaction(async (tx) => {
+      await acquireAdvisoryLock(tx, ADMINS_LOCK);
+      const actual = await this.obtenerOFallar(tx, id);
+      if (actual.rol === 'ADMIN' && actual.activo) {
+        await this.exigirOtroAdminActivo(tx, id, 'desactivar a');
+      }
+      const usuario = await tx.usuarios.update({
         where: { id },
+        data: { activo: false },
       });
-    } catch {
+      return this.excludePasswordHash(usuario);
+    }, TX_OPTIONS);
+  }
+
+  async reactivar(id: number) {
+    await this.findOne(id);
+    const usuario = await this.prisma.usuarios.update({
+      where: { id },
+      data: { activo: true },
+    });
+    return this.excludePasswordHash(usuario);
+  }
+
+  private async obtenerOFallar(tx: Prisma.TransactionClient, id: number) {
+    const usuario = await tx.usuarios.findUnique({ where: { id } });
+    if (!usuario) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    }
+    return usuario;
+  }
+
+  private async exigirOtroAdminActivo(
+    tx: Prisma.TransactionClient,
+    id: number,
+    accion: string,
+  ) {
+    const otros = await tx.usuarios.count({
+      where: { rol: 'ADMIN', activo: true, id: { not: id } },
+    });
+    if (otros === 0) {
+      throw new ConflictException(
+        `No se puede ${accion} la única administradora activa. Antes, crea o reactiva a otra administradora.`,
+      );
     }
   }
 

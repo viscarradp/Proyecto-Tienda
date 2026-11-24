@@ -24,10 +24,40 @@
     `@Public()`.
   - `RolesGuard`: si el controlador/endpoint tiene `@Roles('ADMIN', ...)`,
     exige que el rol del usuario autenticado esté en esa lista.
-- Roles actuales: `ADMIN` y `CAJERO`. (El código reconoce también
-  `VENDEDOR` en algunos controladores, pero no se puede crear un usuario con
-  ese rol — `CreateUsuarioDto` solo permite `ADMIN`/`CAJERO`. Es un rol muerto,
-  documentado aquí para que no sorprenda a quien lo encuentre.)
+- Roles: `ADMIN` (la dueña) y `CAJERO`. El rol `VENDEDOR` (muerto) se quitó.
+- Todo 403 por rol responde "Esto lo hace la dueña (administradora)."
+  (`RolesGuard` y `common/permisos.ts`).
+
+### Matriz de permisos (D-06: "la cajera opera, la dueña controla")
+
+| Acción | CAJERO | ADMIN |
+|---|---|---|
+| Vender, anular, devolver (queda su nombre y motivo) | sí | sí |
+| Abrir y cerrar caja (incl. origen de la diferencia de apertura) | sí | sí |
+| `EGRESO_OPERATIVO` desde la gaveta; `RETIRO_BOVEDA` (gaveta→bóveda) | sí | sí |
+| `RETIRO_PERSONAL`, `INGRESO_CAPITAL`, `TRASLADO_DESDE_BOVEDA`, egreso desde bóveda | 403 | sí |
+| Inyección a bóveda (`/caja-general/inyeccion`), arqueo, libro de bóveda | 403 | sí |
+| Saldo de bóveda (`GET /caja-general/saldo`) | sí | sí |
+| Categorías de gasto: leer / crear, editar, borrar | leer / 403 | todo |
+| Alta rápida de productos, ver inventario y movimientos | sí | sí |
+| Productos, precios, catálogo, compras (crear), ajustes, reportes | 403 (lectura de catálogo sí) | sí |
+| Cierre forzado, usuarios | 403 | sí |
+
+`POST /movimientos-financieros` decide por `tipo_movimiento` y `origen_fondos`
+(`exigirPermisoMovimiento`).
+
+### Validación del usuario en cada request y desactivación
+
+- `JwtStrategy.validate` consulta la base en cada request: el usuario debe
+  existir y estar `activo`, y el rol que cuenta es el de la BD (no el del
+  token). Desactivar o cambiar de rol aplica al siguiente request (401 / 403).
+- Los usuarios no se borran: `DELETE /usuarios/:id` los desactiva
+  (`activo=false`) y `PATCH /usuarios/:id/reactivar` los reactiva, para
+  conservar la autoría del historial. No se puede desactivar a uno mismo ni
+  dejar al sistema sin ADMIN activo (desactivar o bajar de rol al último).
+- El login rechaza usuarios inactivos ("Este usuario está desactivado. Habla
+  con la dueña.") solo tras verificar la contraseña. Ninguna respuesta de
+  usuarios incluye `password_hash`.
 - La autorización por rol en el **frontend es solo cosmética** (oculta
   botones/menús). La autorización real siempre la hace el backend — un
   usuario `CAJERO` que manipule la UI o llame la API directamente sigue

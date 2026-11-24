@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 interface CategoriaGasto {
   id: number
@@ -78,6 +79,10 @@ export function SacarDineroDialog({
   onOpenChange: (v: boolean) => void
   onSuccess: () => void
 }) {
+  // D-06: el retiro personal y traer de la bóveda son de la dueña (el backend
+  // responde 403 a la cajera); aquí solo se ocultan para no ofrecerlos.
+  const { user } = useCurrentUser()
+  const opciones = user?.rol === "ADMIN" ? OPCIONES : OPCIONES.filter((o) => o.modo === "boveda" || o.modo === "gasto")
   const [modo, setModo] = React.useState<Modo | null>(null)
   const [monto, setMonto] = React.useState("")
   const [descripcion, setDescripcion] = React.useState("")
@@ -177,7 +182,7 @@ export function SacarDineroDialog({
 
         {!modo ? (
           <div className="flex flex-col gap-2">
-            {OPCIONES.map((o) => (
+            {opciones.map((o) => (
               <button
                 key={o.modo}
                 type="button"

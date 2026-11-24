@@ -211,6 +211,7 @@ export class MovimientosFinancierosService {
       take: limit ?? 100,
       include: {
         categorias_gastos: true,
+        usuarios: { select: { nombre: true } },
       },
     });
   }
@@ -220,6 +221,7 @@ export class MovimientosFinancierosService {
       where: { id },
       include: {
         categorias_gastos: true,
+        usuarios: { select: { nombre: true } },
       },
     });
     if (!movimiento) {

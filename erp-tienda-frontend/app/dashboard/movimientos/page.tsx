@@ -58,6 +58,9 @@ interface Venta {
   total: string
   estado: string
   justificacion_nula: string | null
+  // Autoría (D-06): solo el nombre; null si el usuario ya no está o no se registró.
+  usuarios?: { nombre: string } | null
+  anulada_por?: { nombre: string } | null
   detalle_ventas: DetalleVenta[]
   _count?: { devoluciones: number }
   devoluciones?: { total_reembolsado: string }[]
@@ -72,6 +75,8 @@ interface CajaTurno {
   efectivo_esperado: string | null
   efectivo_declarado: string | null
   diferencia: string | null
+  usuarios?: { nombre: string } | null
+  cerrado_por?: { nombre: string } | null
 }
 
 interface PaginaTurnos {
@@ -357,6 +362,9 @@ export default function MovimientosPage() {
         {isVentaExpanded && (
           <div className="border-l-2 border-primary/30 bg-background/40 px-4 py-3 sm:ml-6">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Desglose de artículos</p>
+            {venta.usuarios?.nombre && (
+              <p className="mb-2 text-xs text-muted-foreground">Vendió: {venta.usuarios.nombre}</p>
+            )}
             <div className="flex flex-col gap-2">
               {venta.detalle_ventas.map(detalle => (
                 <div key={detalle.id} className="flex items-center justify-between gap-3 rounded-sm border border-border bg-card p-3 text-sm">
@@ -409,7 +417,9 @@ export default function MovimientosPage() {
             {venta.estado === 'ANULADA' && venta.justificacion_nula && (
               <div className="mt-3 border-t border-border pt-3">
                 <div className="rounded-sm border border-destructive/20 bg-destructive/5 p-3 text-xs">
-                  <p className="mb-1 font-medium text-destructive">Motivo de anulación:</p>
+                  <p className="mb-1 font-medium text-destructive">
+                    Motivo de anulación{venta.anulada_por?.nombre ? ` (anuló ${venta.anulada_por.nombre})` : ""}:
+                  </p>
                   <p className="text-muted-foreground">{venta.justificacion_nula}</p>
                 </div>
               </div>
@@ -572,6 +582,13 @@ export default function MovimientosPage() {
                             {format(new Date(turno.fecha_apertura), "HH:mm")}
                             {turno.fecha_cierre && <>→ {format(new Date(turno.fecha_cierre), "HH:mm")}</>}
                           </div>
+                          {(turno.usuarios?.nombre || turno.cerrado_por?.nombre) && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {turno.usuarios?.nombre && <>Abrió: {turno.usuarios.nombre}</>}
+                              {turno.usuarios?.nombre && turno.cerrado_por?.nombre && " · "}
+                              {turno.cerrado_por?.nombre && <>Cerró: {turno.cerrado_por.nombre}</>}
+                            </p>
+                          )}
                         </div>
                       </div>
 

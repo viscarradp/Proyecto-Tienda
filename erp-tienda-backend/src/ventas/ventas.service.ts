@@ -447,6 +447,9 @@ export class VentasService {
       orderBy: { id: 'desc' },
       take: limit ?? (porTurno ? undefined : 50),
       include: {
+        // Quién vendió y quién anuló: solo el nombre (trazabilidad D-06).
+        usuarios: { select: { nombre: true } },
+        anulada_por: { select: { nombre: true } },
         // Solo el conteo: la UI decide si ofrece «Anular» (no se puede anular
         // una venta con devoluciones).
         _count: { select: { devoluciones: true } },
@@ -470,6 +473,8 @@ export class VentasService {
       where: { id },
       include: {
         // Misma forma que el listado: la pantalla Movimientos busca por número.
+        usuarios: { select: { nombre: true } },
+        anulada_por: { select: { nombre: true } },
         _count: { select: { devoluciones: true } },
         devoluciones: { select: { total_reembolsado: true } },
         detalle_ventas: {
@@ -489,7 +494,7 @@ export class VentasService {
     return venta;
   }
 
-  async anular(id: number, justificacion_nula: string) {
+  async anular(id: number, justificacion_nula: string, userId?: number) {
     // Lectura previa SOLO para ubicar el turno a bloquear. Todo lo demás
     // (estado, devoluciones, líneas y lotes) se lee y valida bajo lock dentro
     // de la transacción.
@@ -597,6 +602,7 @@ export class VentasService {
           estado: 'ANULADA',
           justificacion_nula,
           fecha_anulacion: new Date(),
+          anulada_por_id: userId,
         },
       });
 

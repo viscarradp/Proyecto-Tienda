@@ -320,6 +320,7 @@ export class CajasTurnosService {
           efectivo_declarado: efectivoDeclarado,
           diferencia: diferencia,
           observaciones: justificacion || null,
+          cerrado_por_id: userId,
         },
       });
 
@@ -392,6 +393,9 @@ export class CajasTurnosService {
       take: limit + 1,
       include: {
         movimientos_financieros: true,
+        // Quién abrió y quién cerró: solo el nombre (trazabilidad D-06).
+        usuarios: { select: { nombre: true } },
+        cerrado_por: { select: { nombre: true } },
         _count: {
           select: { ventas: true },
         },
@@ -405,6 +409,9 @@ export class CajasTurnosService {
       where: { id },
       include: {
         movimientos_financieros: true,
+        // Quién abrió y quién cerró: solo el nombre (trazabilidad D-06).
+        usuarios: { select: { nombre: true } },
+        cerrado_por: { select: { nombre: true } },
         _count: {
           select: { ventas: true },
         },
