@@ -59,6 +59,7 @@ interface Venta {
   estado: string
   justificacion_nula: string | null
   detalle_ventas: DetalleVenta[]
+  _count?: { devoluciones: number }
 }
 
 interface CajaTurno {
@@ -501,14 +502,21 @@ export default function MovimientosPage() {
                                           >
                                             <Undo2 className="h-4 w-4" /> Devolver
                                           </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                            onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
-                                          >
-                                            <XCircle className="h-4 w-4" /> Anular venta
-                                          </Button>
+                                          {venta.caja_turno_id === cajaActiva?.id && (venta._count?.devoluciones ?? 0) > 0 && (
+                                            <p className="self-center text-xs text-muted-foreground">
+                                              Ya tiene devoluciones — puedes devolver el resto
+                                            </p>
+                                          )}
+                                          {venta.caja_turno_id === cajaActiva?.id && (venta._count?.devoluciones ?? 0) === 0 && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                              onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
+                                            >
+                                              <XCircle className="h-4 w-4" /> Anular venta
+                                            </Button>
+                                          )}
                                         </div>
                                       )}
                                       {venta.estado === 'ANULADA' && venta.justificacion_nula && (
