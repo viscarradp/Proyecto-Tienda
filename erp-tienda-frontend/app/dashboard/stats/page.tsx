@@ -166,6 +166,9 @@ export default function StatsPage() {
   const [inyeccionDesc, setInyeccionDesc] = useState("")
   const [inyeccionLoading, setInyeccionLoading] = useState(false)
   const [inyeccionMsg, setInyeccionMsg] = useState<string | null>(null)
+  const [bovedaInicial, setBovedaInicial] = useState("")
+  const [bovedaInicialLoading, setBovedaInicialLoading] = useState(false)
+  const [bovedaInicialMsg, setBovedaInicialMsg] = useState<string | null>(null)
   const [showArqueo, setShowArqueo] = useState(false)
   const [arqueoSaldo, setArqueoSaldo] = useState("")
   const [arqueoJustif, setArqueoJustif] = useState("")
@@ -221,6 +224,33 @@ export default function StatsPage() {
     ingreso: parseFloat(p.ingreso),
     tone: marginTone(parseFloat(p.margen_porcentaje)),
   }))
+
+  // Asistente de bóveda inicial (NEG-12): crea el INGRESO_CAPITAL de arranque con el
+  // mismo endpoint de inyección. Desaparece solo cuando la bóveda ya tiene movimientos.
+  const handleBovedaInicial = async () => {
+    const monto = parseFloat(bovedaInicial)
+    if (isNaN(monto) || monto <= 0) {
+      setBovedaInicialMsg("❌ Escribe un monto mayor a 0")
+      return
+    }
+    setBovedaInicialLoading(true)
+    setBovedaInicialMsg(null)
+    try {
+      await apiFetch("/caja-general/inyeccion", {
+        method: "POST",
+        body: JSON.stringify({ monto, descripcion: "Efectivo guardado al empezar a usar el sistema" }),
+      })
+      setBovedaInicial("")
+      await fetchData()
+    } catch (err) {
+      setBovedaInicialMsg(`❌ ${err instanceof Error ? err.message : "Error"}`)
+    } finally {
+      setBovedaInicialLoading(false)
+    }
+  }
+
+  const bovedaSinMovimientos =
+    saldoBoveda !== null && saldoBoveda.total_depositos === 0 && parseFloat(saldoBoveda.saldo_actual) === 0
 
   const handleInyeccion = async () => {
     setInyeccionLoading(true)
@@ -323,6 +353,31 @@ export default function StatsPage() {
 
         {estado && (
           <>
+            {/* Asistente de bóveda inicial */}
+            {bovedaSinMovimientos && (
+              <div className="mb-4 rounded-sm border border-primary/30 bg-primary/5 p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <Vault className="h-4 w-4" /> ¿Cuánto efectivo tienes guardado fuera de la caja hoy?
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Así la bóveda empieza con lo que de verdad tienes y los pagos desde ella cuadran.
+                  Si no tienes nada guardado, ignora este aviso.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number" min={0.01} step="0.01" inputMode="decimal"
+                    value={bovedaInicial} onChange={(e) => setBovedaInicial(e.target.value)}
+                    placeholder="0.00" className="h-11 w-40 font-mono"
+                  />
+                  <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="h-11 gap-2">
+                    {bovedaInicialLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    Guardar
+                  </Button>
+                </div>
+                {bovedaInicialMsg && <p className="mt-2 text-sm font-medium text-destructive">{bovedaInicialMsg}</p>}
+              </div>
+            )}
+
             {/* KPI Cards */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
               <KPICard

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Vault, Receipt, HandCoins, Loader2, type LucideIcon } from "lucide-react"
+import { Vault, Receipt, HandCoins, ArrowDownToLine, Loader2, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -28,7 +28,10 @@ interface CategoriaGasto {
   nombre: string
 }
 
-type Modo = "boveda" | "gasto" | "retiro"
+type Modo = "boveda" | "gasto" | "retiro" | "traer"
+
+/** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
+const SIN_CATEGORIA = "sin-categoria"
 
 const OPCIONES: { modo: Modo; label: string; desc: string; icon: LucideIcon }[] = [
   {
@@ -49,13 +52,22 @@ const OPCIONES: { modo: Modo; label: string; desc: string; icon: LucideIcon }[] 
     desc: "Dinero que toma la dueña (no es gasto del negocio)",
     icon: HandCoins,
   },
+  {
+    modo: "traer",
+    label: "Traer de la bóveda",
+    desc: "Meter a la gaveta dinero que está en la bóveda (por ejemplo, para reponer cambio)",
+    icon: ArrowDownToLine,
+  },
 ]
 
 /**
- * "Sacar dinero" de la gaveta (Bloque 1.D §5.4). Un solo botón con tres
+ * "Sacar dinero" de la gaveta (Bloque 1.D §5.4). Un solo botón con cuatro
  * opciones que traducen la intención a los asientos correctos por detrás:
- * bóveda (RETIRO_BOVEDA), gasto (EGRESO_OPERATIVO) o retiro personal
- * (RETIRO_PERSONAL). Todas requieren un turno abierto (salen de la gaveta).
+ * bóveda (RETIRO_BOVEDA), gasto (EGRESO_OPERATIVO), retiro personal
+ * (RETIRO_PERSONAL) y "Traer de la bóveda" (TRASLADO_DESDE_BOVEDA, que en
+ * cambio SUMA a la gaveta). Todas requieren un turno abierto.
+ * Política registrar y avisar (ADR 0011): el backend nunca rechaza por fondos;
+ * si el sistema cree que no alcanza, devuelve `avisos` y se muestran aquí.
  */
 export function SacarDineroDialog({
   open,
@@ -101,10 +113,6 @@ export function SacarDineroDialog({
       toast.error("Ingresa un monto válido")
       return
     }
-    if (modo === "gasto" && !categoriaId) {
-      toast.error("Selecciona una categoría de gasto")
-      return
-    }
 
     const body =
       modo === "boveda"
@@ -112,6 +120,12 @@ export function SacarDineroDialog({
             tipo_movimiento: "RETIRO_BOVEDA",
             monto: m,
             descripcion: descripcion.trim() || "Traslado a bóveda",
+          }
+        : modo === "traer"
+        ? {
+            tipo_movimiento: "TRASLADO_DESDE_BOVEDA",
+            monto: m,
+            descripcion: descripcion.trim() || "Efectivo traído de la bóveda",
           }
         : modo === "retiro"
           ? {
@@ -123,17 +137,22 @@ export function SacarDineroDialog({
               tipo_movimiento: "EGRESO_OPERATIVO",
               monto: m,
               descripcion: descripcion.trim() || "Gasto",
-              categoria_gasto_id: parseInt(categoriaId),
+              // Opcional: sin categoría el backend la guarda en "Otros".
+              categoria_gasto_id:
+                categoriaId && categoriaId !== SIN_CATEGORIA ? parseInt(categoriaId) : undefined,
               origen_fondos: "GAVETA",
             }
 
     setLoading(true)
     try {
-      await apiFetch("/movimientos-financieros", {
+      const resp = await apiFetch<{ avisos?: string[] }>("/movimientos-financieros", {
         method: "POST",
         body: JSON.stringify(body),
       })
       toast.success("Movimiento registrado")
+      for (const aviso of resp.avisos ?? []) {
+        toast.warning(aviso, { duration: 12000 })
+      }
       reset()
       onOpenChange(false)
       onSuccess()
@@ -152,7 +171,7 @@ export function SacarDineroDialog({
         <DialogHeader>
           <DialogTitle>{opcion ? opcion.label : "Sacar dinero"}</DialogTitle>
           {!modo && (
-            <DialogDescription>¿Qué querés hacer con el efectivo de la gaveta?</DialogDescription>
+            <DialogDescription>¿Qué quieres hacer con el efectivo de la gaveta?</DialogDescription>
           )}
         </DialogHeader>
 
@@ -177,6 +196,12 @@ export function SacarDineroDialog({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {modo === "traer" && (
+              <p className="rounded-sm border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+                Esto <strong>mete</strong> dinero a la gaveta sacándolo de la bóveda. Sube el efectivo
+                esperado de la gaveta y baja el saldo de la bóveda.
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
               <Input
@@ -194,12 +219,13 @@ export function SacarDineroDialog({
 
             {modo === "gasto" && (
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
-                <Select value={categoriaId} onValueChange={setCategoriaId} required>
+                <Label className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
+                <Select value={categoriaId} onValueChange={setCategoriaId}>
                   <SelectTrigger className="h-11 w-full">
-                    <SelectValue placeholder="Selecciona una categoría…" />
+                    <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={SIN_CATEGORIA}>Sin categoría (Otros)</SelectItem>
                     {categorias.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.nombre}

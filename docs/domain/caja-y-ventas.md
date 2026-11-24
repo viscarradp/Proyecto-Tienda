@@ -7,10 +7,23 @@ línea por línea (para eso está el código y `architecture/data-model.md`).
 
 - Solo puede haber **un turno `ABIERTA` a la vez**. Abrir un turno nuevo
   mientras hay uno abierto debe rechazarse (`CajasTurnosService.abrir()`).
-- Al abrir un turno, si el fondo inicial declarado no coincide con lo que
-  quedó en la gaveta en el cierre anterior, el sistema registra
-  automáticamente un `INGRESO_CAPITAL` (si es mayor) o `AJUSTE_FALTANTE`
-  (si es menor) — nadie tiene que hacerlo a mano.
+- Al abrir un turno, si el fondo inicial no coincide con lo que quedó en la
+  gaveta al último cierre (el *remanente*: efectivo declarado − lo trasladado a
+  la bóveda; 0 en el primer turno de la historia), la diferencia **se registra
+  siempre** y nunca bloquea la apertura. `POST /cajas-turnos/abrir` acepta
+  `origen_diferencia` (`BOVEDA` | `APORTE` | `RETIRO` | `NO_SE`) y `nota`:
+  - sobra: `BOVEDA` → `TRASLADO_DESDE_BOVEDA` (BOVEDA→GAVETA); `APORTE` →
+    `INGRESO_CAPITAL` (DUEÑOS→GAVETA); sin explicar → `AJUSTE_SOBRANTE`
+    (GASTO→GAVETA, "Diferencia de apertura sin explicar").
+  - falta: `BOVEDA` → `TRASLADO_A_BOVEDA` (GAVETA→BOVEDA); `RETIRO` →
+    `RETIRO_PERSONAL` (GAVETA→DUEÑOS); sin explicar → `AJUSTE_FALTANTE`
+    (GAVETA→GASTO).
+  El turno nuevo arranca con `efectivo_esperado = fondo_inicial` (ya incluye la
+  diferencia), así que el asiento solo explica el salto remanente → fondo y no
+  vuelve a tocar el esperado. El traslado a bóveda de la apertura se guarda sin
+  `caja_turno_id` para que el cierre de ese turno no lo reste otra vez del
+  remanente. La respuesta incluye `avisos: string[]` (p. ej. diferencia sin
+  explicar, bóveda en negativo).
 - Al cerrar un turno, se compara `efectivo_declarado` (conteo físico) contra
   `efectivo_esperado` (lo que el sistema calculó); la diferencia genera
   automáticamente un `AJUSTE_FALTANTE` o `AJUSTE_SOBRANTE` si supera un
@@ -127,14 +140,24 @@ Tipos reconocidos por el sistema (`movimientos_financieros.tipo_movimiento`):
 
 | Tipo | Efecto en `efectivo_esperado` del turno |
 |---|---|
-| `INGRESO_CAPITAL` | Incrementa |
-| `EGRESO_OPERATIVO` | Decrementa (requiere categoría de gasto) |
-| `RETIRO_BOVEDA` | Decrementa (y se refleja como ingreso en `caja_general`) |
-| `PAGO_PROVEEDOR` | Decrementa (generado automáticamente por una compra `CAJA_POS`) |
-| `AJUSTE_FALTANTE` / `AJUSTE_SOBRANTE` | Generados automáticamente al abrir/cerrar turno |
+| `INGRESO_CAPITAL` | Incrementa (DUEÑOS→GAVETA) |
+| `TRASLADO_DESDE_BOVEDA` | Incrementa (BOVEDA→GAVETA): "Traer de la bóveda" a media jornada |
+| `EGRESO_OPERATIVO` | Decrementa (GAVETA→GASTO, o BOVEDA→GASTO sin turno); categoría opcional, por defecto "Otros" |
+| `RETIRO_BOVEDA` | Decrementa (GAVETA→BOVEDA) |
+| `RETIRO_PERSONAL` | Decrementa (GAVETA→DUEÑOS) |
+| `PAGO_PROVEEDOR` | Decrementa (generado por una compra `CAJA_POS`; `CAJA_GENERAL` sale de la bóveda) |
+| `AJUSTE_FALTANTE` / `AJUSTE_SOBRANTE` | Generados al abrir (diferencia sin explicar) y al cerrar turno |
 
-Ningún egreso puede dejar `efectivo_esperado` en negativo — se valida antes
-de aplicar el movimiento.
+### Política de fondos: registrar y avisar
+
+Ninguna salida de efectivo (gasto, retiro, guardar en bóveda, compra `CAJA_POS`
+o `CAJA_GENERAL`, gasto desde bóveda, traer de la bóveda) se rechaza porque el
+saldo que cree el sistema no alcance: se registra igual y la respuesta trae
+`avisos: string[]` («Según el sistema la gaveta quedó en −$5.00. …»). Por eso
+`efectivo_esperado` y el saldo derivado de la bóveda **pueden quedar
+negativos**; el cierre de turno y el arqueo de bóveda los reconcilian. Los
+locks se mantienen para que dos salidas concurrentes lean un saldo coherente.
+Ver `docs/decisions/0011-registrar-y-avisar.md`.
 
 ## Mermas
 

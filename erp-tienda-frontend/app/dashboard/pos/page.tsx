@@ -37,6 +37,7 @@ import { MoneyValue } from "@/components/money-value"
 import { CartLines } from "@/components/pos/CartLines"
 import { CheckoutSection } from "@/components/pos/CheckoutSection"
 import { SacarDineroDialog } from "@/components/pos/SacarDineroDialog"
+import { AbrirCajaDialog } from "@/components/pos/AbrirCajaDialog"
 import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
 import { useInventoryStore } from "../../../src/store/inventoryStore"
@@ -112,7 +113,6 @@ export default function POSPage() {
   const [openCajaDialog, setOpenCajaDialog] = React.useState(false)
   const [closeCajaDialog, setCloseCajaDialog] = React.useState(false)
   const [sacarDineroOpen, setSacarDineroOpen] = React.useState(false)
-  const [fondoInicial, setFondoInicial] = React.useState<string>("")
   const [efectivoDeclarado, setEfectivoDeclarado] = React.useState<string>("")
   const [montoBoveda, setMontoBoveda] = React.useState<string>("")
   const [autoOpenNext, setAutoOpenNext] = React.useState(true)
@@ -127,7 +127,6 @@ export default function POSPage() {
   // Modo contingencia (Bloque 3.D): registrar una venta de apagón con su hora real.
   const [contingencia, setContingencia] = React.useState(false)
   const [fechaContingencia, setFechaContingencia] = React.useState<string>("")
-  const [ultimoCierreFondo, setUltimoCierreFondo] = React.useState<number | null>(null)
   // Clave de idempotencia del intento de cobro en curso: se reutiliza si la
   // cajera reintenta el mismo carrito y se descarta al cobrar o al cambiar el carrito.
   const idemRef = React.useRef<{ key: string; firma: string } | null>(null)
@@ -151,7 +150,6 @@ export default function POSPage() {
       const caja = await apiFetch<CajaTurno>("/cajas-turnos/activa")
       setCajaActiva(caja)
       setCajaError(false)
-      setUltimoCierreFondo(null)
     } catch (err) {
       if (tipoDeError(err) !== "no_encontrado") {
         // Red/servidor: no sabemos si hay caja. No ofrecer abrir otra; dejar reintentar.
@@ -160,16 +158,6 @@ export default function POSPage() {
       }
       setCajaError(false)
       setCajaActiva(null)
-      try {
-        const ult = await apiFetch<{fondo_siguiente: number | string}>("/cajas-turnos/ultimo-cierre")
-        const parsedVal = Number(ult.fondo_siguiente) || 0
-        setUltimoCierreFondo(parsedVal)
-        if (parsedVal > 0) {
-          setFondoInicial(parsedVal.toString())
-        }
-      } catch {
-        setUltimoCierreFondo(0)
-      }
     } finally {
       setCajaLoading(false)
     }
@@ -178,30 +166,6 @@ export default function POSPage() {
   React.useEffect(() => {
     if (mounted) { loadData(); loadCaja() }
   }, [mounted, loadData, loadCaja])
-
-  // ─── Abrir Caja ───
-  const handleAbrirCaja = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const fondoParsed = parseFloat(fondoInicial)
-    if (isNaN(fondoParsed) || fondoParsed < 0) {
-      toast.error("Por favor ingresa un fondo inicial válido (mayor o igual a 0)")
-      return
-    }
-    setCajaActionLoading(true)
-    try {
-      const caja = await apiFetch<CajaTurno>("/cajas-turnos/abrir", {
-        method: "POST",
-        body: JSON.stringify({ fondo_inicial: fondoParsed }),
-      })
-      setCajaActiva(caja)
-      setOpenCajaDialog(false)
-      setFondoInicial("")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al abrir caja")
-    } finally {
-      setCajaActionLoading(false)
-    }
-  }
 
   // ─── Cerrar Caja ───
   const handleCerrarCaja = async (e: React.FormEvent) => {
@@ -672,62 +636,11 @@ export default function POSPage() {
       </BottomSheet>
 
       {/* ════════ DIALOG: ABRIR CAJA ════════ */}
-      <Dialog open={openCajaDialog} onOpenChange={setOpenCajaDialog}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <DoorOpen className="h-5 w-5 text-success" /> Abrir turno de caja
-            </DialogTitle>
-            <DialogDescription>
-              Ingresa el monto de efectivo con el que inicias el turno.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAbrirCaja} className="flex flex-col gap-4">
-            {ultimoCierreFondo !== null && (
-              <div className="flex flex-col gap-2 rounded-sm border border-border bg-muted/50 p-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Total dejado en turno anterior</span>
-                  <MoneyValue value={ultimoCierreFondo} className="text-sm font-semibold" />
-                </div>
-
-                {fondoInicial !== "" &&
-                  parseFloat(fondoInicial) !== Number(ultimoCierreFondo) && (
-                    <p className="text-muted-foreground">
-                      Iniciando con{" "}
-                      <strong>
-                        <MoneyValue
-                          value={Math.abs(parseFloat(fondoInicial) - Number(ultimoCierreFondo))}
-                          tone="muted"
-                          className="text-xs"
-                        />
-                      </strong>{" "}
-                      {parseFloat(fondoInicial) > Number(ultimoCierreFondo) ? "más" : "menos"} que lo
-                      dejado ayer. Si sacaste dinero de la bóveda para el fondo, regístralo con
-                      &quot;Sacar dinero&quot;.
-                    </p>
-                  )}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Fondo inicial físico ($)</Label>
-              <Input
-                type="number" min={0} step="0.01" inputMode="decimal" value={fondoInicial}
-                onChange={(e) => setFondoInicial(e.target.value)}
-                className="h-14 text-center font-mono text-2xl font-bold tabular-nums"
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setOpenCajaDialog(false)}>Cancelar</Button>
-              <Button type="submit" disabled={cajaActionLoading} className="gap-2 bg-success text-success-foreground hover:bg-success/90">
-                {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorOpen className="h-4 w-4" />}
-                Abrir caja
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AbrirCajaDialog<CajaTurno>
+        open={openCajaDialog}
+        onOpenChange={setOpenCajaDialog}
+        onAbierta={setCajaActiva}
+      />
 
       {/* ════════ DIALOG: CERRAR CAJA ════════ */}
       <Dialog open={closeCajaDialog} onOpenChange={setCloseCajaDialog}>

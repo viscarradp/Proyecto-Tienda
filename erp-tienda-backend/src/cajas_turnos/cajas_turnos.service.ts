@@ -16,20 +16,102 @@ import {
 } from '../common/cuentas-efectivo';
 import { TOLERANCIA_DESCUADRE } from '../common/tolerancia';
 import { TX_OPTIONS } from '../common/transaccion';
+import { avisoBovedaNegativa } from '../common/avisos-fondos';
+import { CuentaEfectivo } from '../common/cuentas-efectivo';
+import { OrigenDiferencia } from './dto/create-caja_turno.dto';
+
+/** Asiento que explica la diferencia entre el fondo de apertura y el remanente. */
+interface AsientoApertura {
+  tipo_movimiento: string;
+  cuenta_origen: CuentaEfectivo;
+  cuenta_destino: CuentaEfectivo;
+  descripcion: string;
+  sinExplicar: boolean;
+}
+
+/**
+ * Elige el asiento de la diferencia de apertura (D-15). : el fondo es
+ * mayor que el remanente (entró efectivo a la gaveta); si no, salió efectivo.
+ * Una opción que no corresponde al sentido (APORTE cuando falta, RETIRO cuando
+ * sobra) o NO_SE/ausente deja la diferencia como ajuste sin explicar.
+ */
+function asientoDeDiferencia(
+  sobra: boolean,
+  origen: OrigenDiferencia | undefined,
+): AsientoApertura {
+  if (sobra) {
+    if (origen === 'BOVEDA') {
+      return {
+        tipo_movimiento: 'TRASLADO_DESDE_BOVEDA',
+        cuenta_origen: 'BOVEDA',
+        cuenta_destino: 'GAVETA',
+        descripcion: 'Fondo de apertura tomado de la bóveda',
+        sinExplicar: false,
+      };
+    }
+    if (origen === 'APORTE') {
+      return {
+        tipo_movimiento: 'INGRESO_CAPITAL',
+        cuenta_origen: 'DUEÑOS',
+        cuenta_destino: 'GAVETA',
+        descripcion: 'Aporte de la dueña al abrir la caja',
+        sinExplicar: false,
+      };
+    }
+    return {
+      tipo_movimiento: 'AJUSTE_SOBRANTE',
+      cuenta_origen: 'GASTO',
+      cuenta_destino: 'GAVETA',
+      descripcion: 'Diferencia de apertura sin explicar',
+      sinExplicar: true,
+    };
+  }
+  if (origen === 'BOVEDA') {
+    return {
+      tipo_movimiento: 'TRASLADO_A_BOVEDA',
+      cuenta_origen: 'GAVETA',
+      cuenta_destino: 'BOVEDA',
+      descripcion: 'Se guardó en la bóveda (diferencia de apertura)',
+      sinExplicar: false,
+    };
+  }
+  if (origen === 'RETIRO') {
+    return {
+      tipo_movimiento: 'RETIRO_PERSONAL',
+      cuenta_origen: 'GAVETA',
+      cuenta_destino: 'DUEÑOS',
+      descripcion: 'Retiro de la dueña (diferencia de apertura)',
+      sinExplicar: false,
+    };
+  }
+  return {
+    tipo_movimiento: 'AJUSTE_FALTANTE',
+    cuenta_origen: 'GAVETA',
+    cuenta_destino: 'GASTO',
+    descripcion: 'Diferencia de apertura sin explicar',
+    sinExplicar: true,
+  };
+}
 
 @Injectable()
 export class CajasTurnosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Abre un turno. Si el fondo difiere de lo que quedó en la gaveta al último
+   * cierre (el remanente), la diferencia se registra SIEMPRE con su asiento
+   * (D-15, ADR 0011) según `origen_diferencia`; nunca se bloquea la apertura.
+   *
+   * Modelo: el turno nuevo arranca con `efectivo_esperado = fondo_inicial`
+   * (ya incluye la diferencia), así que el asiento de la diferencia NO vuelve a
+   * tocar `efectivo_esperado`: solo explica el salto remanente → fondo. Con
+   * eso la gaveta (turno abierto = esperado) y la bóveda (libro) cuadran y el
+   * patrimonio solo cambia por lo que de verdad entró o salió del negocio.
+   */
   async abrir(createCajaTurnoDto: CreateCajaTurnoDto, userId?: number) {
-    const fondoInicial = createCajaTurnoDto.fondo_inicial;
-    const desdeBoveda = createCajaTurnoDto.desde_boveda ?? 0;
-
-    if (desdeBoveda > fondoInicial) {
-      throw new BadRequestException(
-        'El monto tomado de la bóveda no puede superar el fondo inicial.',
-      );
-    }
+    const fondoInicial = new Prisma.Decimal(createCajaTurnoDto.fondo_inicial);
+    const origen = createCajaTurnoDto.origen_diferencia;
+    const nota = createCajaTurnoDto.nota?.trim();
 
     // Advisory lock: serializa aperturas de turno concurrentes. Sin esto, dos
     // requests de apertura simultáneos podrían leer "0 turnos abiertos" ambos
@@ -48,18 +130,32 @@ export class CajasTurnosService {
         );
       }
 
-      // 2. Si parte del fondo sale de la bóveda, validar su saldo bajo lock.
-      //    NOTA (fuga F3): ya NO se compara el fondo contra el último cierre para
-      //    inventar un AJUSTE_FALTANTE/INGRESO_CAPITAL — el traslado de dinero
-      //    fuera de la gaveta se registra explícitamente al CIERRE.
-      if (desdeBoveda > 0) {
-        await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
-        const saldo = await saldoBovedaDerivado(tx);
-        if (saldo.lessThan(desdeBoveda)) {
-          throw new BadRequestException(
-            `Fondos insuficientes en bóveda. ` +
-              `Disponible: $${saldo.toFixed(2)}, Requerido: $${desdeBoveda}`,
+      // 2. Remanente: lo que quedó en la gaveta al último cierre, leído ya bajo
+      //    el lock (no hay turno abierto, así que nadie lo cambia mientras tanto).
+      //    El primer turno de la historia no tiene cierre previo: remanente 0.
+      const remanente = await this.remanenteDeUltimoCierre(tx);
+      const diferencia = fondoInicial.sub(remanente);
+      const hayDiferencia = !diferencia.isZero();
+      const avisos: string[] = [];
+
+      // Si el fondo no explica de dónde vino, o la opción no corresponde al
+      // sentido de la diferencia (p. ej. APORTE cuando falta), se registra igual
+      // como ajuste sin explicar: nunca se bloquea la apertura.
+      const sobra = diferencia.greaterThan(0);
+      let asiento: AsientoApertura | null = null;
+      if (hayDiferencia) {
+        asiento = asientoDeDiferencia(sobra, origen);
+        if (asiento.sinExplicar) {
+          avisos.push(
+            `El fondo ($${fondoInicial.toFixed(2)}) no coincide con lo que quedó ` +
+              `en la gaveta al último cierre ($${remanente.toFixed(2)}). ` +
+              `La diferencia de $${diferencia.abs().toFixed(2)} quedó registrada ` +
+              'sin explicar.',
           );
+        }
+        // Si sale de la bóveda, se serializa con el resto de escritores de bóveda.
+        if (asiento.cuenta_origen === 'BOVEDA') {
+          await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
         }
       }
 
@@ -74,23 +170,37 @@ export class CajasTurnosService {
         },
       });
 
-      // 4. Registrar el traslado bóveda→gaveta si se tomó fondo de la bóveda.
-      //    Solo reduce el saldo derivado de bóveda; la gaveta ya es fondoInicial.
-      if (desdeBoveda > 0) {
+      // 4. Asiento de la diferencia (siempre que exista). No toca
+      //    efectivo_esperado: el turno ya arrancó en el fondo.
+      if (asiento) {
         await tx.movimientos_financieros.create({
           data: {
-            caja_turno_id: nuevoTurno.id,
-            tipo_movimiento: 'TRASLADO_DESDE_BOVEDA',
-            monto: new Prisma.Decimal(desdeBoveda),
-            descripcion: 'Fondo inicial tomado de la bóveda',
+            // El traslado gaveta→bóveda de la apertura NO se ata al turno nuevo:
+            // getUltimoCierre y el patrimonio restan del remanente los
+            // TRASLADO_A_BOVEDA del turno cerrado; ligarlo a este turno lo
+            // restaría de nuevo cuando este turno se cierre.
+            caja_turno_id:
+              asiento.tipo_movimiento === 'TRASLADO_A_BOVEDA'
+                ? null
+                : nuevoTurno.id,
+            tipo_movimiento: asiento.tipo_movimiento,
+            monto: diferencia.abs(),
+            descripcion: nota
+              ? `${asiento.descripcion} — ${nota}`
+              : asiento.descripcion,
             usuario_id: userId,
-            cuenta_origen: 'BOVEDA',
-            cuenta_destino: 'GAVETA',
+            cuenta_origen: asiento.cuenta_origen,
+            cuenta_destino: asiento.cuenta_destino,
           },
         });
+
+        if (asiento.cuenta_origen === 'BOVEDA') {
+          const aviso = avisoBovedaNegativa(await saldoBovedaDerivado(tx));
+          if (aviso) avisos.push(aviso);
+        }
       }
 
-      return nuevoTurno;
+      return { ...nuevoTurno, avisos };
     });
   }
 
@@ -109,7 +219,18 @@ export class CajasTurnosService {
   }
 
   async getUltimoCierre() {
-    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
+    return this.leerUltimoCierre(this.prisma);
+  }
+
+  /** Lo que quedó en la gaveta al último cierre (0 si nunca hubo un cierre). */
+  private async remanenteDeUltimoCierre(
+    client: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal> {
+    return (await this.leerUltimoCierre(client)).fondo_siguiente;
+  }
+
+  private async leerUltimoCierre(client: Prisma.TransactionClient) {
+    const ultimoCierre = await client.cajas_turnos.findFirst({
       // Incluye CERRADA_FORZADA (Bloque 3.C): si el último turno se cerró forzado
       // (2.B), el fondo del siguiente debe derivarse de ESE cierre, no de uno viejo.
       where: { estado: { in: ['CERRADA', 'CERRADA_FORZADA'] } },
