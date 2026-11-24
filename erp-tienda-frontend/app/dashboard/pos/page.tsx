@@ -230,7 +230,7 @@ export default function POSPage() {
     }
 
     if (bovedaParsed > efectivoParsed) {
-      toast.error("El monto enviado a bóveda no puede ser mayor al total físico en caja.")
+      toast.error("No puedes mandar a la bóveda más de lo que hay en la gaveta.")
       return
     }
 

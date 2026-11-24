@@ -31,6 +31,7 @@ import { StatCard } from "@/components/stat-card"
 import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch, tipoDeError } from "@/lib/api"
+import { GAVETA, BOVEDA, etiquetaMovimiento } from "@/lib/glosario"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -66,6 +67,19 @@ interface Venta {
   devoluciones?: { total_reembolsado: string }[]
 }
 
+/** Movimiento de dinero de un turno (gasto, traslado, retiro, pago…), con quién lo hizo. */
+interface MovimientoTurno {
+  id: number
+  tipo_movimiento: string
+  monto: string
+  descripcion: string
+  fecha: string | null
+  cuenta_origen: string | null
+  cuenta_destino: string | null
+  usuarios?: { nombre: string } | null
+  categorias_gastos?: { nombre: string } | null
+}
+
 interface CajaTurno {
   id: number
   fondo_inicial: string
@@ -77,6 +91,7 @@ interface CajaTurno {
   diferencia: string | null
   usuarios?: { nombre: string } | null
   cerrado_por?: { nombre: string } | null
+  movimientos_financieros?: MovimientoTurno[]
 }
 
 interface PaginaTurnos {
@@ -95,6 +110,43 @@ type BusquedaVenta =
 const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERRADA_FORZADA'
 const etiquetaEstado = (estado: string) =>
   estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
+
+/** Movimientos de dinero que se muestran en el turno (la merma no es dinero). */
+const movimientosDeDinero = (turno: CajaTurno) =>
+  (turno.movimientos_financieros ?? []).filter(m => m.tipo_movimiento !== 'MERMA_INVENTARIO')
+
+/** Fila "Gasto: Pago de agua — $5.00 — karla": qué pasó, cuánto, cuándo y quién. */
+function MovimientoFila({ mov }: { mov: MovimientoTurno }) {
+  // Respecto a la gaveta: sale, entra o ni la toca (se movió solo en la bóveda).
+  const sale = mov.cuenta_origen === 'GAVETA'
+  const entra = mov.cuenta_destino === 'GAVETA'
+  const soloBoveda = !sale && !entra
+  const nombre = mov.usuarios?.nombre
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 last:border-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm">
+          <span className="font-medium">{etiquetaMovimiento(mov.tipo_movimiento)}</span>
+          {mov.descripcion && <span className="text-muted-foreground">: {mov.descripcion}</span>}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {mov.fecha && format(new Date(mov.fecha), "HH:mm")}
+          {mov.categorias_gastos?.nombre && <> · {mov.categorias_gastos.nombre}</>}
+          {soloBoveda && <> · {mov.cuenta_origen === 'BOVEDA' ? `salió de la ${BOVEDA.toLowerCase()}` : `no tocó la ${GAVETA.toLowerCase()}`}</>}
+          {nombre && <> · {nombre}</>}
+        </p>
+      </div>
+      <span
+        className={cn(
+          "shrink-0 font-mono text-sm font-semibold tabular-nums",
+          sale ? "text-destructive" : entra ? "text-success" : "text-muted-foreground",
+        )}
+      >
+        {sale ? "−" : entra ? "+" : ""}{formatMoney(mov.monto)}
+      </span>
+    </div>
+  )
+}
 
 const TURNOS_POR_PAGINA = 7
 const TURNOS_MAX = 50
@@ -239,7 +291,8 @@ export default function MovimientosPage() {
         const matchId = String(turno.id).includes(searchLower)
         const matchDate = format(new Date(turno.fecha_apertura), "dd/MMM/yyyy HH:mm", { locale: es }).toLowerCase().includes(searchLower)
         const matchEstado = turno.estado.toLowerCase().includes(searchLower) || etiquetaEstado(turno.estado).toLowerCase().includes(searchLower)
-        return matchId || matchDate || matchEstado
+        const matchMov = movimientosDeDinero(turno).some(m => m.descripcion.toLowerCase().includes(searchLower))
+        return matchId || matchDate || matchEstado || matchMov
       })
     }
 
@@ -438,15 +491,15 @@ export default function MovimientosPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Ventas y turnos</h1>
-            <p className="text-xs text-muted-foreground">Historial de cajas, ventas y cuadres</p>
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Movimientos</h1>
+            <p className="text-xs text-muted-foreground">Lo que se vendió y el dinero que entró o salió, turno por turno</p>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1 md:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar turno, o nº de venta…"
+                placeholder="Buscar turno, gasto o nº de venta…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="h-11 pl-9"
@@ -466,15 +519,15 @@ export default function MovimientosPage() {
           {/* Stat cards */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <StatCard
-              label="Estado de caja (hoy)"
+              label={`${GAVETA} (hoy)`}
               icon={cajaActiva ? DoorOpen : DoorClosed}
-              footer={cajaActiva ? <>Fondo inicial: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
+              footer={cajaActiva ? <>Empezó con: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
               className={cajaActiva ? "border-success/30" : undefined}
             >
               <div className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 rounded-full", cajaActiva ? "bg-success" : "bg-destructive")} />
                 <p className={cn("text-lg font-semibold", cajaActiva ? "text-success" : "text-muted-foreground")}>
-                  {cajaActiva ? "En operación" : "Cerrada"}
+                  {cajaActiva ? "Abierta" : "Cerrada"}
                 </p>
               </div>
             </StatCard>
@@ -595,7 +648,7 @@ export default function MovimientosPage() {
                       {/* Resumen de totales */}
                       <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
                         <div>
-                          <p className="text-xs text-muted-foreground">Fondo inicial</p>
+                          <p className="text-xs text-muted-foreground">Empezó con</p>
                           <MoneyValue value={turno.fondo_inicial} className="text-sm" />
                         </div>
                         <div>
@@ -651,6 +704,22 @@ export default function MovimientosPage() {
                     {/* Ventas Expanded */}
                     {isExpanded && (
                       <div className="border-t border-border bg-muted/20">
+                        {/* Dinero que se movió en el turno (UX-12) */}
+                        <div className="border-b border-border">
+                          <p className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Dinero que se movió en este turno
+                          </p>
+                          {movimientosDeDinero(turno).length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-muted-foreground">
+                              No hubo gastos ni otros movimientos de dinero.
+                            </p>
+                          ) : (
+                            <div className="mt-1">
+                              {movimientosDeDinero(turno).map(mov => <MovimientoFila key={mov.id} mov={mov} />)}
+                            </div>
+                          )}
+                        </div>
+                        <p className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Ventas del turno</p>
                         {/* Cabecera de la tabla de ventas (desktop) */}
                         <div className="hidden items-center border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
                           <div className="w-6" />

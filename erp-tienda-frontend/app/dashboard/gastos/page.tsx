@@ -30,6 +30,7 @@ import { MoneyValue } from "@/components/money-value"
 import { StatCard } from "@/components/stat-card"
 import { apiFetch } from "@/lib/api"
 import { DeudasProveedores } from "@/components/gastos/DeudasProveedores"
+import { GAVETA, BOVEDA } from "@/lib/glosario"
 
 /** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
 const SIN_CATEGORIA = "sin-categoria"
@@ -124,7 +125,7 @@ export default function GastosPage() {
     }
 
     if (origenFondos === "CAJA_POS" && !cajaActiva) {
-      setError("No hay un turno de caja abierto para registrar el gasto en POS.")
+      setError(`No hay un turno abierto: abre la caja en Vender, o paga el gasto desde la ${BOVEDA.toLowerCase()}.`)
       return
     }
 
@@ -148,7 +149,7 @@ export default function GastosPage() {
         })
       })
 
-      setSuccess("¡Gasto registrado exitosamente!")
+      setSuccess("¡Gasto registrado!")
       for (const aviso of resp.avisos ?? []) {
         toast.warning(aviso, { duration: 12000 })
       }
@@ -204,7 +205,7 @@ export default function GastosPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Control de gastos</h1>
-            <p className="text-xs text-muted-foreground">Registro de egresos operativos</p>
+            <p className="text-xs text-muted-foreground">Lo que pagas para que el negocio funcione</p>
           </div>
           <Button variant="outline" size="icon" onClick={loadData} disabled={loading} className="h-11 w-11 shrink-0">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
@@ -217,12 +218,12 @@ export default function GastosPage() {
 
           {/* Tarjetas de saldo */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <StatCard label="Caja registradora (POS)" icon={Store}>
+            <StatCard label={GAVETA} icon={Store}>
               {cajaActiva ? (
                 <>
                   <MoneyValue value={cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial} className="text-3xl font-bold tracking-tight" />
                   <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Turno #{cajaActiva.id} activo
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Turno #{cajaActiva.id} abierto
                   </p>
                 </>
               ) : (
@@ -232,16 +233,16 @@ export default function GastosPage() {
               )}
             </StatCard>
 
-            <StatCard label="Caja general (bóveda)" icon={Wallet}>
+            <StatCard label={BOVEDA} icon={Wallet}>
               {cajaGeneral ? (
                 <>
                   <MoneyValue value={cajaGeneral.saldo_actual} className="text-3xl font-bold tracking-tight" />
                   {parseFloat(cajaGeneral.saldo_actual) < 0 ? (
                     <p className="mt-1 text-xs font-medium text-warning">
-                      Negativo según el sistema: falta registrar efectivo. Haz el arqueo en Estadísticas.
+                      Negativo según el sistema: falta registrar efectivo. Cuenta la bóveda o pon dinero en Estadísticas.
                     </p>
                   ) : (
-                    <p className="mt-1 text-xs font-medium text-success">Saldo disponible</p>
+                    <p className="mt-1 text-xs font-medium text-success">Dinero disponible</p>
                   )}
                 </>
               ) : (
@@ -281,14 +282,14 @@ export default function GastosPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Origen de los fondos</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
                   <Select value={origenFondos} onValueChange={setOrigenFondos}>
                     <SelectTrigger className="h-14 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CAJA_POS">Caja registradora (POS)</SelectItem>
-                      <SelectItem value="CAJA_GENERAL">Caja general (bóveda)</SelectItem>
+                      <SelectItem value="CAJA_POS">{GAVETA} (efectivo del mostrador)</SelectItem>
+                      <SelectItem value="CAJA_GENERAL">{BOVEDA} (dinero guardado aparte)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -321,7 +322,7 @@ export default function GastosPage() {
                     </SelectContent>
                   </Select>
                   {origenFondos === "CAJA_GENERAL" && (
-                    <p className="pl-1 text-xs text-muted-foreground">Se paga desde la bóveda; no requiere turno abierto</p>
+                    <p className="pl-1 text-xs text-muted-foreground">Se paga desde la bóveda; no hace falta turno abierto</p>
                   )}
                 </div>
               </div>
@@ -331,7 +332,7 @@ export default function GastosPage() {
                   {submitLoading ? (
                     <><Loader2 className="h-5 w-5 animate-spin" /> Registrando…</>
                   ) : (
-                    "Registrar egreso"
+                    "Registrar gasto"
                   )}
                 </Button>
               </div>
@@ -345,7 +346,7 @@ export default function GastosPage() {
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Receipt className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold">Últimos gastos (POS)</h2>
+              <h2 className="font-semibold">Últimos gastos</h2>
             </div>
 
             {loading && gastosRecientes.length === 0 ? (
