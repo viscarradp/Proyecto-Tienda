@@ -91,14 +91,14 @@ export function AnularDialog({
         </DialogHeader>
         <form onSubmit={confirmar} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Motivo (obligatorio)</Label>
-            <Input
+            <Label htmlFor="anulardialog-motivo-obligatorio" className="text-xs font-medium text-muted-foreground">Motivo (obligatorio)</Label>
+            <Input id="anulardialog-motivo-obligatorio"
               required
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               maxLength={500}
               placeholder="Ej. Me equivoqué en el monto"
-              className="h-12"
+              className="h-12 md:h-12"
               autoFocus
             />
           </div>

@@ -148,8 +148,9 @@ export function DevolucionDialog({
                       </p>
                     </div>
                     <div className="w-24 shrink-0">
-                      <Label className="sr-only">Cantidad a devolver</Label>
+                      <Label htmlFor={`dev-cant-${d.id}`} className="sr-only">Cantidad a devolver de {d.presentaciones?.productos?.nombre ?? `la presentación #${d.presentacion_id}`}</Label>
                       <Input
+                        id={`dev-cant-${d.id}`}
                         type="number"
                         min={0}
                         max={aNumero(d.cantidad)}
@@ -158,7 +159,7 @@ export function DevolucionDialog({
                         placeholder="0"
                         value={linea.cantidad}
                         onChange={(e) => setLinea(d.id, { cantidad: e.target.value })}
-                        className="h-10 text-center font-mono tabular-nums"
+                        className="h-11 md:h-10 text-center font-mono tabular-nums"
                       />
                     </div>
                   </div>
@@ -173,8 +174,9 @@ export function DevolucionDialog({
                         key={key}
                         type="button"
                         onClick={() => setLinea(d.id, { destino: key })}
+                        aria-pressed={linea.destino === key}
                         className={cn(
-                          "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors",
+                          "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs md:min-h-0 font-medium transition-colors",
                           linea.destino === key
                             ? key === "MERMA"
                               ? "bg-destructive text-destructive-foreground"
@@ -192,14 +194,14 @@ export function DevolucionDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">
+            <Label htmlFor="devoluciondialog-justificacion-opcional" className="text-xs font-medium text-muted-foreground">
               Justificación (opcional)
             </Label>
-            <Input
+            <Input id="devoluciondialog-justificacion-opcional"
               value={justif}
               onChange={(e) => setJustif(e.target.value)}
               placeholder="Ej. Producto vencido / cliente cambió de opinión"
-              className="h-11"
+              className="h-11 md:h-11"
             />
           </div>
 

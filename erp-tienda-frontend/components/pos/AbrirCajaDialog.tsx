@@ -169,11 +169,11 @@ export function AbrirCajaDialog<T>({
           )}
 
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Efectivo con el que empiezas en la gaveta ($)</Label>
-            <Input
+            <Label htmlFor="abrircajadialog-efectivo-con-el-que-empiezas" className="text-xs font-medium text-muted-foreground">Efectivo con el que empiezas en la gaveta ($)</Label>
+            <Input id="abrircajadialog-efectivo-con-el-que-empiezas"
               type="number" min={0} step="0.01" inputMode="decimal" value={fondo}
               onChange={(e) => setFondo(e.target.value)}
-              className="h-14 text-center font-mono text-2xl font-bold tabular-nums"
+              className="h-14 md:h-14 text-center font-mono text-2xl font-bold tabular-nums"
               autoFocus
             />
           </div>
@@ -195,7 +195,7 @@ export function AbrirCajaDialog<T>({
                       variant={activo ? "default" : "outline"}
                       aria-pressed={activo}
                       onClick={() => setOrigen(o.valor)}
-                      className={cn("h-9", !activo && "bg-background")}
+                      className={cn("h-11 md:h-9", !activo && "bg-background")}
                     >
                       {o.label}
                     </Button>
@@ -207,7 +207,7 @@ export function AbrirCajaDialog<T>({
                 onChange={(e) => setNota(e.target.value)}
                 maxLength={200}
                 placeholder="Nota (opcional)"
-                className="h-10 bg-background"
+                className="h-11 md:h-10 bg-background"
               />
               <p className="text-xs text-muted-foreground">
                 Puedes abrir de todos modos: la diferencia queda anotada para revisarla después.

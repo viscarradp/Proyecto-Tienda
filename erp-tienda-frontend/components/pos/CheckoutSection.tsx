@@ -121,7 +121,7 @@ export function CheckoutSection({
               value={pagoCliente}
               onChange={(e) => setPagoCliente(e.target.value)}
               placeholder="0.00"
-              className="h-11 w-28 text-right font-mono tabular-nums"
+              className="h-11 md:h-11 w-28 text-right font-mono tabular-nums"
             />
           </div>
         </div>
@@ -131,7 +131,7 @@ export function CheckoutSection({
             variant="outline"
             disabled={total <= 0}
             onClick={() => setPagoCliente(total.toFixed(2))}
-            className="h-11 px-1 text-xs font-semibold"
+            className="h-11 md:h-11 px-1 text-xs font-semibold"
           >
             Exacto
           </Button>
@@ -141,7 +141,7 @@ export function CheckoutSection({
               type="button"
               variant="outline"
               onClick={() => setPagoCliente(String(b))}
-              className="h-11 px-1 font-mono text-sm font-semibold"
+              className="h-11 md:h-11 px-1 font-mono text-sm font-semibold"
             >
               ${b}
             </Button>
@@ -177,6 +177,8 @@ export function CheckoutSection({
             setContingencia(!contingencia)
           }}
           className="flex w-full items-center justify-between gap-2 text-left"
+          role="switch"
+          aria-checked={contingencia}
         >
           <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Clock className="h-4 w-4" /> Modo apagón (ventas del cuaderno)
@@ -206,10 +208,10 @@ export function CheckoutSection({
               max={ahoraLocal}
               value={fechaContingencia}
               onChange={(e) => { setFechaContingencia(e.target.value); setFechaPorAjustar(false) }}
-              className={cn("h-11", fechaPorAjustar && "border-warning ring-2 ring-warning/50")}
+              className={cn("h-11 md:h-11", fechaPorAjustar && "border-warning ring-2 ring-warning/50")}
             />
             {fechaPorAjustar && (
-              <p className="text-xs font-semibold text-warning">
+              <p className="text-xs font-semibold text-warning-text">
                 Ajusta la fecha y hora para la siguiente venta del cuaderno.
               </p>
             )}
@@ -221,7 +223,7 @@ export function CheckoutSection({
       </div>
 
       <Button
-        className="h-14 w-full justify-center gap-2 text-base font-semibold"
+        className="h-14 md:h-14 w-full justify-center gap-2 text-base font-semibold"
         disabled={disabled}
         onClick={onCheckout}
       >

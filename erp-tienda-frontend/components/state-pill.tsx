@@ -6,7 +6,7 @@ type PillTone = "success" | "warning" | "destructive" | "muted" | "primary"
 
 const toneClass: Record<PillTone, string> = {
   success: "bg-success/10 text-success",
-  warning: "bg-warning/10 text-warning",
+  warning: "bg-warning/10 text-warning-text",
   destructive: "bg-destructive/10 text-destructive",
   muted: "bg-muted text-muted-foreground",
   primary: "bg-primary/10 text-primary",

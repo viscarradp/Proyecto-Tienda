@@ -16,14 +16,14 @@ export function ThemeToggle({ className }: { className?: string }) {
 
   React.useEffect(() => setMounted(true), [])
 
-  const isDark = resolvedTheme === "dark"
+  const isDark = mounted && resolvedTheme === "dark"
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-      title={isDark ? "Tema claro" : "Tema oscuro"}
+      aria-label={!mounted ? "Cambiar tema" : isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+      title={!mounted ? "Cambiar tema" : isDark ? "Tema claro" : "Tema oscuro"}
       className={className}
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >

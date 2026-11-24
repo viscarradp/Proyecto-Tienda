@@ -49,6 +49,7 @@ import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventario
 import { EditProductDialog } from "@/components/inventario/EditProductDialog"
 import { PrecioRapido } from "@/components/inventario/PrecioRapido"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useInventoryStore, stockTotalDe, pendienteTotalDe, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
 
 interface Compra {
@@ -143,7 +144,7 @@ export default function InventarioPage() {
   const [newCatName, setNewCatName] = React.useState("")
   const [catLoading, setCatLoading] = React.useState(false)
   const [catError, setCatError] = React.useState("")
-  const [catSuccess, setCatSuccess] = React.useState("")
+  const [catABorrar, setCatABorrar] = React.useState<{ id: number; nombre: string; productos: number } | null>(null)
 
   React.useEffect(() => { setMounted(true) }, [])
 
@@ -299,16 +300,14 @@ export default function InventarioPage() {
     if (!newCatName.trim()) return
     setCatLoading(true)
     setCatError("")
-    setCatSuccess("")
     try {
       await apiFetch("/categorias", {
         method: "POST",
         body: JSON.stringify({ nombre: newCatName.trim() }),
       })
+      toast.success(`Categoría «${newCatName.trim()}» creada`)
       setNewCatName("")
-      setCatSuccess("Categoría creada exitosamente")
       loadData(true)
-      setTimeout(() => setCatSuccess(""), 3000)
     } catch (err: unknown) {
       setCatError(err instanceof Error ? err.message : "Error al crear categoría")
     } finally {
@@ -317,10 +316,11 @@ export default function InventarioPage() {
   }
 
   // ─── Category delete handler ───
-  const handleDeleteCategory = async (id: number) => {
+  const handleDeleteCategory = async (id: number, nombre: string) => {
     setCatError("")
     try {
       await apiFetch(`/categorias/${id}`, { method: "DELETE" })
+      toast.success(`Categoría «${nombre}» borrada`)
       loadData(true)
     } catch (err: unknown) {
       setCatError(err instanceof Error ? err.message : "No se puede eliminar (tiene productos asociados)")
@@ -346,15 +346,15 @@ export default function InventarioPage() {
           </div>
           {!esCajero && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => { setCompraInicial(true); setCompraDialogOpen(true) }} className="h-11 gap-2">
+              <Button variant="outline" onClick={() => { setCompraInicial(true); setCompraDialogOpen(true) }} className="h-11 md:h-11 gap-2">
                 <PackagePlus className="h-4 w-4" />
                 <span className="hidden lg:inline">Inventario inicial</span>
               </Button>
-              <Button variant="outline" onClick={() => { setCompraInicial(false); setCompraDialogOpen(true) }} className="h-11 gap-2">
+              <Button variant="outline" onClick={() => { setCompraInicial(false); setCompraDialogOpen(true) }} className="h-11 md:h-11 gap-2">
                 <Truck className="h-4 w-4" />
                 <span className="hidden sm:inline">Nueva compra</span>
               </Button>
-              <Button onClick={() => setProductDialogOpen(true)} className="h-11 gap-2">
+              <Button onClick={() => setProductDialogOpen(true)} className="h-11 md:h-11 gap-2">
                 <Plus className="h-4 w-4" />
                 <span className="hidden sm:inline">Nuevo producto</span>
                 <span className="sm:hidden">Producto</span>
@@ -423,14 +423,14 @@ export default function InventarioPage() {
                         onChange={(e) => setBusqueda(e.target.value)}
                         placeholder="Buscar por nombre, presentación o código…"
                         aria-label="Buscar producto"
-                        className="h-11 pl-9"
+                        className="h-11 md:h-11 pl-9"
                       />
                     </div>
                     {!esCajero && (
                       <Button
                         type="button"
                         variant={verDesactivados ? "default" : "outline"}
-                        className="h-11 gap-2"
+                        className="h-11 md:h-11 gap-2"
                         onClick={() => { setVerDesactivados(v => !v); setExpandedProduct(null) }}
                       >
                         <Archive className="h-4 w-4" />
@@ -453,7 +453,7 @@ export default function InventarioPage() {
                   )}
                   {porRevisar.length > 0 && !verDesactivados && (
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-2.5">
-                      <p className="flex items-center gap-2 text-sm font-medium text-warning">
+                      <p className="flex items-center gap-2 text-sm font-medium text-warning-text">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         {porRevisar.length === 1
                           ? "1 producto por revisar (lo dieron de alta en caja)"
@@ -463,7 +463,7 @@ export default function InventarioPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                        className="h-11 md:h-9 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                         onClick={() => setSoloPorRevisar(v => !v)}
                       >
                         {soloPorRevisar ? "Ver todos" : "Ver solo los por revisar"}
@@ -491,6 +491,7 @@ export default function InventarioPage() {
                             type="button"
                             className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                             onClick={() => setExpandedProduct(isOpen ? null : prod.id)}
+                            aria-expanded={isOpen}
                           >
                             <div className="w-6 shrink-0">
                               {isOpen
@@ -519,7 +520,7 @@ export default function InventarioPage() {
                             </div>
                             <div className="w-auto shrink-0 text-right sm:w-24">
                               <StatePill tone={stock > 0 ? "success" : "destructive"} className="font-mono tabular-nums">
-                                {formatCantidad(stock)} uds
+                                {stock > 0 ? `${formatCantidad(stock)} uds` : "Agotado"}
                               </StatePill>
                             </div>
                             <div className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
@@ -533,14 +534,14 @@ export default function InventarioPage() {
                               <div className="flex flex-col gap-4">
                                 {prod.por_revisar && (
                                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3">
-                                    <p className="text-xs text-warning">
+                                    <p className="text-xs text-warning-text">
                                       Producto creado en caja. Completa precio y categoría con «Editar» y luego márcalo como revisado.
                                     </p>
                                     {!esCajero && (
                                       <Button
                                         type="button"
                                         size="sm"
-                                        className="h-9 gap-1.5"
+                                        className="h-11 md:h-9 gap-1.5"
                                         disabled={revisandoId === prod.id}
                                         onClick={(e) => { e.stopPropagation(); handleYaRevise(prod) }}
                                       >
@@ -553,7 +554,7 @@ export default function InventarioPage() {
                                   </div>
                                 )}
                                 {pendiente > 0 && (
-                                  <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                                  <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3 text-xs text-warning-text">
                                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p>
                                       <strong>Vendido sin registrar: {formatCantidad(pendiente)} uds.</strong>{" "}
@@ -566,22 +567,22 @@ export default function InventarioPage() {
                                   <div className="mb-2 flex items-center justify-between">
                                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Presentaciones</p>
                                     {!esCajero && prod.activo === false && (
-                                      <Button type="button" size="sm" className="h-9 gap-1"
+                                      <Button type="button" size="sm" className="h-11 md:h-9 gap-1"
                                         onClick={(e) => { e.stopPropagation(); handleReactivar(prod) }}>
                                         <ArchiveRestore className="h-4 w-4" /> Reactivar
                                       </Button>
                                     )}
                                     {!esCajero && prod.activo !== false && (
                                       <div className="flex flex-wrap items-center justify-end gap-2">
-                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
+                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); setEditProductTarget(prod); setEditProductDialogOpen(true) }}>
                                           <Pencil className="h-3.5 w-3.5" /> Editar
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
+                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); openPresDialog(prod) }}>
                                           <Plus className="h-3.5 w-3.5" /> Agregar
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
+                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); setProductoAQuitar(prod) }}>
                                           <Archive className="h-3.5 w-3.5" /> Desactivar
                                         </Button>
@@ -619,13 +620,13 @@ export default function InventarioPage() {
                                     {prod.activo !== false && (
                                       <div className="flex flex-wrap items-center gap-2">
                                         <Button type="button" variant="outline" size="sm"
-                                          className="h-9 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                                          className="h-11 md:h-9 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                                           onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar") }}>
                                           <AlertTriangle className="h-3.5 w-3.5" /> Registrar merma
                                         </Button>
                                         {!esCajero && (
                                           <Button type="button" variant="outline" size="sm"
-                                            className="h-9 gap-1 border-success/40 text-success hover:bg-success/10 hover:text-success"
+                                            className="h-11 md:h-9 gap-1 border-success/40 text-success hover:bg-success/10 hover:text-success"
                                             onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "agregar") }}>
                                             <Plus className="h-3.5 w-3.5" /> Encontré producto
                                           </Button>
@@ -646,13 +647,13 @@ export default function InventarioPage() {
                                             <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{formatCantidad(lote.cantidad_disponible)} uds</span>
                                             <span className="flex-1 font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                             {lote.fecha_vencimiento && (
-                                              <span className="text-xs text-warning">
+                                              <span className="text-xs text-warning-text">
                                                 Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}
                                               </span>
                                             )}
                                             {prod.activo !== false && (
                                               <Button variant="outline" size="sm"
-                                                className="h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                                                className="h-11 md:h-7 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                                                 onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                               >
                                                 <AlertTriangle className="h-3.5 w-3.5" /> Merma
@@ -685,17 +686,14 @@ export default function InventarioPage() {
                     {catError && (
                       <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{catError}</div>
                     )}
-                    {catSuccess && (
-                      <div className="rounded-sm border border-success/20 bg-success/10 p-3 text-sm text-success">{catSuccess}</div>
-                    )}
 
                     <form onSubmit={handleCreateCategory} className="flex items-end gap-3">
                       <div className="flex flex-1 flex-col gap-2">
-                        <Label className="text-xs font-medium text-muted-foreground">Nombre</Label>
-                        <Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)}
-                          placeholder="Ej: Lácteos, Limpieza, Bebidas…" required className="h-11" />
+                        <Label htmlFor="inventario-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
+                        <Input id="inventario-nombre" value={newCatName} onChange={(e) => setNewCatName(e.target.value)}
+                          placeholder="Ej: Lácteos, Limpieza, Bebidas…" required className="h-11 md:h-11" />
                       </div>
-                      <Button type="submit" disabled={catLoading} className="h-11 gap-2">
+                      <Button type="submit" disabled={catLoading} className="h-11 md:h-11 gap-2">
                         {catLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         Crear
                       </Button>
@@ -723,9 +721,9 @@ export default function InventarioPage() {
                                 <p className="text-xs text-muted-foreground">{productCount} producto{productCount !== 1 ? 's' : ''}</p>
                               </div>
                             </div>
-                            <Button variant="ghost" size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => handleDeleteCategory(cat.id)}>
+                            <Button aria-label={`Borrar la categoría ${cat.nombre}`} variant="ghost" size="icon"
+                              className="size-11 md:size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setCatABorrar({ id: cat.id, nombre: cat.nombre, productos: productCount })}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -762,6 +760,7 @@ export default function InventarioPage() {
                             type="button"
                             className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                             onClick={() => setExpandedCompra(isOpen ? null : compra.id)}
+                            aria-expanded={isOpen}
                           >
                             <div className="w-6 shrink-0">
                               {isOpen
@@ -811,11 +810,11 @@ export default function InventarioPage() {
                                       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatCantidad(lote.cantidad_disponible)}/{formatCantidad(lote.cantidad_inicial)} uds</span>
                                       <span className="font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                       {lote.fecha_vencimiento && (
-                                        <span className="text-xs text-warning">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
+                                        <span className="text-xs text-warning-text">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
                                       )}
                                       {aNumero(lote.cantidad_disponible) > 0 && prod && (
                                         <Button variant="outline" size="sm"
-                                          className="ml-auto h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                                          className="ml-auto h-11 md:h-7 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                                           onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                         >
                                           <AlertTriangle className="h-3.5 w-3.5" /> Merma
@@ -943,6 +942,18 @@ export default function InventarioPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={catABorrar !== null}
+        onOpenChange={(v) => { if (!v) setCatABorrar(null) }}
+        title={`¿Borrar la categoría «${catABorrar?.nombre ?? ""}»?`}
+        description={
+          catABorrar && catABorrar.productos > 0
+            ? `Tiene ${catABorrar.productos} producto${catABorrar.productos !== 1 ? "s" : ""}: el sistema no la dejará borrar mientras los tenga. Si no hay ninguno, se borra y no se puede deshacer.`
+            : "No tiene productos. Se borra y no se puede deshacer."
+        }
+        confirmLabel="Borrar categoría"
+        onConfirm={() => { if (catABorrar) return handleDeleteCategory(catABorrar.id, catABorrar.nombre) }}
+      />
       <EditProductDialog
         open={editProductDialogOpen}
         onClose={() => { setEditProductDialogOpen(false); setEditProductTarget(null) }}

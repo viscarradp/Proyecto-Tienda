@@ -244,7 +244,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
           )}
 
           {avisoFactor && (
-            <div className="rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning">
+            <div className="rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning-text">
               {avisoFactor}
             </div>
           )}
@@ -253,18 +253,18 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos generales</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
-                <Input
+                <Label htmlFor="editproductdialog-nombre-del-producto" className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
+                <Input id="editproductdialog-nombre-del-producto"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="h-11"
+                  className="h-11 md:h-11"
                   required
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
+                <Label htmlFor="editproductdialog-categoria" className="text-xs font-medium text-muted-foreground">Categoría</Label>
                 <Select value={categoriaId} onValueChange={setCategoriaId}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger id="editproductdialog-categoria" className="h-11 md:h-11 w-full">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,56 +287,60 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                 <div key={pres.id} className="rounded-sm border border-border bg-muted/30 p-3">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
                     <div className="flex flex-col gap-1">
-                      <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
-                      <Input
+                      <Label htmlFor={`ep-desc-${pres.id}`} className="text-xs font-medium text-muted-foreground">Descripción</Label>
+                      <Input id={`ep-desc-${pres.id}`}
                         value={pres.descripcion}
                         onChange={(e) => handleUpdatePresentacion(idx, "descripcion", e.target.value)}
-                        className="h-8 text-xs"
+                        className="h-11 md:h-8 text-xs"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
-                      <Input
+                      <Label htmlFor={`ep-cod-${pres.id}`} className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
+                      <Input id={`ep-cod-${pres.id}`}
                         value={pres.codigo_barras || ""}
                         onChange={(e) => handleUpdatePresentacion(idx, "codigo_barras", e.target.value)}
                         placeholder="Sin código"
-                        className="h-8 font-mono text-xs"
+                        className="h-11 md:h-8 font-mono text-xs"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
+                      <Label htmlFor={`ep-mult-${pres.id}`} className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
                       <Input
+                        id={`ep-mult-${pres.id}`}
                         type="number"
                         min="0.001"
                         step="any"
                         value={pres.factor_conversion}
                         onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", e.target.value)}
-                        className="h-8 font-mono text-xs"
+                        className="h-11 md:h-8 font-mono text-xs"
                       />
                       {intentado && cambioPresentacion(pres) && <MensajeCampo error={errorFactor(String(pres.factor_conversion))} />}
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs font-medium text-muted-foreground">Precio ($)</Label>
+                        <Label htmlFor={`ep-precio-${pres.id}`} className="text-xs font-medium text-muted-foreground">Precio ($)</Label>
                         <button
                           type="button"
                           onClick={() => toggleHistorial(pres.id)}
                           className={cn(
-                            "flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                            "flex size-11 md:size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                             histFor === pres.id && "bg-muted text-foreground",
                           )}
                           title="Historial de precios"
+                          aria-label={`Historial de precios de ${pres.descripcion || "la presentación"}`}
+                          aria-pressed={histFor === pres.id}
                         >
                           <History className="h-3 w-3" />
                         </button>
                       </div>
                       <Input
+                        id={`ep-precio-${pres.id}`}
                         type="number"
                         step="0.01"
                         min="0"
                         value={pres.precio_venta}
                         onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
-                        className="h-8 font-mono text-xs font-semibold text-success"
+                        className="h-11 md:h-8 font-mono text-xs font-semibold text-success"
                       />
                       <MensajeCampo
                         error={intentado && cambioPresentacion(pres) ? errorPrecio(pres.precio_venta) : null}

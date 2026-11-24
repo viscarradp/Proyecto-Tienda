@@ -8,7 +8,7 @@ type MoneyTone = "default" | "success" | "warning" | "destructive" | "muted"
 const toneClass: Record<MoneyTone, string> = {
   default: "text-foreground",
   success: "text-success",
-  warning: "text-warning",
+  warning: "text-warning-text",
   destructive: "text-destructive",
   muted: "text-muted-foreground",
 }

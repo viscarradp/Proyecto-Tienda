@@ -33,8 +33,10 @@ interface Producto {
 function ProductSearchableSelect({
   productos,
   value,
-  onChange
+  onChange,
+  id,
 }: {
+  id?: string
   productos: Producto[]
   value: string
   onChange: (v: string) => void
@@ -60,42 +62,73 @@ function ProductSearchableSelect({
   )
   const selectedProduct = productos.find(p => String(p.id) === value)
 
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const close = (returnFocus: boolean) => {
+    setOpen(false)
+    setSearch("")
+    if (returnFocus) triggerRef.current?.focus()
+  }
+
+  // Teclado: Esc cierra y devuelve el foco; flecha abajo/arriba recorre las opciones.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault()
+      close(true)
+      return
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return
+    const items = Array.from(ref.current?.querySelectorAll<HTMLElement>("input, [role='option']") ?? [])
+    const idx = items.indexOf(document.activeElement as HTMLElement)
+    const next = e.key === "ArrowDown" ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0)
+    e.preventDefault()
+    items[next]?.focus()
+  }
+
   return (
-    <div className="relative" ref={ref}>
-      <div
-        className="flex h-9 cursor-pointer items-center justify-between rounded-sm border border-input bg-transparent px-3 text-sm outline-none focus:border-ring"
-        onClick={() => setOpen(!open)}
+    <div className="relative" ref={ref} onKeyDown={handleKeyDown}>
+      <button
+        ref={triggerRef}
+        id={id}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex h-11 md:h-9 w-full cursor-pointer items-center justify-between rounded-sm border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        onClick={() => (open ? close(false) : setOpen(true))}
       >
         <span className={cn("truncate", !selectedProduct && "text-muted-foreground")}>
           {selectedProduct ? selectedProduct.nombre : "Seleccionar…"}
         </span>
-      </div>
+      </button>
       {open && (
-        <div className="absolute left-0 top-10 z-50 mt-1 w-full overflow-hidden rounded-sm border border-border bg-popover shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-sm border border-border bg-popover shadow-lg">
           <div className="border-b border-border p-2">
             <input
               autoFocus
-              className="h-8 w-full rounded-sm border border-input bg-transparent px-2 text-xs outline-none focus:border-ring"
+              aria-label="Buscar producto por nombre o código"
+              className="h-11 md:h-8 w-full rounded-sm border border-input bg-transparent px-2 text-base md:text-xs outline-none focus:border-ring"
               placeholder="Buscar por nombre o código…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div className="max-h-48 overflow-y-auto p-1">
+          <div role="listbox" aria-label="Productos" className="max-h-48 overflow-y-auto p-1">
             {filtered.length === 0 && <div className="p-2 text-center text-xs text-muted-foreground">No encontrado</div>}
             {filtered.map(p => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === String(p.id)}
                 key={p.id}
                 className={cn(
-                  "cursor-pointer rounded-sm p-2 text-sm",
+                  "block min-h-11 w-full cursor-pointer rounded-sm p-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0",
                   value === String(p.id)
                     ? "bg-primary font-medium text-primary-foreground"
                     : "hover:bg-muted",
                 )}
-                onClick={() => { onChange(String(p.id)); setOpen(false); setSearch("") }}
+                onClick={() => { onChange(String(p.id)); close(true) }}
               >
                 {p.nombre}
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -127,7 +160,6 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
   const [lineas, setLineas] = React.useState<LoteLineForm[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
-  const [success, setSuccess] = React.useState("")
   const [avisos, setAvisos] = React.useState<string[]>([])
 
   const addLinea = () => {
@@ -179,7 +211,6 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
     e.preventDefault()
     setLoading(true)
     setError("")
-    setSuccess("")
     setAvisos([])
 
     const alCredito = !inicial && estadoPago === "AL_CREDITO"
@@ -222,10 +253,11 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
         }),
       })
 
-      setSuccess(
+      toast.success(
         alCredito
           ? "Compra registrada. Quedó como deuda con el proveedor; la pagas desde Gastos → Deudas."
           : "Compra registrada exitosamente. Los lotes de inventario fueron creados.",
+        { duration: 8000 },
       )
       setAvisos(res?.avisos ?? [])
       setProveedor("")
@@ -245,11 +277,6 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
       {error && (
         <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
           {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-sm border border-success/20 bg-success/10 p-3 text-sm font-medium text-success">
-          {success}
         </div>
       )}
 
@@ -274,19 +301,19 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
         <div className={inicial ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 gap-4 md:grid-cols-3"}>
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">
+            <Label htmlFor="compra-proveedor" className="text-xs font-medium text-muted-foreground">
               {inicial ? "Origen del inventario" : "Proveedor"}
             </Label>
-            <Input value={proveedor} onChange={(e) => setProveedor(e.target.value)} required
-              placeholder={inicial ? "Ej. Inventario propio inicial" : "Nombre del proveedor"} className="h-11" />
+            <Input id="compra-proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)} required
+              placeholder={inicial ? "Ej. Inventario propio inicial" : "Nombre del proveedor"} className="h-11 md:h-11" />
           </div>
 
           {!inicial && (
             <>
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
+                <Label htmlFor="compraform-estado-de-pago" className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
                 <Select value={estadoPago} onValueChange={setEstadoPago}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger id="compraform-estado-de-pago" className="h-11 md:h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -298,9 +325,9 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
               {estadoPago !== "AL_CREDITO" && (
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">¿De dónde salió el dinero?</Label>
+                  <Label htmlFor="compraform-de-donde-salio-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde salió el dinero?</Label>
                   <Select value={origenFondos} onValueChange={setOrigenFondos}>
-                    <SelectTrigger className="h-11 w-full">
+                    <SelectTrigger id="compraform-de-donde-salio-el-dinero" className="h-11 md:h-11 w-full">
                       <SelectValue placeholder="Elige una opción" />
                     </SelectTrigger>
                     <SelectContent>
@@ -326,7 +353,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Lotes de inventario</h3>
-          <Button type="button" variant="outline" size="sm" onClick={addLinea} className="h-9 gap-1.5 text-xs">
+          <Button type="button" variant="outline" size="sm" onClick={addLinea} className="h-11 md:h-9 gap-1.5 text-xs">
             <Plus className="h-3.5 w-3.5" /> Agregar lote
           </Button>
         </div>
@@ -342,7 +369,8 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
             <div className="mb-3 flex items-center justify-between">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lote #{idx + 1}</span>
               <Button type="button" variant="ghost" size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                className="size-11 md:size-6 text-muted-foreground hover:text-destructive"
+                aria-label={`Quitar lote ${idx + 1}`}
                 onClick={() => removeLinea(linea.key)}>
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -350,8 +378,9 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <div className="col-span-2">
-                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Producto</Label>
+                <Label htmlFor={`compra-producto-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Producto</Label>
                 <ProductSearchableSelect
+                  id={`compra-producto-${linea.key}`}
                   productos={productos}
                   value={linea.producto_id}
                   onChange={(v) => updateLinea(linea.key, "producto_id", v)}
@@ -359,24 +388,24 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
               </div>
 
               <div>
-                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
-                <Input type="number" min={0.001} step="0.001" inputMode="decimal" value={linea.cantidad_inicial}
+                <Label htmlFor={`compra-cant-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
+                <Input id={`compra-cant-${linea.key}`} type="number" min={0.001} step="0.001" inputMode="decimal" value={linea.cantidad_inicial}
                   onChange={(e) => updateLinea(linea.key, "cantidad_inicial", e.target.value)}
-                  className="h-9 font-mono text-sm" />
+                  className="h-11 md:h-9 font-mono text-sm" />
               </div>
 
               <div>
-                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Costo unit. ($)</Label>
-                <Input type="number" min={0} step="0.01" value={linea.costo_unitario_adquisicion}
+                <Label htmlFor={`compra-costo-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Costo unit. ($)</Label>
+                <Input id={`compra-costo-${linea.key}`} type="number" min={0} step="0.01" value={linea.costo_unitario_adquisicion}
                   onChange={(e) => updateLinea(linea.key, "costo_unitario_adquisicion", e.target.value)}
-                  className="h-9 font-mono text-sm" />
+                  className="h-11 md:h-9 font-mono text-sm" />
               </div>
 
               <div className="col-span-2">
-                <Label className="mb-1 block text-xs font-medium text-muted-foreground">Vencimiento (opcional)</Label>
-                <Input type="date" value={linea.fecha_vencimiento}
+                <Label htmlFor={`compra-venc-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Vencimiento (opcional)</Label>
+                <Input id={`compra-venc-${linea.key}`} type="date" value={linea.fecha_vencimiento}
                   onChange={(e) => updateLinea(linea.key, "fecha_vencimiento", e.target.value)}
-                  className="h-9 text-sm" />
+                  className="h-11 md:h-9 text-sm" />
               </div>
 
               <div className="col-span-2 flex items-end justify-end">
@@ -400,7 +429,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
           <MoneyValue value={montoTotal} className="text-3xl font-bold tracking-tight" />
         </div>
 
-        <Button type="submit" disabled={loading || lineas.length === 0} className="h-12 gap-2 px-8">
+        <Button type="submit" disabled={loading || lineas.length === 0} className="h-12 md:h-12 gap-2 px-8">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

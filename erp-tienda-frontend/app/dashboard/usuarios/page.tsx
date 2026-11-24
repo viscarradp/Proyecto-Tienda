@@ -158,10 +158,10 @@ export default function UsuariosPage() {
             <p className="text-xs text-muted-foreground">Quién puede entrar al sistema</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="icon" onClick={cargar} disabled={loading} className="h-11 w-11">
+            <Button aria-label="Actualizar usuarios" variant="outline" size="icon" onClick={cargar} disabled={loading} className="size-11 md:size-11 ">
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
-            <Button onClick={() => abrir({ tipo: "crear" })} className="h-11 gap-2">
+            <Button onClick={() => abrir({ tipo: "crear" })} className="h-11 md:h-11 gap-2">
               <PlusCircle className="h-4 w-4" /> Nuevo
             </Button>
           </div>
@@ -254,23 +254,23 @@ export default function UsuariosPage() {
           <form onSubmit={enviar} className="flex flex-col gap-4">
             {accion?.tipo === "crear" && (
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Nombre</Label>
-                <Input
+                <Label htmlFor="usuarios-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
+                <Input id="usuarios-nombre"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Karla"
                   autoFocus
                   maxLength={100}
-                  className="h-11"
+                  className="h-11 md:h-11"
                 />
               </div>
             )}
 
             {(accion?.tipo === "crear" || accion?.tipo === "rol") && (
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Rol</Label>
+                <Label htmlFor="usuarios-rol" className="text-xs font-medium text-muted-foreground">Rol</Label>
                 <Select value={rol} onValueChange={(v) => setRol(v as Rol)}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger id="usuarios-rol" className="h-11 md:h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,16 +287,16 @@ export default function UsuariosPage() {
 
             {(accion?.tipo === "crear" || accion?.tipo === "password") && (
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">
+                <Label htmlFor="usuarios-minimo-6-caracteres" className="text-xs font-medium text-muted-foreground">
                   {accion.tipo === "crear" ? "Contraseña" : "Nueva contraseña"} (mínimo 6 caracteres)
                 </Label>
-                <Input
+                <Input id="usuarios-minimo-6-caracteres"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
                   autoFocus={accion.tipo === "password"}
-                  className="h-11"
+                  className="h-11 md:h-11"
                 />
               </div>
             )}

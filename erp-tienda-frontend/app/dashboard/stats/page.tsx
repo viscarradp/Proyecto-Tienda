@@ -116,7 +116,7 @@ const marginTone = (margenPct: number): MarginTone =>
 const toneText: Record<Tone, string> = {
   success: "text-success",
   destructive: "text-destructive",
-  warning: "text-warning",
+  warning: "text-warning-text",
   primary: "text-primary",
   muted: "text-foreground",
 }
@@ -350,7 +350,7 @@ export default function StatsPage() {
                   onClick={() => setPeriodo(p)}
                   aria-pressed={periodo === p}
                   className={cn(
-                    "rounded-sm px-3 py-1.5 text-xs font-medium transition-colors",
+                    "min-h-11 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors md:min-h-0",
                     periodo === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -364,7 +364,7 @@ export default function StatsPage() {
               onClick={fetchData}
               disabled={loading}
               aria-label="Actualizar números"
-              className="h-9 w-9 shrink-0"
+              className="size-11 md:size-9 shrink-0"
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
@@ -401,9 +401,9 @@ export default function StatsPage() {
                   <Input
                     type="number" min={0.01} step="0.01" inputMode="decimal"
                     value={bovedaInicial} onChange={(e) => setBovedaInicial(e.target.value)}
-                    placeholder="0.00" aria-label="Efectivo guardado" className="h-11 w-40 font-mono"
+                    placeholder="0.00" aria-label="Efectivo guardado" className="h-11 md:h-11 w-40 font-mono"
                   />
-                  <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="h-11 gap-2">
+                  <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="h-11 md:h-11 gap-2">
                     {bovedaInicialLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     Guardar
                   </Button>
@@ -473,10 +473,10 @@ export default function StatsPage() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button onClick={() => abrirDialogo("poner")} className="h-11 gap-2">
+                    <Button onClick={() => abrirDialogo("poner")} className="h-11 md:h-11 gap-2">
                       <Plus className="h-4 w-4" /> Poner dinero
                     </Button>
-                    <Button variant="outline" onClick={() => abrirDialogo("contar")} className="h-11 gap-2">
+                    <Button variant="outline" onClick={() => abrirDialogo("contar")} className="h-11 md:h-11 gap-2">
                       <ClipboardCheck className="h-4 w-4" /> Contar la {BOVEDA.toLowerCase()}
                     </Button>
                   </div>
@@ -698,14 +698,14 @@ export default function StatsPage() {
               <Input
                 id="poner-monto" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="500.00"
                 value={ponerMonto} onChange={(e) => setPonerMonto(e.target.value)} autoFocus
-                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="poner-desc" className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
               <Input
                 id="poner-desc" placeholder="Ej: Dinero que puse del ahorro"
-                value={ponerDesc} onChange={(e) => setPonerDesc(e.target.value)} className="h-11"
+                value={ponerDesc} onChange={(e) => setPonerDesc(e.target.value)} className="h-11 md:h-11"
               />
             </div>
             {parseFloat(ponerMonto) > 0 && saldoBoveda && (
@@ -732,7 +732,7 @@ export default function StatsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-warning" /> Contar la {BOVEDA.toLowerCase()}
+              <ClipboardCheck className="h-5 w-5 text-warning-text" /> Contar la {BOVEDA.toLowerCase()}
             </DialogTitle>
             <DialogDescription>
               Cuenta el efectivo que hay de verdad en la {BOVEDA.toLowerCase()} y escríbelo. El sistema dice que debería haber{" "}
@@ -745,7 +745,7 @@ export default function StatsPage() {
               <Input
                 id="contar-monto" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00"
                 value={contarMonto} onChange={(e) => setContarMonto(e.target.value)} autoFocus
-                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
 
@@ -770,7 +770,7 @@ export default function StatsPage() {
                 </Label>
                 <Input
                   id="contar-motivo" value={contarMotivo} onChange={(e) => setContarMotivo(e.target.value)}
-                  placeholder="Ej: Saqué para pagar al proveedor y no lo anoté" className="h-11"
+                  placeholder="Ej: Saqué para pagar al proveedor y no lo anoté" className="h-11 md:h-11"
                 />
               </div>
             )}
@@ -996,7 +996,7 @@ function PLRow({
     expense: "text-muted-foreground",
     subtotal: "font-semibold text-foreground",
     total: numVal >= 0 ? "text-lg font-bold text-success" : "text-lg font-bold text-destructive",
-    pct: numVal >= 15 ? "text-success" : numVal >= 0 ? "text-warning" : "text-destructive",
+    pct: numVal >= 15 ? "text-success" : numVal >= 0 ? "text-warning-text" : "text-destructive",
   }[type]
 
   const labelClass = {

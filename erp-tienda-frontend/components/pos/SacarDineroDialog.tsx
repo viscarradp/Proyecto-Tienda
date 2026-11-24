@@ -222,8 +222,8 @@ export function SacarDineroDialog({
               </p>
             )}
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
-              <Input
+              <Label htmlFor="sacardinerodialog-monto" className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
+              <Input id="sacardinerodialog-monto"
                 type="number"
                 min={0.01}
                 step="0.01"
@@ -232,15 +232,15 @@ export function SacarDineroDialog({
                 onChange={(e) => setMonto(e.target.value)}
                 placeholder="0.00"
                 autoFocus
-                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
 
             {modo === "gasto" && (
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
+                <Label htmlFor="sacardinerodialog-categoria-opcional" className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
                 <Select value={categoriaId} onValueChange={setCategoriaId}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger id="sacardinerodialog-categoria-opcional" className="h-11 md:h-11 w-full">
                     <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -256,14 +256,14 @@ export function SacarDineroDialog({
             )}
 
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">
+              <Label htmlFor="sacardinerodialog-descripcion" className="text-xs font-medium text-muted-foreground">
                 Descripción {modo === "retiro" ? "(opcional)" : ""}
               </Label>
-              <Input
+              <Input id="sacardinerodialog-descripcion"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 placeholder={modo === "gasto" ? "Ej. Pago de agua" : "Nota opcional"}
-                className="h-11"
+                className="h-11 md:h-11"
               />
             </div>
 
