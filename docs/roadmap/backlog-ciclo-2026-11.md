@@ -94,7 +94,7 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 
 ### 🔴/🟡 Dependen de decisiones (§1)
 
-- **L5 · Mostrador flexible** — cantidad decimal y "por monto", factor decimal (NEG-01, COD-13, UX-04, VIVO-01); vender sin stock (D-01); alta rápida por la cajera (NEG-18, D-02); stock en la unidad de la presentación (NEG-32, VIVO-03).
+- **L5 · Mostrador flexible** — cantidad decimal y "por monto", factor decimal (NEG-01, COD-13, UX-04, VIVO-01); vender sin stock (D-01); alta rápida por la cajera (NEG-18, D-02); stock en la unidad de la presentación (NEG-32, VIVO-03), incluido el mensaje de stock insuficiente: hoy dice "quedan 7.333" six-packs; debe decir paquetes enteros y unidades sueltas.
 - **L6 · Política de fondos y apertura** — una sola regla de fondos (NEG-11, NEG-12, COD-10); origen de la diferencia de apertura y "Traer de la bóveda" (NEG-02, COD-16, D-15, VIVO-08); categoría de gasto "Otros" por defecto (NEG-13).
 - **L7 · Permisos y trazabilidad** — matriz de permisos (D-06, ARQ-11, NEG-25/26); autor de anulación y de cierre, autor en compras (NEG-04, ARQ-10); desactivar usuarios en vez de borrar, revocar token (NEG-03, ARQ-09, COD-18); quitar el rol fantasma `VENDEDOR` (NEG-08).
 - **L8 · Compras a crédito y deudas** — pagar/abonar cuentas por pagar, quitar la regla `CAPITAL_DUEÑOS` y el default engañoso (NEG-15, NEG-21, COD-19, ARQ-07, UX-18/19).
@@ -136,9 +136,9 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 
 | Lote | Estado | Rama |
 |---|---|---|
-| L1a | ⏳ | — |
+| L1a | ✅ 2026-11-24 — verificado en navegador (escritorio y celular) | `feature/l1a-pos-numeros-mensajes` |
 | L1b | ⏳ | — |
-| L2 | ⏳ | — |
+| L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
 | L3a | ⏳ | — |
 | L3b | ⏸ decisión de infraestructura | — |
 | L4 | ⏳ | — |
