@@ -343,8 +343,8 @@ congelado en `../auditorias/`.
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| 0 | Banco de pruebas: dependencias, Postgres local, línea base verde | 🔄 |
-| 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente) | ⏳ |
+| 0 | Banco de pruebas: dependencias, Postgres local, línea base verde (29 e2e) | ✅ 2026-11-24 |
+| 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente). Ramas `feature/1a-anulacion-con-devoluciones` y `feature/1b-reportes-zona-horaria`; master con 38 e2e en verde y 1A verificado en navegador | ✅ 2026-11-24 |
 | 2 | Auditorías en paralelo (solo lectura): arquitectura, código, reglas de negocio (incl. reglas faltantes), interfaz/UX | ⏳ |
 | 3 | Consolidación: verificar hallazgos, deduplicar, backlog único 🔴/🟡/⚪ y decisiones de negocio con el usuario | ⏳ |
 | 4 | Implementación por lotes (máx. 2 subagentes a la vez, áreas sin archivos en común) | ⏳ |
