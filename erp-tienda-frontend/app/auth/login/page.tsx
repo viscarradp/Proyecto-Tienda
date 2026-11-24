@@ -100,7 +100,7 @@ export default function LoginPage() {
               onChange={(e) => setNombre(e.target.value)}
               required
               autoComplete="username"
-              className="h-11"
+              className="h-11 md:h-11"
             />
           </div>
 
@@ -114,11 +114,11 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="h-11"
+              className="h-11 md:h-11"
             />
           </div>
 
-          <Button type="submit" className="mt-1 h-11 w-full gap-2" disabled={loading}>
+          <Button type="submit" className="mt-1 h-11 md:h-11 w-full gap-2" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />

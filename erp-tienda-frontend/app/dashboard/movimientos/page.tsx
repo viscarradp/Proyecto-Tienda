@@ -424,6 +424,7 @@ export default function MovimientosPage() {
           type="button"
           className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/40"
           onClick={() => setExpandedVenta(isVentaExpanded ? null : venta.id)}
+          aria-expanded={isVentaExpanded}
         >
           <div className="w-6 shrink-0">
             {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -533,10 +534,10 @@ export default function MovimientosPage() {
                 placeholder="Buscar turno, gasto o nº de venta…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="h-11 pl-9"
+                className="h-11 md:h-11 pl-9"
               />
             </div>
-            <Button variant="outline" size="icon" onClick={loadData} disabled={loading} className="h-11 w-11 shrink-0">
+            <Button aria-label="Actualizar movimientos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="size-11 md:size-11 shrink-0">
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
           </div>
@@ -573,7 +574,7 @@ export default function MovimientosPage() {
                 <p className="text-xs text-muted-foreground">turnos</p>
               </div>
               <p className={cn("mt-1 text-xs font-medium", descuadreTotal >= 0 ? "text-success" : "text-destructive")}>
-                Desc.: {descuadreTotal >= 0 ? '+' : ''}{descuadreTotal.toFixed(2)}
+                Desc.: {descuadreTotal >= 0 ? '+' : ''}{descuadreTotal.toFixed(2)}{descuadreTotal > 0 ? " (sobró)" : descuadreTotal < 0 ? " (faltó)" : ""}
               </p>
             </StatCard>
           </div>
@@ -649,6 +650,7 @@ export default function MovimientosPage() {
                       type="button"
                       className="flex w-full flex-col gap-4 p-4 text-left transition-colors hover:bg-muted/40 md:flex-row md:items-center md:justify-between"
                       onClick={() => setExpandedTurno(isExpanded ? null : turno.id)}
+                      aria-expanded={isExpanded}
                     >
                       <div className="flex min-w-0 items-center gap-3 md:w-72">
                         <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border", isAbierta ? "border-success/30 bg-success/10 text-success" : "border-border bg-muted text-muted-foreground")}>
@@ -698,6 +700,7 @@ export default function MovimientosPage() {
                                 getDiferenciaTone(turno.diferencia) === "success" ? "text-success" : getDiferenciaTone(turno.diferencia) === "destructive" ? "text-destructive" : "text-muted-foreground")}>
                                 {parseFloat(turno.diferencia || "0") > 0 ? <TrendingUp className="h-3.5 w-3.5" /> : parseFloat(turno.diferencia || "0") < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : null}
                                 {formatMoney(Math.abs(parseFloat(turno.diferencia || "0")))}
+                                {parseFloat(turno.diferencia || "0") > 0 ? <span className="font-sans text-xs font-medium">sobró</span> : parseFloat(turno.diferencia || "0") < 0 ? <span className="font-sans text-xs font-medium">faltó</span> : <span className="font-sans text-xs font-medium">cuadró</span>}
                               </div>
                             </div>
                           </>
@@ -719,7 +722,7 @@ export default function MovimientosPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-2 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                          className="gap-2 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                           onClick={() => {
                             setForzarTurnoId(turno.id)
                             setForzarEfectivo("")
@@ -787,7 +790,7 @@ export default function MovimientosPage() {
                 )
               })}
               {hayMas && (
-                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="h-11 gap-2 self-center">
+                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="h-11 md:h-11 gap-2 self-center">
                   {cargandoMas && <RefreshCw className="h-4 w-4 animate-spin" />}
                   Ver turnos anteriores
                 </Button>
@@ -812,11 +815,11 @@ export default function MovimientosPage() {
           </DialogHeader>
           <form onSubmit={handleAnularVenta} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Motivo de la anulación</Label>
-              <Input required value={motivoAnulacion}
+              <Label htmlFor="movimientos-motivo-de-la-anulacion" className="text-xs font-medium text-muted-foreground">Motivo de la anulación</Label>
+              <Input id="movimientos-motivo-de-la-anulacion" required value={motivoAnulacion}
                 onChange={(e) => setMotivoAnulacion(e.target.value)}
                 placeholder="Ej. El cliente devolvió el producto empacado"
-                className="h-12"
+                className="h-12 md:h-12"
                 autoFocus />
             </div>
             {error && <p className="text-xs font-medium text-destructive">{error}</p>}
@@ -837,7 +840,7 @@ export default function MovimientosPage() {
       <Dialog open={forzarOpen} onOpenChange={setForzarOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-warning">
+            <DialogTitle className="flex items-center gap-2 text-warning-text">
               <DoorClosed className="h-5 w-5" /> Cierre forzado del turno #{forzarTurnoId}
             </DialogTitle>
             <DialogDescription>
@@ -847,15 +850,15 @@ export default function MovimientosPage() {
           </DialogHeader>
           <form onSubmit={handleForzarCierre} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Efectivo contado ($)</Label>
-              <Input type="number" min={0} step="0.01" inputMode="decimal" required
+              <Label htmlFor="movimientos-efectivo-contado" className="text-xs font-medium text-muted-foreground">Efectivo contado ($)</Label>
+              <Input id="movimientos-efectivo-contado" type="number" min={0} step="0.01" inputMode="decimal" required
                 value={forzarEfectivo} onChange={(e) => setForzarEfectivo(e.target.value)}
-                placeholder="0.00" className="h-12 text-center font-mono text-xl font-bold tabular-nums" autoFocus />
+                placeholder="0.00" className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums" autoFocus />
             </div>
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Justificación</Label>
-              <Input required value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
-                placeholder="Ej. La cajera se retiró sin cerrar" className="h-11" />
+              <Label htmlFor="movimientos-justificacion" className="text-xs font-medium text-muted-foreground">Justificación</Label>
+              <Input id="movimientos-justificacion" required value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
+                placeholder="Ej. La cajera se retiró sin cerrar" className="h-11 md:h-11" />
             </div>
             {error && <p className="text-xs font-medium text-destructive">{error}</p>}
             <DialogFooter>

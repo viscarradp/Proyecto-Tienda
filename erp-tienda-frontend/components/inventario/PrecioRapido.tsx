@@ -72,7 +72,7 @@ export function PrecioRapido({ presentacionId, nombre, precio, editable, onGuard
         type="button"
         onClick={(e) => { e.stopPropagation(); abrir() }}
         title="Tocar para cambiar el precio"
-        className="rounded-sm border border-dashed border-border px-2 py-1 font-mono text-sm font-semibold tabular-nums hover:border-primary hover:bg-primary/5"
+        className="min-h-11 rounded-sm border border-dashed border-border px-2 py-1 font-mono md:min-h-0 text-sm font-semibold tabular-nums hover:border-primary hover:bg-primary/5"
       >
         {formatMoney(precio)}
       </button>
@@ -97,13 +97,13 @@ export function PrecioRapido({ presentacionId, nombre, precio, editable, onGuard
             if (e.key === "Escape") { e.preventDefault(); setEditando(false) }
           }}
           aria-label={`Nuevo precio de ${nombre}`}
-          className="h-10 w-28 font-mono text-base"
+          className="h-11 md:h-10 w-28 font-mono text-base"
         />
-        <Button type="button" size="sm" className="h-10 gap-1" disabled={guardando} onClick={guardar}>
+        <Button type="button" size="sm" className="h-11 md:h-10 gap-1" disabled={guardando} onClick={guardar}>
           {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Guardar
         </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10" disabled={guardando}
+        <Button type="button" variant="ghost" size="icon" className="size-11 md:size-10 " disabled={guardando}
           onClick={() => setEditando(false)} aria-label="Cancelar">
           <X className="h-4 w-4" />
         </Button>

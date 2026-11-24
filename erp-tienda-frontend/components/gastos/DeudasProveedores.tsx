@@ -163,7 +163,7 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
                       <p className="text-xs text-muted-foreground">Saldo</p>
                       <MoneyValue value={d.saldo_pendiente} className="text-lg font-semibold text-destructive" />
                     </div>
-                    <Button type="button" onClick={() => abrirPago(d)} className="h-11 shrink-0">
+                    <Button type="button" onClick={() => abrirPago(d)} className="h-11 md:h-11 shrink-0">
                       Pagar / abonar
                     </Button>
                   </div>
@@ -174,7 +174,8 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
                     <button
                       type="button"
                       onClick={() => setAbierta(isOpen ? null : d.id)}
-                      className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                      aria-expanded={isOpen}
+                      className="flex min-h-11 w-full items-center justify-between px-4 py-2 text-xs md:min-h-0 font-medium text-muted-foreground hover:bg-muted/50"
                     >
                       <span>Abonos hechos ({d.abonos.length})</span>
                       {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -219,15 +220,15 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
-              <Input type="number" min={0.01} step="0.01" inputMode="decimal" required value={monto}
+              <Label htmlFor="deudasproveedores-monto" className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
+              <Input id="deudasproveedores-monto" type="number" min={0.01} step="0.01" inputMode="decimal" required value={monto}
                 onChange={e => setMonto(e.target.value)}
-                className="h-14 font-mono text-2xl font-bold" />
+                className="h-14 md:h-14 font-mono text-2xl font-bold" />
             </div>
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
+              <Label htmlFor="deudasproveedores-de-donde-sale-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
               <Select value={origen} onValueChange={setOrigen}>
-                <SelectTrigger className="h-12 w-full">
+                <SelectTrigger id="deudasproveedores-de-donde-sale-el-dinero" className="h-12 md:h-12 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,9 +238,9 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
-              <Input value={nota} maxLength={255} onChange={e => setNota(e.target.value)}
-                placeholder="Ej. Factura 123" className="h-12" />
+              <Label htmlFor="deudasproveedores-nota-opcional" className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
+              <Input id="deudasproveedores-nota-opcional" value={nota} maxLength={255} onChange={e => setNota(e.target.value)}
+                placeholder="Ej. Factura 123" className="h-12 md:h-12" />
             </div>
             <div className={cn("flex justify-end gap-3 pt-2")}>
               <Button type="button" variant="secondary" onClick={() => setObjetivo(null)}>Cancelar</Button>

@@ -93,7 +93,7 @@ function StockCelda({ row }: { row: PresentacionRow }) {
   if (row.stock <= 0) {
     return (
       <div className="w-24 shrink-0 text-right leading-tight">
-        <span className="text-xs font-medium text-warning">Sin stock registrado</span>
+        <span className="text-xs font-medium text-warning-text">Sin stock registrado</span>
         {row.pendiente > 0 && <p className="text-[10px] text-muted-foreground">vendido sin registrar</p>}
       </div>
     )
@@ -107,7 +107,7 @@ function StockCelda({ row }: { row: PresentacionRow }) {
         {empaque ? row.presentacion_desc : "stock"}
         {empaque && haySueltas ? ` + ${formatCantidad(sueltas)}` : ""}
       </p>
-      {row.pendiente > 0 && <p className="text-[10px] text-warning">vendido sin registrar</p>}
+      {row.pendiente > 0 && <p className="text-[10px] text-warning-text">vendido sin registrar</p>}
     </div>
   )
 }
@@ -536,7 +536,7 @@ export default function POSPage() {
                   variant="outline"
                   onClick={() => setSacarDineroOpen(true)}
                   aria-label="Sacar dinero de la gaveta"
-                  className="h-11 gap-2"
+                  className="h-11 md:h-11 gap-2"
                 >
                   <HandCoins className="h-4 w-4" />
                   <span className="sm:hidden">Sacar</span>
@@ -545,7 +545,7 @@ export default function POSPage() {
                 <Button
                   variant="outline"
                   onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
-                  className="h-11 gap-2"
+                  className="h-11 md:h-11 gap-2"
                 >
                   <DoorClosed className="h-4 w-4" />
                   Cerrar caja
@@ -555,14 +555,14 @@ export default function POSPage() {
               <Button
                 variant="outline"
                 onClick={() => loadCaja()}
-                className="h-11 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="h-11 md:h-11 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <RefreshCw className="h-4 w-4" /> Sin conexión · Reintentar
               </Button>
             ) : (
               <Button
                 onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
-                className="h-11 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
+                className="h-11 md:h-11 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
               >
                 <DoorOpen className="h-4 w-4" /> Abrir caja
               </Button>
@@ -571,11 +571,11 @@ export default function POSPage() {
 
           {/* Modo apagón: visible mientras esté encendido */}
           {contingencia && (
-            <div className="flex items-center justify-between gap-2 border-t border-warning/30 bg-warning/15 px-4 py-2 text-xs font-medium text-warning lg:px-6">
+            <div className="flex items-center justify-between gap-2 border-t border-warning/30 bg-warning/15 px-4 py-2 text-xs font-medium text-warning-text lg:px-6">
               <span className="flex items-center gap-2">
                 <Zap className="h-4 w-4 shrink-0" /> Modo apagón activo: las ventas se guardan con la fecha y hora que pongas
               </span>
-              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => { setContingencia(false); setFechaContingencia(""); setFechaPorAjustar(false) }}>
+              <Button type="button" size="sm" variant="outline" className="h-11 md:h-9 shrink-0" onClick={() => { setContingencia(false); setFechaContingencia(""); setFechaPorAjustar(false) }}>
                 Apagar
               </Button>
             </div>
@@ -586,7 +586,7 @@ export default function POSPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-12 pl-10 pr-10 text-base"
+                className="h-12 md:h-12 pl-10 pr-10 text-base"
                 placeholder="Buscar producto o código…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -603,8 +603,9 @@ export default function POSPage() {
                 key={cat}
                 type="button"
                 onClick={() => setCategoriaActiva(cat)}
+                aria-pressed={categoriaActiva === cat}
                 className={cn(
-                  "shrink-0 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors",
+                  "inline-flex min-h-11 shrink-0 items-center rounded-sm px-3 py-1.5 text-xs font-medium transition-colors md:min-h-0",
                   categoriaActiva === cat
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
@@ -623,7 +624,7 @@ export default function POSPage() {
                 Sin conexión: no se pudo revisar la caja. Revisa el internet y toca «Reintentar».
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning">
+              <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning-text">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Debes abrir un turno de caja antes de vender
               </div>
@@ -656,7 +657,7 @@ export default function POSPage() {
                 <Search className="h-8 w-8 opacity-30" />
                 <p className="text-sm font-medium text-foreground">No se encontraron productos</p>
                 <p className="text-xs">¿No está en el catálogo? Agrégalo y véndelo ahora.</p>
-                <Button type="button" className="mt-2 h-11 gap-2" onClick={abrirAltaDesdeBusqueda}>
+                <Button type="button" className="mt-2 h-11 md:h-11 gap-2" onClick={abrirAltaDesdeBusqueda}>
                   <PackagePlus className="h-4 w-4" /> Agregar como producto nuevo
                 </Button>
               </div>
@@ -820,7 +821,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DoorClosed className="h-5 w-5 text-warning" /> Cerrar turno de caja
+              <DoorClosed className="h-5 w-5 text-warning-text" /> Cerrar turno de caja
             </DialogTitle>
             <DialogDescription>
               Ingresa el total físico y cuánto enviarás a la bóveda.
@@ -835,11 +836,11 @@ export default function POSPage() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Total físico en gaveta ($)</Label>
-              <Input
+              <Label htmlFor="pos-total-fisico-en-gaveta" className="text-xs font-medium text-muted-foreground">Total físico en gaveta ($)</Label>
+              <Input id="pos-total-fisico-en-gaveta"
                 type="number" min={0} step="0.01" inputMode="decimal" value={efectivoDeclarado}
                 onChange={(e) => setEfectivoDeclarado(e.target.value)}
-                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
                 autoFocus
               />
             </div>
@@ -849,7 +850,7 @@ export default function POSPage() {
                 role="status"
                 className={cn(
                   "rounded-sm px-3 py-2 text-center text-sm font-semibold",
-                  difCierre === 0 ? "bg-success/10 text-success" : exigeExplicacion ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning",
+                  difCierre === 0 ? "bg-success/10 text-success" : exigeExplicacion ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning-text",
                 )}
               >
                 {difCierre === 0
@@ -861,18 +862,18 @@ export default function POSPage() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-success">Trasladar a bóveda ($)</Label>
-              <Input
+              <Label htmlFor="pos-trasladar-a-boveda" className="text-xs font-medium text-success">Trasladar a bóveda ($)</Label>
+              <Input id="pos-trasladar-a-boveda"
                 type="number" min={0} step="0.01" inputMode="decimal" value={montoBoveda}
                 onChange={(e) => setMontoBoveda(e.target.value)}
                 placeholder="0.00"
-                className="h-12 text-center font-mono text-xl font-bold tabular-nums"
+                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
 
             <div className="flex items-center justify-between rounded-sm border border-border p-3">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Fondo siguiente turno</Label>
+                <p className="text-xs font-medium text-muted-foreground">Fondo siguiente turno</p>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox" checked={autoOpenNext}
@@ -889,15 +890,15 @@ export default function POSPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label className={cn("text-xs font-medium", exigeExplicacion ? "text-destructive" : "text-muted-foreground")}>
+              <Label htmlFor="pos-observaciones-cierre" className={cn("text-xs font-medium", exigeExplicacion ? "text-destructive" : "text-muted-foreground")}>
                 {exigeExplicacion ? "Explica la diferencia (obligatorio desde $1)" : "Observaciones (opcional)"}
               </Label>
-              <Input
+              <Input id="pos-observaciones-cierre"
                 type="text" value={observacionesCierre}
                 onChange={(e) => setObservacionesCierre(e.target.value)}
                 placeholder={exigeExplicacion ? "Ej. Se dio mal un vuelto" : "Razón de descuadre o nota…"}
                 aria-invalid={faltaExplicacion}
-                className="h-11"
+                className="h-11 md:h-11"
               />
             </div>
 
@@ -920,8 +921,8 @@ export default function POSPage() {
             <DialogDescription>Se quitan los {items.length} productos. La venta no se registra.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" className="h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
-            <Button type="button" variant="destructive" className="h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
+            <Button type="button" variant="secondary" className="h-11 md:h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
+            <Button type="button" variant="destructive" className="h-11 md:h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
           </div>
         </DialogContent>
       </Dialog>

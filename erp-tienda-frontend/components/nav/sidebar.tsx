@@ -2,16 +2,15 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import Cookies from "js-cookie"
+import { usePathname } from "next/navigation"
 import { Store, LogOut } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { getNavItems } from "@/lib/navigation"
 import type { CurrentUser } from "@/hooks/useCurrentUser"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { useCartStore } from "@/src/store/cartStore"
-import { useInventoryStore } from "@/src/store/inventoryStore"
+import { useLogout } from "@/hooks/useLogout"
+import { etiquetaRol } from "@/lib/roles"
 
 /**
  * Sidebar de escritorio (oculta en móvil; en móvil manda <BottomNav />).
@@ -19,18 +18,9 @@ import { useInventoryStore } from "@/src/store/inventoryStore"
  */
 export function Sidebar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname()
-  const router = useRouter()
   const navItems = getNavItems(user?.rol)
 
-  const handleLogout = () => {
-    Cookies.remove("token", { path: "/" })
-    Cookies.remove("user", { path: "/" })
-    // En una terminal compartida, el siguiente cajero no debe heredar carrito ni
-    // inventario cacheado. getState() porque es una acción imperativa.
-    useCartStore.getState().clearCart()
-    useInventoryStore.getState().reset()
-    router.push("/auth/login")
-  }
+  const handleLogout = useLogout()
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -79,7 +69,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user ? user.nombre : "Cargando…"}</p>
             <p className="text-xs text-muted-foreground">
-              {user?.rol === "CAJERO" ? "Cajero" : user?.rol === "ADMIN" ? "Administrador" : ""}
+              {etiquetaRol(user?.rol)}
             </p>
           </div>
           <ThemeToggle />

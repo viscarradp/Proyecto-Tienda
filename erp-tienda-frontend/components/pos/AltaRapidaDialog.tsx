@@ -133,7 +133,7 @@ export function AltaRapidaDialog({
               maxLength={150}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Ej: Queso fresco"
-              className="h-12 text-base"
+              className="h-12 md:h-12 text-base"
               autoFocus
             />
           </div>
@@ -148,7 +148,7 @@ export function AltaRapidaDialog({
                 value={precio}
                 onChange={(e) => setPrecio(e.target.value)}
                 placeholder="0.00"
-                className="h-12 font-mono text-lg"
+                className="h-12 md:h-12 font-mono text-lg"
               />
             </div>
           </div>
@@ -161,8 +161,9 @@ export function AltaRapidaDialog({
                   key={u}
                   type="button"
                   onClick={() => setUnidad(u)}
+                  aria-pressed={unidad === u}
                   className={cn(
-                    "h-9 rounded-sm border px-3 text-sm font-medium transition-colors",
+                    "h-11 md:h-9 rounded-sm border px-3 text-sm font-medium transition-colors",
                     unidad === u
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -178,7 +179,7 @@ export function AltaRapidaDialog({
               maxLength={100}
               onChange={(e) => setUnidad(e.target.value)}
               placeholder="Otra unidad: caja, docena…"
-              className="h-11"
+              className="h-11 md:h-11"
             />
           </div>
 
@@ -191,7 +192,7 @@ export function AltaRapidaDialog({
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
               placeholder="Escanéalo o déjalo vacío"
-              className="h-11 font-mono"
+              className="h-11 md:h-11 font-mono"
             />
           </div>
 

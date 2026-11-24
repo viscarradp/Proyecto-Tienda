@@ -71,7 +71,6 @@ export default function GastosPage() {
   const [mounted, setMounted] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
-  const [success, setSuccess] = React.useState("")
 
   const [categorias, setCategorias] = React.useState<CategoriaGasto[]>([])
   const [cajaActiva, setCajaActiva] = React.useState<CajaTurno | null>(null)
@@ -124,7 +123,6 @@ export default function GastosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    setSuccess("")
 
     const montoParsed = parseFloat(monto)
     if (isNaN(montoParsed) || montoParsed <= 0) {
@@ -157,7 +155,7 @@ export default function GastosPage() {
         })
       })
 
-      setSuccess("¡Gasto registrado!")
+      toast.success(`Gasto registrado: ${montoParsed.toLocaleString("en-US", { style: "currency", currency: "USD" })}`)
       for (const aviso of resp.avisos ?? []) {
         toast.warning(aviso, { duration: 12000 })
       }
@@ -167,7 +165,6 @@ export default function GastosPage() {
       // Recargar saldos
       loadData()
 
-      setTimeout(() => setSuccess(""), 3000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al registrar el gasto")
     } finally {
@@ -196,8 +193,7 @@ export default function GastosPage() {
 
       setNewCatNombre("")
       setShowNewCatDialog(false)
-      setSuccess("Categoría creada exitosamente")
-      setTimeout(() => setSuccess(""), 3000)
+      toast.success("Categoría creada")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al crear la categoría")
     } finally {
@@ -229,7 +225,7 @@ export default function GastosPage() {
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Control de gastos</h1>
             <p className="text-xs text-muted-foreground">Lo que pagas para que el negocio funcione</p>
           </div>
-          <Button variant="outline" size="icon" onClick={loadData} disabled={loading} className="h-11 w-11 shrink-0">
+          <Button aria-label="Actualizar gastos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="size-11 md:size-11 shrink-0">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
         </div>
@@ -250,7 +246,7 @@ export default function GastosPage() {
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 text-warning" /> No hay turno abierto
+                  <AlertTriangle className="h-4 w-4 text-warning-text" /> No hay turno abierto
                 </div>
               )}
             </StatCard>
@@ -260,7 +256,7 @@ export default function GastosPage() {
                 <>
                   <MoneyValue value={cajaGeneral.saldo_actual} className="text-3xl font-bold tracking-tight" />
                   {parseFloat(cajaGeneral.saldo_actual) < 0 ? (
-                    <p className="mt-1 text-xs font-medium text-warning">
+                    <p className="mt-1 text-xs font-medium text-warning-text">
                       Negativo según el sistema: falta registrar efectivo. Cuenta la bóveda o pon dinero en Estadísticas.
                     </p>
                   ) : (
@@ -269,7 +265,7 @@ export default function GastosPage() {
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 text-warning" /> No disponible o vacía
+                  <AlertTriangle className="h-4 w-4 text-warning-text" /> No disponible o vacía
                 </div>
               )}
             </StatCard>
@@ -287,26 +283,21 @@ export default function GastosPage() {
                 <AlertTriangle className="h-5 w-5 shrink-0" /> {error}
               </div>
             )}
-            {success && (
-              <div className="mb-5 flex items-center gap-3 rounded-sm border border-success/20 bg-success/10 p-3 text-sm font-medium text-success">
-                <CheckCircle2 className="h-5 w-5 shrink-0" /> {success}
-              </div>
-            )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Monto del gasto ($)</Label>
-                  <Input type="number" min={0.01} step="0.01" required value={monto}
+                  <Label htmlFor="gastos-monto-del-gasto" className="text-xs font-medium text-muted-foreground">Monto del gasto ($)</Label>
+                  <Input id="gastos-monto-del-gasto" type="number" min={0.01} step="0.01" required value={monto}
                     onChange={e => setMonto(e.target.value)}
                     placeholder="0.00"
-                    className="h-14 font-mono text-2xl font-bold" />
+                    className="h-14 md:h-14 font-mono text-2xl font-bold" />
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
+                  <Label htmlFor="gastos-de-donde-sale-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
                   <Select value={origenFondos} onValueChange={setOrigenFondos}>
-                    <SelectTrigger className="h-14 w-full">
+                    <SelectTrigger id="gastos-de-donde-sale-el-dinero" className="h-14 md:h-14 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -317,23 +308,23 @@ export default function GastosPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
-                  <Input required value={descripcion}
+                  <Label htmlFor="gastos-descripcion" className="text-xs font-medium text-muted-foreground">Descripción</Label>
+                  <Input id="gastos-descripcion" required value={descripcion}
                     onChange={e => setDescripcion(e.target.value)}
                     placeholder="Ej. Pago de Internet mes de Marzo"
-                    className="h-12" />
+                    className="h-12 md:h-12" />
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
+                    <Label htmlFor="gastos-categoria-opcional" className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
                     <Button type="button" variant="link" onClick={() => setShowNewCatDialog(true)}
                       className="h-auto p-0 text-xs text-primary">
                       + Nueva
                     </Button>
                   </div>
                   <Select value={categoriaId} onValueChange={setCategoriaId}>
-                    <SelectTrigger className="h-12 w-full">
+                    <SelectTrigger id="gastos-categoria-opcional" className="h-12 md:h-12 w-full">
                       <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                     </SelectTrigger>
                     <SelectContent>
@@ -350,7 +341,7 @@ export default function GastosPage() {
               </div>
 
               <div className="flex justify-end border-t border-border pt-4">
-                <Button type="submit" disabled={submitLoading || loading} className="h-12 gap-2 px-8">
+                <Button type="submit" disabled={submitLoading || loading} className="h-12 md:h-12 gap-2 px-8">
                   {submitLoading ? (
                     <><Loader2 className="h-5 w-5 animate-spin" /> Registrando…</>
                   ) : (
@@ -428,17 +419,17 @@ export default function GastosPage() {
           </DialogHeader>
           <form onSubmit={handleCreateCategory} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Nombre de la categoría</Label>
-              <Input required value={newCatNombre}
+              <Label htmlFor="gastos-nombre-de-la-categoria" className="text-xs font-medium text-muted-foreground">Nombre de la categoría</Label>
+              <Input id="gastos-nombre-de-la-categoria" required value={newCatNombre}
                 onChange={(e) => setNewCatNombre(e.target.value)}
                 placeholder="Ej. Suministros de Oficina"
-                className="h-12"
+                className="h-12 md:h-12"
                 autoFocus />
             </div>
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Tipo de gasto</Label>
+              <Label htmlFor="gastos-tipo-de-gasto" className="text-xs font-medium text-muted-foreground">Tipo de gasto</Label>
               <Select value={newCatTipo} onValueChange={setNewCatTipo}>
-                <SelectTrigger className="h-12 w-full">
+                <SelectTrigger id="gastos-tipo-de-gasto" className="h-12 md:h-12 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

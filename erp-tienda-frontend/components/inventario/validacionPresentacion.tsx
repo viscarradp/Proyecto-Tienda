@@ -52,6 +52,6 @@ export function avisoPrecio(texto: string): string | null {
 /** Mensaje bajo un campo: error en rojo o aviso en ámbar. */
 export function MensajeCampo({ error, aviso }: { error?: string | null; aviso?: string | null }) {
   if (error) return <p className="text-[11px] font-medium text-destructive">{error}</p>
-  if (aviso) return <p className="text-[11px] font-medium text-warning">{aviso}</p>
+  if (aviso) return <p className="text-[11px] font-medium text-warning-text">{aviso}</p>
   return null
 }

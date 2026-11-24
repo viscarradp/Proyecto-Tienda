@@ -135,7 +135,7 @@ export function AjusteInventarioDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-warning" />
+            <AlertTriangle className="h-5 w-5 text-warning-text" />
             {esCajero ? "Registrar merma" : esAgregar ? "Encontré producto" : "Ajuste de inventario"}
           </DialogTitle>
           <DialogDescription>
@@ -156,12 +156,12 @@ export function AjusteInventarioDialog({
           {/* Dirección del ajuste (solo la dueña: los conteos son suyos) */}
           {!esCajero && (
             <div className="grid grid-cols-2 gap-1 rounded-sm border border-border p-1">
-              <button type="button" onClick={() => setDireccion("quitar")}
+              <button type="button" onClick={() => setDireccion("quitar")} aria-pressed={!esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
                   !esAgregar ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-foreground")}>
                 <Minus className="h-4 w-4" /> Quitar (merma)
               </button>
-              <button type="button" onClick={() => setDireccion("agregar")}
+              <button type="button" onClick={() => setDireccion("agregar")} aria-pressed={esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
                   esAgregar ? "bg-success/10 text-success" : "text-muted-foreground hover:text-foreground")}>
                 <Plus className="h-4 w-4" /> Encontré (conteo)
@@ -182,9 +182,9 @@ export function AjusteInventarioDialog({
             <>
               {!esAgregar && lotes.length > 1 && (
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">¿De qué lote? (el más viejo sale primero)</Label>
+                  <Label htmlFor="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="text-xs font-medium text-muted-foreground">¿De qué lote? (el más viejo sale primero)</Label>
                   <Select value={loteId} onValueChange={setLoteId}>
-                    <SelectTrigger className="h-12 w-full">
+                    <SelectTrigger id="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="h-12 md:h-12 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -205,10 +205,11 @@ export function AjusteInventarioDialog({
 
               <div className={esAgregar ? "" : "grid grid-cols-2 gap-4"}>
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium text-muted-foreground">
+                  <Label htmlFor="ajuste-cantidad" className="text-xs font-medium text-muted-foreground">
                     {esAgregar ? "Cantidad que encontré" : "Cantidad a descontar"}
                   </Label>
                   <Input
+                    id="ajuste-cantidad"
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -217,14 +218,14 @@ export function AjusteInventarioDialog({
                     value={cantidad}
                     onChange={(e) => setCantidad(e.target.value)}
                     required
-                    className="h-12 font-mono text-lg"
+                    className="h-12 md:h-12 font-mono text-lg"
                   />
                 </div>
                 {!esAgregar && (
                   <div className="flex flex-col gap-2">
-                    <Label className="text-xs font-medium text-muted-foreground">¿Qué pasó?</Label>
+                    <Label htmlFor="ajusteinventariodialog-que-paso" className="text-xs font-medium text-muted-foreground">¿Qué pasó?</Label>
                     <Select value={tipoAjuste} onValueChange={setTipoAjuste}>
-                      <SelectTrigger className="h-12 w-full">
+                      <SelectTrigger id="ajusteinventariodialog-que-paso" className="h-12 md:h-12 w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -239,15 +240,16 @@ export function AjusteInventarioDialog({
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">
+                <Label htmlFor="ajuste-motivo" className="text-xs font-medium text-muted-foreground">
                   {esCajero ? "Motivo (obligatorio)" : "Motivo (opcional)"}
                 </Label>
                 <Input
+                  id="ajuste-motivo"
                   value={justificacion}
                   onChange={(e) => setJustificacion(e.target.value)}
                   required={esCajero}
                   placeholder={esAgregar ? "Ej: Estaba en la bodega" : "Ej: Se cayó de la estantería…"}
-                  className="h-12"
+                  className="h-12 md:h-12"
                 />
               </div>
             </>

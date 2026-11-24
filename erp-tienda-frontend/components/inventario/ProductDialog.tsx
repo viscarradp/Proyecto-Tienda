@@ -6,6 +6,7 @@ import { Plus, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
   Dialog,
   DialogContent,
@@ -128,6 +129,13 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
   const removePresentacion = (key: string) => {
     setPresentaciones(prev => prev.filter(p => p.key !== key))
   }
+  const [presAQuitar, setPresAQuitar] = React.useState<string | null>(null)
+  // Una presentación vacía se quita sin preguntar; si ya tiene datos, se confirma.
+  const pedirQuitarPresentacion = (p: PresentacionForm) => {
+    const tieneDatos = p.descripcion.trim() !== "" || p.codigo_barras.trim() !== "" || p.precio_venta.trim() !== ""
+    if (tieneDatos) setPresAQuitar(p.key)
+    else removePresentacion(p.key)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,38 +213,38 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
 
           {/* Código de barras primero y con el foco: el lector escribe aquí, no en "Nombre". */}
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Código de barras</Label>
-            <Input
+            <Label htmlFor="productdialog-codigo-de-barras" className="text-xs font-medium text-muted-foreground">Código de barras</Label>
+            <Input id="productdialog-codigo-de-barras"
               autoFocus
               value={codigoPrincipal}
               onChange={(e) => setCodigoPrincipal(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
               placeholder="Escanea el código o déjalo vacío"
-              className="h-11 font-mono"
+              className="h-11 md:h-11 font-mono"
             />
           </div>
 
           {/* Nombre del producto */}
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
-            <Input
+            <Label htmlFor="productdialog-nombre-del-producto" className="text-xs font-medium text-muted-foreground">Nombre del producto</Label>
+            <Input id="productdialog-nombre-del-producto"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Ej: Arroz Blanco Precocido"
               required
-              className="h-11"
+              className="h-11 md:h-11"
             />
           </div>
 
           {/* Categoría */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
+              <Label htmlFor="producto-categoria" className="text-xs font-medium text-muted-foreground">Categoría</Label>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs text-primary hover:text-primary"
+                className="h-11 md:h-6 px-2 text-xs text-primary hover:text-primary"
                 onClick={() => setShowNewCat(!showNewCat)}
               >
                 {showNewCat ? "Seleccionar existente" : "+ Crear nueva"}
@@ -244,14 +252,15 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
             </div>
             {showNewCat ? (
               <Input
+                id="producto-categoria"
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="Nombre de la nueva categoría"
-                className="h-11"
+                className="h-11 md:h-11"
               />
             ) : (
               <Select value={categoriaId} onValueChange={setCategoriaId}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger id="producto-categoria" className="h-11 md:h-11 w-full">
                   <SelectValue placeholder="Selecciona una categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,8 +277,8 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
           {/* Presentaciones */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium text-muted-foreground">Presentaciones de venta</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addPresentacion} className="h-7 gap-1 text-xs">
+              <p className="text-xs font-medium text-muted-foreground">Presentaciones de venta</p>
+              <Button type="button" variant="outline" size="sm" onClick={addPresentacion} className="h-11 md:h-7 gap-1 text-xs">
                 <Plus className="h-3 w-3" /> Agregar
               </Button>
             </div>
@@ -278,39 +287,40 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
               <div key={pres.key} className="relative flex flex-col gap-3 rounded-sm border border-border bg-muted/30 p-4">
                 {idx > 0 && (
                   <Button type="button" variant="ghost" size="icon"
-                    className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:text-destructive"
-                    onClick={() => removePresentacion(pres.key)}>
+                    className="absolute top-2 right-2 size-11 md:size-6 text-muted-foreground hover:text-destructive"
+                    aria-label={`Quitar la presentación ${idx + 1}`}
+                    onClick={() => pedirQuitarPresentacion(pres)}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
-                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</Label>
-                    <Input value={pres.descripcion} onChange={(e) => updatePresentacion(pres.key, "descripcion", e.target.value)}
-                      placeholder='Ej: "Unidad", "Fardo de 12"' className="h-9 text-sm" />
+                    <Label htmlFor={`pres-desc-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</Label>
+                    <Input id={`pres-desc-${pres.key}`} value={pres.descripcion} onChange={(e) => updatePresentacion(pres.key, "descripcion", e.target.value)}
+                      placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11 md:h-9 text-sm" />
                     {intentado && !pres.descripcion.trim() && <MensajeCampo error="Falta la descripción" />}
                   </div>
                   {idx > 0 && (
                     <div className="col-span-2">
-                      <Label className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
-                      <Input value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
+                      <Label htmlFor={`pres-cod-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
+                      <Input id={`pres-cod-${pres.key}`} value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                        placeholder="Opcional" className="h-9 font-mono text-sm" />
+                        placeholder="Opcional" className="h-11 md:h-9 font-mono text-sm" />
                     </div>
                   )}
                   <div>
-                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Múltiplo (unidades que trae)</Label>
-                    <Input type="number" min={0.001} step="any" value={pres.factor_conversion}
+                    <Label htmlFor={`pres-mult-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Múltiplo (unidades que trae)</Label>
+                    <Input id={`pres-mult-${pres.key}`} type="number" min={0.001} step="any" value={pres.factor_conversion}
                       onChange={(e) => updatePresentacion(pres.key, "factor_conversion", e.target.value)}
-                      className="h-9 font-mono text-sm" />
+                      className="h-11 md:h-9 font-mono text-sm" />
                     {intentado && <MensajeCampo error={errorFactor(pres.factor_conversion)} />}
                   </div>
                   <div>
-                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
-                    <Input type="number" min={0} step="0.01" value={pres.precio_venta}
+                    <Label htmlFor={`pres-precio-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
+                    <Input id={`pres-precio-${pres.key}`} type="number" min={0} step="0.01" value={pres.precio_venta}
                       onChange={(e) => updatePresentacion(pres.key, "precio_venta", e.target.value)}
-                      className="h-9 font-mono text-sm" />
+                      className="h-11 md:h-9 font-mono text-sm" />
                     <MensajeCampo
                       error={intentado ? errorPrecio(pres.precio_venta) : null}
                       aviso={avisoPrecio(pres.precio_venta)}
@@ -337,6 +347,14 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
           </div>
         </form>
       </DialogContent>
+      <ConfirmDialog
+        open={presAQuitar !== null}
+        onOpenChange={(v) => { if (!v) setPresAQuitar(null) }}
+        title="¿Quitar esta presentación?"
+        description="Se descartan los datos que escribiste en ella. El producto todavía no se ha guardado, así que no se borra nada del inventario."
+        confirmLabel="Quitar presentación"
+        onConfirm={() => { if (presAQuitar) removePresentacion(presAQuitar) }}
+      />
     </Dialog>
   )
 }
@@ -418,32 +436,32 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
           )}
 
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
-            <Input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required
-              placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11" />
+            <Label htmlFor="productdialog-descripcion-2" className="text-xs font-medium text-muted-foreground">Descripción</Label>
+            <Input id="productdialog-descripcion-2" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required
+              placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11 md:h-11" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Código de barras</Label>
-              <Input value={codigoBarras} onChange={(e) => setCodigoBarras(e.target.value)}
+              <Label htmlFor="productdialog-codigo-de-barras-2" className="text-xs font-medium text-muted-foreground">Código de barras</Label>
+              <Input id="productdialog-codigo-de-barras-2" value={codigoBarras} onChange={(e) => setCodigoBarras(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                placeholder="Opcional" className="h-9 font-mono text-sm" />
+                placeholder="Opcional" className="h-11 md:h-9 font-mono text-sm" />
             </div>
             <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium text-muted-foreground">Factor conversión</Label>
-              <Input type="number" min={0.001} step="any" value={factorConversion}
+              <Label htmlFor="productdialog-factor-conversion" className="text-xs font-medium text-muted-foreground">Factor conversión</Label>
+              <Input id="productdialog-factor-conversion" type="number" min={0.001} step="any" value={factorConversion}
                 onChange={(e) => setFactorConversion(e.target.value)}
-                className="h-9 font-mono text-sm" />
+                className="h-11 md:h-9 font-mono text-sm" />
               {intentado && <MensajeCampo error={errorFactor(factorConversion)} />}
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
-            <Input type="number" min={0} step="0.01" value={precioVenta}
+            <Label htmlFor="productdialog-precio-de-venta-2" className="text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
+            <Input id="productdialog-precio-de-venta-2" type="number" min={0} step="0.01" value={precioVenta}
               onChange={(e) => setPrecioVenta(e.target.value)}
-              className="h-11 font-mono" />
+              className="h-11 md:h-11 font-mono" />
             <MensajeCampo error={intentado ? errorPrecio(precioVenta) : null} aviso={avisoPrecio(precioVenta)} />
           </div>
 
