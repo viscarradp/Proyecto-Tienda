@@ -29,6 +29,7 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { StatCard } from "@/components/stat-card"
 import { apiFetch } from "@/lib/api"
+import { DeudasProveedores } from "@/components/gastos/DeudasProveedores"
 
 /** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
 const SIN_CATEGORIA = "sin-categoria"
@@ -336,6 +337,9 @@ export default function GastosPage() {
               </div>
             </form>
           </div>
+
+          {/* Deudas con proveedores (compras al crédito) */}
+          <DeudasProveedores onPagado={loadData} />
 
           {/* Historial de gastos recientes */}
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">

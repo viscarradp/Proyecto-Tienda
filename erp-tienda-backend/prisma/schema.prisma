@@ -88,8 +88,13 @@ model compras_inventario {
   estado_pago       String              @db.VarChar(20)
   origen_fondos     String              @db.VarChar(50)
   fecha             DateTime?           @default(now()) @db.Timestamptz(6)
+  // Autor de la compra (NEG-04).
+  usuario_id        Int?
   cuentas_por_pagar cuentas_por_pagar[]
   lotes_inventario  lotes_inventario[]
+  usuarios          usuarios?           @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_compra")
+
+  @@index([usuario_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -102,8 +107,28 @@ model cuentas_por_pagar {
   saldo_pendiente    Decimal             @db.Decimal(10, 2)
   fecha_creacion     DateTime?           @default(now()) @db.Timestamptz(6)
   compras_inventario compras_inventario? @relation(fields: [compra_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_compra")
+  abonos             abono_deuda[]
 
   @@index([compra_id])
+}
+
+/// Pagos parciales o totales de una deuda con un proveedor (L8, D-05).
+model abono_deuda {
+  id            Int                      @id @default(autoincrement())
+  cuenta_id     Int
+  monto         Decimal                  @db.Decimal(10, 2)
+  fecha         DateTime                 @default(now()) @db.Timestamptz(6)
+  usuario_id    Int?
+  movimiento_id Int?
+  nota          String?                  @db.VarChar(255)
+  cuenta        cuentas_por_pagar        @relation(fields: [cuenta_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_abono_cuenta")
+  usuarios      usuarios?                @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_abono_usuario")
+  movimiento    movimientos_financieros? @relation(fields: [movimiento_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_abono_movimiento")
+
+  @@index([cuenta_id])
+  @@index([usuario_id])
+  @@index([movimiento_id])
+  @@map("abonos_cuentas_por_pagar")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -185,6 +210,7 @@ model movimientos_financieros {
   cajas_turnos       cajas_turnos?      @relation(fields: [caja_turno_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_caja_movimiento")
   categorias_gastos  categorias_gastos? @relation(fields: [categoria_gasto_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_categoria_gasto")
   usuarios           usuarios?          @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_movimiento")
+  abonos_deuda       abono_deuda[]
 
   // reportes.service.ts filtra siempre tipo_movimiento + fecha juntos
   // (gastos operativos, mermas). findAll(tipo_movimiento) también lo usa solo.
@@ -249,6 +275,8 @@ model usuarios {
   ajustes_inventario      ajustes_inventario[]
   devoluciones            devoluciones[]
   historial_precios       historial_precios_presentaciones[]
+  compras_inventario      compras_inventario[]
+  abonos_deuda            abono_deuda[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

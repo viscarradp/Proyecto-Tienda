@@ -169,3 +169,10 @@ y calcula la pérdida económica (`costo_asumido` = cantidad × costo de
 adquisición de ese lote). Es informativa/contable: no mueve efectivo de
 ninguna caja (una merma no es una salida de dinero, es una pérdida de
 inventario ya pagado).
+
+## Compras al crédito y pago de deudas (L8, D-05)
+
+- Una compra `AL_CREDITO` no mueve efectivo y no tiene origen de fondos: el campo se ignora y se guarda `CREDITO`. Crea una deuda en `cuentas_por_pagar`. Una compra `PAGADO` sigue exigiendo origen (`CAJA_POS`, `CAJA_GENERAL` o `CAPITAL_DUEÑOS`); el formulario ya no trae uno por defecto. La compra guarda quién la registró (`usuario_id`).
+- La deuda se paga con `POST /cuentas-por-pagar/:id/abonos` (solo ADMIN): `{ monto, origen: GAVETA | BOVEDA, nota? }`. Registra un `PAGO_PROVEEDOR` (`GAVETA→PROVEEDOR` con turno abierto, que baja `efectivo_esperado`; o `BOVEDA→PROVEEDOR`), baja `saldo_pendiente` y guarda el abono. `GET /cuentas-por-pagar?estado=pendientes|todas` lista las deudas con sus abonos.
+- El monto no puede superar el saldo (regla real, 400). Por fondos insuficientes no se bloquea: se registra y se devuelve `avisos` (ADR 0011).
+- Pagar una deuda de mercadería no es un gasto: el estado de resultados no cambia (el costo entra por el FIFO). En el patrimonio bajan por igual las deudas y el efectivo.
