@@ -112,7 +112,7 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 ### ⚪ Nivel 3 — Pulido e higiene
 
 Código muerto y archivos sueltos (COD-24, ARQ-20, `getResumen` cuenta anuladas — NEG-09);
-modelo de datos al adoptar migraciones (ARQ-17, backlog técnico 1–2); activos fijos sin
+modelo de datos al adoptar migraciones (ARQ-17, backlog técnico 1–2); imagen de producción del backend pesa 521 MB (prisma, typescript y effect entran como dependencias de producción); activos fijos sin
 pantalla (NEG-05); hidratación de `ThemeToggle`; período "Semana" de 8 días; textos de marca
 del login (UX-02); pulido general (UX-30).
 
@@ -137,9 +137,9 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | Lote | Estado | Rama |
 |---|---|---|
 | L1a | ✅ 2026-11-24 — verificado en navegador (escritorio y celular) | `feature/l1a-pos-numeros-mensajes` |
-| L1b | ⏳ | — |
+| L1b | ✅ 2026-11-24 — verificado en navegador (precio editable, Estadísticas cuadra, Movimientos) | `feature/l1b-inventario-estadisticas` |
 | L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
-| L3a | ⏳ | — |
+| L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
 | L3b | ⏸ decisión de infraestructura | — |
 | L4 | ⏳ | — |
 | L5–L8 | ⏸ decisiones del negocio | — |
