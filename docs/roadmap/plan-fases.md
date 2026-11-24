@@ -6,7 +6,7 @@
 >
 > **Última actualización:** 2026-11-24 (arranca el **Ciclo 2026-11** — ver la sección homónima abajo).
 >
-> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) es el trabajo activo; su estado vive en la sección "Ciclo 2026-11" de este documento. Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E, diferido por decisión de nube/secrets) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
+> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) es el trabajo activo; su estado vive en la sección "Ciclo 2026-11" de este documento. Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E: ya está **preparado** — scripts y workflow en el repo, guía en [`../operations/respaldos.md`](../operations/respaldos.md); falta activarlo cargando los secretos y hacer el primer respaldo y ensayo de restauración reales) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
 
 ---
 
