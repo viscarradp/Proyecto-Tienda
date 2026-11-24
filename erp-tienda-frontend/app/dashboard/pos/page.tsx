@@ -40,8 +40,23 @@ import { SacarDineroDialog } from "@/components/pos/SacarDineroDialog"
 import { useShallow } from "zustand/react/shallow"
 import { useCartStore } from "@/src/store/cartStore"
 import { useInventoryStore } from "../../../src/store/inventoryStore"
-import { apiFetch } from "@/lib/api"
+import { apiFetch, tipoDeError } from "@/lib/api"
+import {
+  aNumero,
+  centavosAMonto,
+  formatCantidad,
+  formatMoney,
+  montoACentavos,
+} from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
+
+/** UUID para Idempotency-Key. crypto.randomUUID solo existe en contextos seguros (https/localhost). */
+function nuevaClaveIdempotencia(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+}
 
 // ─── Types ───
 interface PresentacionRow {
@@ -92,6 +107,8 @@ export default function POSPage() {
   // ─── Caja/Turno ───
   const [cajaActiva, setCajaActiva] = React.useState<CajaTurno | null>(null)
   const [cajaLoading, setCajaLoading] = React.useState(true)
+  // Error al consultar la caja (red/servidor): distinto de "no hay caja abierta".
+  const [cajaError, setCajaError] = React.useState(false)
   const [openCajaDialog, setOpenCajaDialog] = React.useState(false)
   const [closeCajaDialog, setCloseCajaDialog] = React.useState(false)
   const [sacarDineroOpen, setSacarDineroOpen] = React.useState(false)
@@ -111,6 +128,9 @@ export default function POSPage() {
   const [contingencia, setContingencia] = React.useState(false)
   const [fechaContingencia, setFechaContingencia] = React.useState<string>("")
   const [ultimoCierreFondo, setUltimoCierreFondo] = React.useState<number | null>(null)
+  // Clave de idempotencia del intento de cobro en curso: se reutiliza si la
+  // cajera reintenta el mismo carrito y se descarta al cobrar o al cambiar el carrito.
+  const idemRef = React.useRef<{ key: string; firma: string } | null>(null)
 
   // ─── Filtros ───
   const [categoriaActiva, setCategoriaActiva] = React.useState("Todos")
@@ -118,17 +138,27 @@ export default function POSPage() {
 
   React.useEffect(() => { setMounted(true) }, [])
 
-  const loadData = React.useCallback(async () => {
-    await fetchInventory()
+  const loadData = React.useCallback(async (forzar = false) => {
+    await fetchInventory(forzar)
   }, [fetchInventory])
+
+  // Un error de cobro queda visible hasta la siguiente acción: al cambiar el ticket se limpia.
+  React.useEffect(() => { setCheckoutError("") }, [items])
 
   const loadCaja = React.useCallback(async () => {
     setCajaLoading(true)
     try {
       const caja = await apiFetch<CajaTurno>("/cajas-turnos/activa")
       setCajaActiva(caja)
+      setCajaError(false)
       setUltimoCierreFondo(null)
-    } catch {
+    } catch (err) {
+      if (tipoDeError(err) !== "no_encontrado") {
+        // Red/servidor: no sabemos si hay caja. No ofrecer abrir otra; dejar reintentar.
+        setCajaError(true)
+        return
+      }
+      setCajaError(false)
       setCajaActiva(null)
       try {
         const ult = await apiFetch<{fondo_siguiente: number | string}>("/cajas-turnos/ultimo-cierre")
@@ -215,6 +245,14 @@ export default function POSPage() {
         }),
       })
 
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al cerrar caja")
+      setCajaActionLoading(false)
+      return
+    }
+
+    // El cierre salió bien: a partir de aquí la caja ya está cerrada.
+    try {
       // Reabrir automáticamente con lo que quedó en la gaveta
       if (autoOpenNext && fondoSiguiente > 0) {
         const nuevaCaja = await apiFetch<CajaTurno>("/cajas-turnos/abrir", {
@@ -225,14 +263,15 @@ export default function POSPage() {
       } else {
         setCajaActiva(null)
       }
-
+    } catch {
+      toast.warning("La caja se cerró, pero no se pudo abrir la siguiente: ábrela manualmente.")
+      // Consultar el estado real en lugar de suponer cómo quedó.
+      await loadCaja()
+    } finally {
       setCloseCajaDialog(false)
       setEfectivoDeclarado("")
       setMontoBoveda("")
       setObservacionesCierre("")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al cerrar caja")
-    } finally {
       setCajaActionLoading(false)
     }
   }
@@ -255,26 +294,48 @@ export default function POSPage() {
         ? new Date(fechaContingencia).toISOString()
         : undefined
 
+    // Misma clave mientras el carrito (y la fecha) no cambien: un reintento tras
+    // un error de red no duplica la venta.
+    const firma = JSON.stringify({ detalles, fechaReal })
+    if (!idemRef.current || idemRef.current.firma !== firma) {
+      idemRef.current = { key: nuevaClaveIdempotencia(), firma }
+    }
+    const idemKey = idemRef.current.key
+
     try {
-      await apiFetch("/ventas", {
+      const venta = await apiFetch<{ total?: number | string }>("/ventas", {
         method: "POST",
+        headers: { "Idempotency-Key": idemKey },
         body: JSON.stringify(fechaReal ? { detalles, fecha: fechaReal } : { detalles }),
       })
 
+      // Total del servidor; si no viniera, el calculado igual que él (línea a línea).
+      const totalCobrado = venta?.total != null ? montoACentavos(venta.total) : montoACentavos(getTotal())
+      const pagoCentavos = pagoCliente.trim() === "" ? null : montoACentavos(pagoCliente)
+      const cambioCentavos = pagoCentavos !== null ? pagoCentavos - totalCobrado : null
+      const textoCambio =
+        cambioCentavos !== null && cambioCentavos >= 0
+          ? ` · Cambio: ${formatMoney(centavosAMonto(cambioCentavos))}`
+          : ""
+      toast.success(`Venta registrada · Total: ${formatMoney(centavosAMonto(totalCobrado))}${textoCambio}`, {
+        duration: 8000,
+      })
+
+      idemRef.current = null
       clearCart()
       setPagoCliente("")
       setContingencia(false)
       setFechaContingencia("")
       setCartOpen(false)
       setCheckoutSuccess(true)
-      // Recargar datos para actualizar stock
-      loadData()
+      // Recargar inventario (forzado: el caché de 3 min mostraría stock viejo)
+      loadData(true)
       // Recargar caja para actualizar el efectivo esperado
       loadCaja()
       setTimeout(() => setCheckoutSuccess(false), 3000)
     } catch (err: unknown) {
-      setCheckoutError(err instanceof Error ? err.message : "Error al procesar venta")
-      setTimeout(() => setCheckoutError(""), 5000)
+      // Se queda visible hasta la siguiente acción (no se oculta solo).
+      setCheckoutError(err instanceof Error ? err.message : "No se pudo registrar la venta. Intenta de nuevo.")
     } finally {
       setCheckoutLoading(false)
     }
@@ -282,15 +343,15 @@ export default function POSPage() {
 
   // ─── Aplanar productos → filas de presentaciones ───
   const allRows: PresentacionRow[] = productos.flatMap(prod => {
-    const stock = prod.lotes_inventario.reduce((s, l) => s + l.cantidad_disponible, 0)
+    const stock = prod.lotes_inventario.reduce((s, l) => s + aNumero(l.cantidad_disponible), 0)
     return prod.presentaciones.map(pres => ({
       presentacion_id: pres.id,
       producto_id: prod.id,
       producto_nombre: prod.nombre,
       presentacion_desc: pres.descripcion,
       codigo_barras: pres.codigo_barras,
-      factor_conversion: pres.factor_conversion,
-      precio_venta: parseFloat(pres.precio_venta),
+      factor_conversion: aNumero(pres.factor_conversion),
+      precio_venta: aNumero(pres.precio_venta),
       categoria: prod.categorias.nombre,
       stock,
     }))
@@ -380,6 +441,14 @@ export default function POSPage() {
                   <span className="sm:hidden">Caja</span>
                 </Button>
               </div>
+            ) : cajaError ? (
+              <Button
+                variant="outline"
+                onClick={() => loadCaja()}
+                className="h-10 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <RefreshCw className="h-4 w-4" /> Sin conexión · Reintentar
+              </Button>
             ) : (
               <Button
                 onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
@@ -425,10 +494,17 @@ export default function POSPage() {
 
           {/* Banner: caja cerrada */}
           {!cajaLoading && !cajaActiva && (
-            <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              Debes abrir un turno de caja antes de vender
-            </div>
+            cajaError ? (
+              <div className="flex items-center justify-center gap-2 border-t border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Sin conexión: no se pudo revisar la caja. Revisa el internet y toca «Reintentar».
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Debes abrir un turno de caja antes de vender
+              </div>
+            )
           )}
         </div>
 
@@ -479,7 +555,7 @@ export default function POSPage() {
                           "font-mono text-sm font-medium tabular-nums",
                           row.stock > 0 ? "text-success" : "text-destructive",
                         )}>
-                          {row.stock}
+                          {formatCantidad(row.stock)}
                         </span>
                         <p className="text-[10px] text-muted-foreground">stock</p>
                       </div>

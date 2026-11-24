@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { centavosAMonto, totalLineaCentavos } from '@/lib/format'
 
 export interface CartItem {
   id: string
@@ -18,7 +20,21 @@ interface CartStore {
   getTotal: () => number
 }
 
-export const useCartStore = create<CartStore>((set, get) => ({
+// localStorage puede no existir o lanzar (modo privado, datos bloqueados):
+// en ese caso el carrito simplemente vive en memoria.
+const safeStorage = {
+  getItem: (name: string) => {
+    try { return localStorage.getItem(name) } catch { return null }
+  },
+  setItem: (name: string, value: string) => {
+    try { localStorage.setItem(name, value) } catch { /* sin persistencia */ }
+  },
+  removeItem: (name: string) => {
+    try { localStorage.removeItem(name) } catch { /* sin persistencia */ }
+  },
+}
+
+export const useCartStore = create<CartStore>()(persist((set, get) => ({
   items: [],
   addItem: (product) => {
     const { items } = get()
@@ -49,6 +65,16 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
   clearCart: () => set({ items: [] }),
   getTotal: () => {
-    return get().items.reduce((acc, item) => acc + item.precio * item.cantidad, 0)
+    // Cada línea se redondea a centavos antes de sumar, igual que el servidor.
+    const centavos = get().items.reduce(
+      (acc, item) => acc + totalLineaCentavos(item.precio, item.cantidad),
+      0
+    )
+    return centavosAMonto(centavos)
   },
+}), {
+  name: 'tienda-carrito',
+  version: 1,
+  storage: createJSONStorage(() => safeStorage),
+  partialize: (state) => ({ items: state.items }),
 }))

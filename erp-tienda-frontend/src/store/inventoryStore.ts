@@ -17,6 +17,8 @@ export interface Presentacion {
 export interface LoteStock {
   id: number
   producto_id: number
+  // OJO: en runtime la API los entrega como string (Decimal de Prisma); el tipo
+  // se deja en number para no romper otras pantallas. Operar con aNumero().
   cantidad_inicial: number
   cantidad_disponible: number
   costo_unitario_adquisicion: string
