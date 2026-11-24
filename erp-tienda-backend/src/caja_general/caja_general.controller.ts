@@ -45,7 +45,7 @@ export class CajaGeneralController {
   }
 
   @Get('saldo')
-  @Roles('ADMIN', 'CAJERO', 'VENDEDOR')
+  @Roles('ADMIN', 'CAJERO')
   @ApiOperation({ summary: 'Saldo actual de la bóveda (derivado del libro)' })
   getSaldo() {
     return this.cajaGeneralService.getSaldo();

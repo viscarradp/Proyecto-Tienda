@@ -24,6 +24,9 @@ línea por línea (para eso está el código y `architecture/data-model.md`).
   `caja_turno_id` para que el cierre de ese turno no lo reste otra vez del
   remanente. La respuesta incluye `avisos: string[]` (p. ej. diferencia sin
   explicar, bóveda en negativo).
+- Autoría (D-06): anular guarda `ventas.anulada_por_id` y cerrar (normal o
+  forzado) guarda `cajas_turnos.cerrado_por_id`; Movimientos muestra quién
+  vendió, anuló, abrió y cerró.
 - Al cerrar un turno, se compara `efectivo_declarado` (conteo físico) contra
   `efectivo_esperado` (lo que el sistema calculó); la diferencia genera
   automáticamente un `AJUSTE_FALTANTE` o `AJUSTE_SOBRANTE` si supera un

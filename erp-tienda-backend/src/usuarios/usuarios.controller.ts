@@ -12,6 +12,7 @@ import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Roles('ADMIN')
 @Controller('usuarios')
@@ -41,8 +42,17 @@ export class UsuariosController {
     return this.usuariosService.update(id, updateUsuarioDto);
   }
 
+  // No borra: DESACTIVA (la autoría del historial se conserva).
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.usuariosService.remove(id);
+  desactivar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('userId') actorId: number,
+  ) {
+    return this.usuariosService.desactivar(id, actorId);
+  }
+
+  @Patch(':id/reactivar')
+  reactivar(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.reactivar(id);
   }
 }

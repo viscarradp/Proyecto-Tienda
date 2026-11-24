@@ -47,10 +47,13 @@ model cajas_turnos {
   diferencia              Decimal?                  @db.Decimal(10, 2)
   observaciones           String?
   usuario_id              Int?
+  // Quién cerró el turno (incluido el cierre forzado de la dueña).
+  cerrado_por_id          Int?
   movimientos_financieros movimientos_financieros[]
   ventas                  ventas[]
   devoluciones            devoluciones[]
-  usuarios                usuarios?                 @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_caja_turno")
+  usuarios                usuarios?                 @relation("TurnoAbiertoPor", fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_caja_turno")
+  cerrado_por             usuarios?                 @relation("TurnoCerradoPor", fields: [cerrado_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_cierra_caja_turno")
 
   // Casi toda operación de escritura (ventas, compras, egresos, ajustes,
   // abrir/cerrar turno) busca "el turno ABIERTA"; abrir() y getUltimoCierre()
@@ -58,6 +61,7 @@ model cajas_turnos {
   // compuesto sirve ambas consultas (ver docs/decisions/0005-indices-bd.md).
   @@index([estado, fecha_cierre])
   @@index([usuario_id])
+  @@index([cerrado_por_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -232,10 +236,15 @@ model usuarios {
   rol           String    @db.VarChar(20)
   password_hash String    @db.VarChar(255)
   created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  // Los usuarios nunca se borran (la autoría del historial se conserva): se
+  // desactivan. Un usuario inactivo no puede entrar y su token deja de servir.
+  activo        Boolean   @default(true)
 
   // Trazabilidad de autor (Bloque 1, §5.2). Back-relations de usuario_id.
-  cajas_turnos            cajas_turnos[]
-  ventas                  ventas[]
+  cajas_turnos            cajas_turnos[]            @relation("TurnoAbiertoPor")
+  turnos_cerrados         cajas_turnos[]            @relation("TurnoCerradoPor")
+  ventas                  ventas[]                  @relation("VentaUsuario")
+  ventas_anuladas         ventas[]                  @relation("VentaAnuladaPor")
   movimientos_financieros movimientos_financieros[]
   ajustes_inventario      ajustes_inventario[]
   devoluciones            devoluciones[]
@@ -253,19 +262,23 @@ model ventas {
   justificacion_nula String?          @db.Text
   fecha_anulacion    DateTime?        @db.Timestamptz(6)
   usuario_id         Int?
+  // Quién anuló la venta (D-06: la cajera anula, con su nombre registrado).
+  anulada_por_id     Int?
   // Idempotencia de POST /ventas: header opcional Idempotency-Key. Un reintento
   // con la misma clave devuelve la venta ya creada en vez de duplicarla.
   clave_idempotencia String?          @unique @db.VarChar(64)
   detalle_ventas     detalle_ventas[]
   devoluciones       devoluciones[]
   cajas_turnos       cajas_turnos     @relation(fields: [caja_turno_id], references: [id], onUpdate: NoAction, map: "fk_caja_venta")
-  usuarios           usuarios?        @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_venta")
+  usuarios           usuarios?        @relation("VentaUsuario", fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_venta")
+  anulada_por        usuarios?        @relation("VentaAnuladaPor", fields: [anulada_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_usuario_anula_venta")
 
   // reportes.service.ts filtra siempre estado + fecha juntos (estado de
   // resultados, productos top, margen por producto).
   @@index([estado, fecha])
   @@index([caja_turno_id])
   @@index([usuario_id])
+  @@index([anulada_por_id])
 }
 
 // La tabla caja_general se eliminó en el Bloque 1.C: el saldo de bóveda se

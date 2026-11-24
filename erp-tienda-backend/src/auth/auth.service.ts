@@ -33,6 +33,14 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    // Se revisa DESPUÉS de la contraseña para no revelar a un desconocido qué
+    // usuarios existen o están desactivados.
+    if (!usuario.activo) {
+      throw new UnauthorizedException(
+        'Este usuario está desactivado. Habla con la dueña.',
+      );
+    }
+
     // Genera el JWT
     const payload = {
       sub: usuario.id,

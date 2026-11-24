@@ -13,7 +13,8 @@ import { CreateCategoriasGastoDto } from './dto/create-categorias_gasto.dto';
 import { UpdateCategoriasGastoDto } from './dto/update-categorias_gasto.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
-@Roles('ADMIN', 'CAJERO', 'VENDEDOR')
+// Lectura: ambos roles. Crear, editar y borrar categorías: solo la dueña (D-06).
+@Roles('ADMIN', 'CAJERO')
 @Controller('categorias-gastos')
 export class CategoriasGastosController {
   constructor(
@@ -21,6 +22,7 @@ export class CategoriasGastosController {
   ) {}
 
   @Post()
+  @Roles('ADMIN')
   create(@Body() createCategoriasGastoDto: CreateCategoriasGastoDto) {
     return this.categoriasGastosService.create(createCategoriasGastoDto);
   }
@@ -36,6 +38,7 @@ export class CategoriasGastosController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCategoriasGastoDto: UpdateCategoriasGastoDto,
@@ -44,6 +47,7 @@ export class CategoriasGastosController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.categoriasGastosService.remove(id);
   }

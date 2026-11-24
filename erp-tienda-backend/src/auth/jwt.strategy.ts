@@ -1,7 +1,8 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { UsuariosService } from '../usuarios/usuarios.service';
 interface JwtPayload {
   sub: number;
   nombre: string;
@@ -10,7 +11,10 @@ interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    private readonly usuariosService: UsuariosService,
+  ) {
     const secret = configService.get<string>('JWT_SECRET');
     if (!secret) {
       throw new Error(
@@ -24,11 +28,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
+  /**
+   * Se ejecuta en CADA request autenticado. El token solo identifica (`sub`):
+   * el usuario debe existir y estar activo, y el rol que cuenta es el de la
+   * base de datos, no el del token. Así una desactivación o un cambio de rol
+   * aplican de inmediato, sin esperar a que el token expire. A esta escala,
+   * una consulta por request es aceptable.
+   */
+  async validate(payload: JwtPayload) {
+    const usuario = await this.usuariosService.findParaAutenticacion(
+      payload.sub,
+    );
+    if (!usuario || !usuario.activo) {
+      throw new UnauthorizedException(
+        'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+      );
+    }
     return {
-      userId: payload.sub,
-      nombre: payload.nombre,
-      rol: payload.rol,
+      userId: usuario.id,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
     };
   }
 }

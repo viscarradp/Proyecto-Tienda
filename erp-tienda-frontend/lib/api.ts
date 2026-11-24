@@ -2,7 +2,7 @@ import Cookies from "js-cookie"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 
-export type ApiErrorKind = "red" | "servidor" | "validacion" | "no_encontrado" | "sesion"
+export type ApiErrorKind = "red" | "servidor" | "validacion" | "no_encontrado" | "sesion" | "permiso"
 
 /**
  * Error de la API con un tipo para que cada pantalla decida qué hacer
@@ -80,7 +80,10 @@ export async function apiFetch<T>(
       : typeof raw === "string" && raw
         ? raw
         : `Error ${res.status}`
-    throw new ApiError(message, res.status === 404 ? "no_encontrado" : "validacion", res.status)
+    // 403 (D-06): el mensaje es el del backend ("Esto lo hace la dueña…").
+    const kind: ApiErrorKind =
+      res.status === 404 ? "no_encontrado" : res.status === 403 ? "permiso" : "validacion"
+    throw new ApiError(message, kind, res.status)
   }
 
   return res.json() as Promise<T>
