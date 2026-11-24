@@ -18,14 +18,18 @@ export class AjustesInventarioController {
     private readonly ajustesInventarioService: AjustesInventarioService,
   ) {}
 
+  // La cajera registra mermas (con motivo); los conteos los valida el servicio.
   @Post()
+  @Roles('ADMIN', 'CAJERO')
   create(
     @Body() createAjusteInventarioDto: CreateAjusteInventarioDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('rol') rol: string,
   ) {
     return this.ajustesInventarioService.create(
       createAjusteInventarioDto,
       userId,
+      rol,
     );
   }
 

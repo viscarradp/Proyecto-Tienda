@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import { errorFactor, errorPrecio, avisoPrecio, MensajeCampo } from "./validacionPresentacion"
@@ -32,6 +33,7 @@ interface Categoria {
 
 interface PresentacionForm {
   key: string
+  /** Solo las presentaciones extra: el código de la primera va arriba del formulario. */
   codigo_barras: string
   descripcion: string
   factor_conversion: string
@@ -46,55 +48,68 @@ interface ProductDialogProps {
   onCategoriaCreated: () => void
 }
 
+const CLAVE_ULTIMA_CATEGORIA = "inventario:ultimaCategoria"
+
+function leerUltimaCategoria(): string {
+  try {
+    return window.localStorage.getItem(CLAVE_ULTIMA_CATEGORIA) ?? ""
+  } catch {
+    return ""
+  }
+}
+
+function guardarUltimaCategoria(id: string) {
+  try {
+    window.localStorage.setItem(CLAVE_ULTIMA_CATEGORIA, id)
+  } catch {
+    // Sin almacenamiento: solo se pierde la comodidad.
+  }
+}
+
+const nuevaPresentacion = (descripcion = ""): PresentacionForm => ({
+  key: crypto.randomUUID(),
+  codigo_barras: "",
+  descripcion,
+  factor_conversion: "1",
+  precio_venta: "",
+})
+
 export function ProductDialog({ open, onClose, onSuccess, categorias, onCategoriaCreated }: ProductDialogProps) {
+  const [codigoPrincipal, setCodigoPrincipal] = React.useState("")
   const [nombre, setNombre] = React.useState("")
   const [categoriaId, setCategoriaId] = React.useState("")
   const [newCatName, setNewCatName] = React.useState("")
   const [showNewCat, setShowNewCat] = React.useState(false)
-  const [presentaciones, setPresentaciones] = React.useState<PresentacionForm[]>([{
-    key: crypto.randomUUID(),
-    codigo_barras: "",
-    descripcion: "",
-    factor_conversion: "1",
-    precio_venta: "",
-  }])
+  // La primera presentación arranca como "Unidad", factor 1.
+  const [presentaciones, setPresentaciones] = React.useState<PresentacionForm[]>(() => [nuevaPresentacion("Unidad")])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const [intentado, setIntentado] = React.useState(false)
 
   const resetForm = () => {
     setIntentado(false)
+    setCodigoPrincipal("")
     setNombre("")
-    setCategoriaId("")
+    setCategoriaId(leerUltimaCategoria())
     setNewCatName("")
     setShowNewCat(false)
-    setPresentaciones([{
-      key: crypto.randomUUID(),
-      codigo_barras: "",
-      descripcion: "",
-      factor_conversion: "1",
-      precio_venta: "",
-    }])
+    setPresentaciones([nuevaPresentacion("Unidad")])
     setError("")
   }
 
-  // Auto-fill barcode when a scanner is used globally while this modal is open
+  // Default útil: la última categoría usada (si todavía existe).
+  React.useEffect(() => {
+    if (!open) return
+    const ultima = leerUltimaCategoria()
+    if (ultima && categorias.some((c) => String(c.id) === ultima)) {
+      setCategoriaId((actual) => actual || ultima)
+    }
+  }, [open, categorias])
+
+  // Si el lector escanea con el foco fuera de un campo, el código va al campo de código.
   useBarcodeScanner({
     enabled: open,
-    onScan: (barcode) => {
-      if (presentaciones.length > 0) {
-        updatePresentacion(presentaciones[0].key, "codigo_barras", barcode)
-      } else {
-        // If no presentation exists yet, create one automatically with the barcode
-        setPresentaciones([{
-          key: crypto.randomUUID(),
-          codigo_barras: barcode,
-          descripcion: "",
-          factor_conversion: "1",
-          precio_venta: "",
-        }])
-      }
-    }
+    onScan: (barcode) => setCodigoPrincipal(barcode),
   })
 
   const handleClose = () => {
@@ -102,15 +117,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
     onClose()
   }
 
-  const addPresentacion = () => {
-    setPresentaciones([...presentaciones, {
-      key: crypto.randomUUID(),
-      codigo_barras: "",
-      descripcion: "",
-      factor_conversion: "1",
-      precio_venta: "",
-    }])
-  }
+  const addPresentacion = () => setPresentaciones((prev) => [...prev, nuevaPresentacion()])
 
   const updatePresentacion = (key: string, field: keyof PresentacionForm, value: string) => {
     setPresentaciones(prev => prev.map(p =>
@@ -127,7 +134,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
     setIntentado(true)
     // Nada se corrige en silencio: si algo está mal, se avisa en el campo.
     const hayErrores = presentaciones.some(
-      (p) => p.descripcion.trim() && (errorFactor(p.factor_conversion) || errorPrecio(p.precio_venta)),
+      (p) => !p.descripcion.trim() || errorFactor(p.factor_conversion) || errorPrecio(p.precio_venta),
     )
     if (hayErrores) {
       setError("Revisa los campos marcados en rojo")
@@ -144,6 +151,9 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
           body: JSON.stringify({ nombre: newCatName.trim() }),
         })
         finalCategoriaId = newCat.id
+        // Si el producto falla, al reintentar se usa esta categoría y no se crea otra.
+        setCategoriaId(String(newCat.id))
+        setShowNewCat(false)
         onCategoriaCreated()
       }
 
@@ -151,25 +161,24 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
         throw new Error("Debes seleccionar o crear una categoría")
       }
 
-      const producto = await apiFetch<{ id: number }>("/productos", {
+      // Una sola llamada: el servidor crea el producto y sus presentaciones
+      // juntos; si algo falla no queda nada a medias.
+      await apiFetch("/productos", {
         method: "POST",
-        body: JSON.stringify({ nombre, categoria_id: finalCategoriaId }),
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          categoria_id: finalCategoriaId,
+          presentaciones: presentaciones.map((p, i) => ({
+            codigo_barras: (i === 0 ? codigoPrincipal : p.codigo_barras).trim() || undefined,
+            descripcion: p.descripcion.trim(),
+            factor_conversion: Number(p.factor_conversion),
+            precio_venta: Number(p.precio_venta),
+          })),
+        }),
       })
 
-      for (const pres of presentaciones) {
-        if (!pres.descripcion.trim()) continue
-        await apiFetch("/presentaciones", {
-          method: "POST",
-          body: JSON.stringify({
-            producto_id: producto.id,
-            codigo_barras: pres.codigo_barras || undefined,
-            descripcion: pres.descripcion,
-            factor_conversion: Number(pres.factor_conversion),
-            precio_venta: Number(pres.precio_venta),
-          }),
-        })
-      }
-
+      guardarUltimaCategoria(String(finalCategoriaId))
+      toast.success(`Producto «${nombre.trim()}» creado`)
       handleClose()
       onSuccess()
     } catch (err: unknown) {
@@ -193,6 +202,19 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
               {error}
             </div>
           )}
+
+          {/* Código de barras primero y con el foco: el lector escribe aquí, no en "Nombre". */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Código de barras</Label>
+            <Input
+              autoFocus
+              value={codigoPrincipal}
+              onChange={(e) => setCodigoPrincipal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+              placeholder="Escanea el código o déjalo vacío"
+              className="h-11 font-mono"
+            />
+          </div>
 
           {/* Nombre del producto */}
           <div className="flex flex-col gap-2">
@@ -252,44 +274,45 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
               </Button>
             </div>
 
-            {presentaciones.length === 0 && (
-              <p className="text-xs italic text-muted-foreground">Puedes agregar presentaciones ahora o después.</p>
-            )}
-
-            {presentaciones.map((pres) => (
+            {presentaciones.map((pres, idx) => (
               <div key={pres.key} className="relative flex flex-col gap-3 rounded-sm border border-border bg-muted/30 p-4">
-                <Button type="button" variant="ghost" size="icon"
-                  className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:text-destructive"
-                  onClick={() => removePresentacion(pres.key)}>
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                {idx > 0 && (
+                  <Button type="button" variant="ghost" size="icon"
+                    className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => removePresentacion(pres.key)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
                     <Label className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</Label>
                     <Input value={pres.descripcion} onChange={(e) => updatePresentacion(pres.key, "descripcion", e.target.value)}
                       placeholder='Ej: "Unidad", "Fardo de 12"' className="h-9 text-sm" />
+                    {intentado && !pres.descripcion.trim() && <MensajeCampo error="Falta la descripción" />}
                   </div>
+                  {idx > 0 && (
+                    <div className="col-span-2">
+                      <Label className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
+                      <Input value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                        placeholder="Opcional" className="h-9 font-mono text-sm" />
+                    </div>
+                  )}
                   <div>
-                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
-                    <Input value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                      placeholder="Opcional" className="h-9 font-mono text-sm" />
-                  </div>
-                  <div>
-                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Factor conversión</Label>
+                    <Label className="mb-1 block text-xs font-medium text-muted-foreground">Múltiplo (unidades que trae)</Label>
                     <Input type="number" min={0.001} step="any" value={pres.factor_conversion}
                       onChange={(e) => updatePresentacion(pres.key, "factor_conversion", e.target.value)}
                       className="h-9 font-mono text-sm" />
                     {intentado && <MensajeCampo error={errorFactor(pres.factor_conversion)} />}
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <Label className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
                     <Input type="number" min={0} step="0.01" value={pres.precio_venta}
                       onChange={(e) => updatePresentacion(pres.key, "precio_venta", e.target.value)}
                       className="h-9 font-mono text-sm" />
                     <MensajeCampo
-                      error={intentado && pres.descripcion.trim() ? errorPrecio(pres.precio_venta) : null}
+                      error={intentado ? errorPrecio(pres.precio_venta) : null}
                       aviso={avisoPrecio(pres.precio_venta)}
                     />
                   </div>

@@ -187,7 +187,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
     // elegir de dónde salió el dinero (sin valor por defecto: así no se olvida).
     const origen = inicial ? "CAPITAL_DUEÑOS" : origenFondos
     if (!alCredito && !origen) {
-      setError("Elige de dónde salió el dinero: caja del día, bóveda o capital de la dueña.")
+      setError("Elige de dónde salió el dinero: gaveta, bóveda o capital de la dueña.")
       setLoading(false)
       return
     }
@@ -268,7 +268,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
         {inicial && (
           <p className="rounded-sm bg-muted/50 p-3 text-xs text-muted-foreground">
             Registra el stock con el que ya arranca la tienda. Se contabiliza como
-            aporte del dueño en especie (capital), sin salida de caja ni turno abierto.
+            aporte del dueño en especie (capital), sin salida de la gaveta ni turno abierto.
           </p>
         )}
 
@@ -304,7 +304,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
                       <SelectValue placeholder="Elige una opción" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CAJA_POS">Caja del día (requiere turno abierto)</SelectItem>
+                      <SelectItem value="CAJA_POS">Gaveta (requiere turno abierto)</SelectItem>
                       <SelectItem value="CAJA_GENERAL">Bóveda</SelectItem>
                       <SelectItem value="CAPITAL_DUEÑOS">Capital de la dueña</SelectItem>
                     </SelectContent>

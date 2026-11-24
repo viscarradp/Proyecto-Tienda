@@ -39,6 +39,8 @@ export interface Producto {
   pendiente_total?: number | string
   /** Creado con alta rápida en el POS; la dueña debe completar precio/categoría. */
   por_revisar?: boolean
+  /** false = desactivado (solo llega con ?incluir_inactivos=true). */
+  activo?: boolean
 }
 
 /** Stock total en unidades base; si el servidor no lo manda, suma los lotes. */

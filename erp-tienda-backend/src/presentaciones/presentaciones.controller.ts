@@ -71,6 +71,14 @@ export class PresentacionesController {
     return this.presentacionesService.getHistorialPrecios(id);
   }
 
+  @Get(':id/uso')
+  @ApiOperation({
+    summary: 'Cuántas líneas de venta usan la presentación (para avisar)',
+  })
+  getUso(@Param('id', ParseIntPipe) id: number) {
+    return this.presentacionesService.getUso(id);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Eliminar una presentación por ID' })

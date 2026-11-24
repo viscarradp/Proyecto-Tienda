@@ -17,6 +17,10 @@ import {
   PackagePlus,
   CheckCheck,
   Info,
+  Search,
+  Archive,
+  ArchiveRestore,
+  PackageSearch,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,14 +35,16 @@ import {
 } from "@/components/ui/dialog"
 import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
+import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
-import { aNumero, formatCantidad } from "@/lib/format"
+import { aNumero, formatCantidad, normalizarBusqueda } from "@/lib/format"
 import { useShallow } from "zustand/react/shallow"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/ProductDialog"
 import { CompraForm } from "@/components/inventario/CompraForm"
 import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventarioDialog"
 import { EditProductDialog } from "@/components/inventario/EditProductDialog"
+import { PrecioRapido } from "@/components/inventario/PrecioRapido"
 import { useInventoryStore, stockTotalDe, pendienteTotalDe, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
 
 interface Compra {
@@ -80,7 +86,18 @@ export default function InventarioPage() {
   const [compraDialogOpen, setCompraDialogOpen] = React.useState(false)
   const [compraInicial, setCompraInicial] = React.useState(false)
   const [ajusteDialogOpen, setAjusteDialogOpen] = React.useState(false)
-  const [ajusteTarget, setAjusteTarget] = React.useState<{ lote: LoteStock, nombre: string } | null>(null)
+  const [ajusteTarget, setAjusteTarget] = React.useState<{
+    productoId: number
+    nombre: string
+    lotes: LoteStock[]
+    loteId: number | null
+    inicio: "quitar" | "agregar"
+  } | null>(null)
+  const [busqueda, setBusqueda] = React.useState("")
+  const [verDesactivados, setVerDesactivados] = React.useState(false)
+  const [desactivados, setDesactivados] = React.useState<Producto[]>([])
+  const [productoAQuitar, setProductoAQuitar] = React.useState<Producto | null>(null)
+  const [quitando, setQuitando] = React.useState(false)
   const [editProductDialogOpen, setEditProductDialogOpen] = React.useState(false)
   const [editProductTarget, setEditProductTarget] = React.useState<Producto | null>(null)
   const [expandedProduct, setExpandedProduct] = React.useState<number | null>(null)
@@ -111,12 +128,19 @@ export default function InventarioPage() {
 
       const resComp = await apiFetch<Compra[]>("/compras")
       setCompras(Array.isArray(resComp) ? resComp : [])
+
+      // Los desactivados no vienen en el catálogo normal (ni en el POS): solo
+      // la dueña los pide, para poder reactivarlos.
+      if (!esCajero) {
+        const todos = await apiFetch<Producto[]>("/productos?incluir_inactivos=true")
+        setDesactivados(Array.isArray(todos) ? todos.filter(p => p.activo === false) : [])
+      }
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : "Error al cargar la base de inventario")
     } finally {
       setLoading(false)
     }
-  }, [fetchInventory, invalidateCache])
+  }, [fetchInventory, invalidateCache, esCajero])
 
   const handleRefresh = () => {
     loadData(true)
@@ -131,7 +155,61 @@ export default function InventarioPage() {
 
   // ─── Productos creados con alta rápida en el POS ───
   const porRevisar = productos.filter(p => p.por_revisar)
-  const productosVisibles = soloPorRevisar ? porRevisar : productos
+  const base = verDesactivados ? desactivados : soloPorRevisar ? porRevisar : productos
+  // Buscador sin acentos ni mayúsculas: por nombre, presentación o código de barras.
+  const consulta = normalizarBusqueda(busqueda)
+  const productosVisibles = consulta
+    ? base.filter(p =>
+        normalizarBusqueda(p.nombre).includes(consulta) ||
+        p.presentaciones.some(pr =>
+          normalizarBusqueda(pr.descripcion).includes(consulta) ||
+          (pr.codigo_barras ?? "").toLowerCase().includes(consulta)
+        )
+      )
+    : base
+
+  const nombrePresentacion = (prod: Producto, descripcion: string) =>
+    prod.presentaciones.length > 1 ? `${prod.nombre} (${descripcion})` : prod.nombre
+
+  // Merma / conteo: lotes con existencias, del más viejo al más nuevo.
+  const abrirAjuste = (prod: Producto, inicio: "quitar" | "agregar", loteId: number | null = null) => {
+    const lotes = prod.lotes_inventario
+      .filter(l => aNumero(l.cantidad_disponible) > 0)
+      .sort((a, b) => a.id - b.id)
+    setAjusteTarget({ productoId: prod.id, nombre: prod.nombre, lotes, loteId, inicio })
+    setAjusteDialogOpen(true)
+  }
+
+  const confirmarQuitar = async () => {
+    if (!productoAQuitar) return
+    setQuitando(true)
+    try {
+      const res = await apiFetch<{ nombre: string; desactivado: boolean }>(`/productos/${productoAQuitar.id}`, { method: "DELETE" })
+      toast.success(
+        res.desactivado
+          ? `«${res.nombre}» tiene historial: se desactivó (ya no sale en Vender). Puedes reactivarlo en «Ver desactivados».`
+          : `«${res.nombre}» se eliminó del catálogo`,
+      )
+      setProductoAQuitar(null)
+      setExpandedProduct(null)
+      await loadData(true)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo quitar el producto")
+    } finally {
+      setQuitando(false)
+    }
+  }
+
+  const handleReactivar = async (prod: Producto) => {
+    try {
+      await apiFetch(`/productos/${prod.id}/reactivar`, { method: "PATCH" })
+      toast.success(`«${prod.nombre}» volvió a estar activo`)
+      setExpandedProduct(null)
+      await loadData(true)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo reactivar")
+    }
+  }
 
   const handleYaRevise = async (prod: Producto) => {
     setRevisandoId(prod.id)
@@ -258,7 +336,7 @@ export default function InventarioPage() {
             <>
               {/* ──────── TAB 1: CATÁLOGO ──────── */}
               <TabsContent value="catalogo">
-                {productos.length === 0 ? (
+                {productos.length === 0 && desactivados.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-muted-foreground">
                     <Package className="h-10 w-10 opacity-20" />
                     <p className="text-sm font-medium text-foreground">No hay productos en el catálogo</p>
@@ -270,7 +348,45 @@ export default function InventarioPage() {
                   </div>
                 ) : (
                   <>
-                  {porRevisar.length > 0 && (
+                  {/* Buscador (sin acentos ni mayúsculas) y filtro de desactivados */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <div className="relative min-w-0 flex-1 basis-60">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type="search"
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        placeholder="Buscar por nombre, presentación o código…"
+                        aria-label="Buscar producto"
+                        className="h-11 pl-9"
+                      />
+                    </div>
+                    {!esCajero && (
+                      <Button
+                        type="button"
+                        variant={verDesactivados ? "default" : "outline"}
+                        className="h-11 gap-2"
+                        onClick={() => { setVerDesactivados(v => !v); setExpandedProduct(null) }}
+                      >
+                        <Archive className="h-4 w-4" />
+                        {verDesactivados ? "Volver a los activos" : `Ver desactivados${desactivados.length > 0 ? ` (${desactivados.length})` : ""}`}
+                      </Button>
+                    )}
+                  </div>
+                  {verDesactivados && (
+                    <p className="mb-3 rounded-sm border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                      Estos productos están desactivados: no salen en Vender, pero su historial se conserva. Ábrelos para reactivarlos.
+                    </p>
+                  )}
+                  {productosVisibles.length === 0 && (
+                    <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+                      <PackageSearch className="h-9 w-9 opacity-30" />
+                      <p className="text-sm font-medium text-foreground">
+                        {consulta ? `Nada coincide con «${busqueda.trim()}»` : "No hay productos desactivados"}
+                      </p>
+                    </div>
+                  )}
+                  {porRevisar.length > 0 && !verDesactivados && (
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-2.5">
                       <p className="flex items-center gap-2 text-sm font-medium text-warning">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -384,8 +500,14 @@ export default function InventarioPage() {
                                 <div>
                                   <div className="mb-2 flex items-center justify-between">
                                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Presentaciones</p>
-                                    {!esCajero && (
-                                      <div className="flex items-center gap-2">
+                                    {!esCajero && prod.activo === false && (
+                                      <Button type="button" size="sm" className="h-9 gap-1"
+                                        onClick={(e) => { e.stopPropagation(); handleReactivar(prod) }}>
+                                        <ArchiveRestore className="h-4 w-4" /> Reactivar
+                                      </Button>
+                                    )}
+                                    {!esCajero && prod.activo !== false && (
+                                      <div className="flex flex-wrap items-center justify-end gap-2">
                                         <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); setEditProductTarget(prod); setEditProductDialogOpen(true) }}>
                                           <Pencil className="h-3.5 w-3.5" /> Editar
@@ -393,6 +515,10 @@ export default function InventarioPage() {
                                         <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
                                           onClick={(e) => { e.stopPropagation(); openPresDialog(prod) }}>
                                           <Plus className="h-3.5 w-3.5" /> Agregar
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1"
+                                          onClick={(e) => { e.stopPropagation(); setProductoAQuitar(prod) }}>
+                                          <Archive className="h-3.5 w-3.5" /> Desactivar
                                         </Button>
                                       </div>
                                     )}
@@ -408,7 +534,13 @@ export default function InventarioPage() {
                                             <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{pres.codigo_barras}</span>
                                           )}
                                           <span className="font-mono text-xs text-muted-foreground">×{formatCantidad(pres.factor_conversion)}</span>
-                                          <MoneyValue value={pres.precio_venta} className="font-semibold" />
+                                          <PrecioRapido
+                                            presentacionId={pres.id}
+                                            nombre={nombrePresentacion(prod, pres.descripcion)}
+                                            precio={pres.precio_venta}
+                                            editable={!esCajero && prod.activo !== false}
+                                            onGuardado={() => loadData(true)}
+                                          />
                                         </div>
                                       ))}
                                     </div>
@@ -417,7 +549,25 @@ export default function InventarioPage() {
 
                                 {/* Lotes */}
                                 <div>
-                                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes de inventario activos</p>
+                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes de inventario activos</p>
+                                    {prod.activo !== false && (
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Button type="button" variant="outline" size="sm"
+                                          className="h-9 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                                          onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar") }}>
+                                          <AlertTriangle className="h-3.5 w-3.5" /> Registrar merma
+                                        </Button>
+                                        {!esCajero && (
+                                          <Button type="button" variant="outline" size="sm"
+                                            className="h-9 gap-1 border-success/40 text-success hover:bg-success/10 hover:text-success"
+                                            onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "agregar") }}>
+                                            <Plus className="h-3.5 w-3.5" /> Encontré producto
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                   {(() => {
                                     const activeLotes = prod.lotes_inventario.filter(l => aNumero(l.cantidad_disponible) > 0)
                                     if (activeLotes.length === 0) {
@@ -435,14 +585,10 @@ export default function InventarioPage() {
                                                 Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}
                                               </span>
                                             )}
-                                            {!esCajero && (
+                                            {prod.activo !== false && (
                                               <Button variant="outline" size="sm"
                                                 className="h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  setAjusteTarget({ lote, nombre: prod.nombre })
-                                                  setAjusteDialogOpen(true)
-                                                }}
+                                                onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                               >
                                                 <AlertTriangle className="h-3.5 w-3.5" /> Merma
                                               </Button>
@@ -589,14 +735,10 @@ export default function InventarioPage() {
                                       {lote.fecha_vencimiento && (
                                         <span className="text-xs text-warning">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
                                       )}
-                                      {aNumero(lote.cantidad_disponible) > 0 && !esCajero && (
+                                      {aNumero(lote.cantidad_disponible) > 0 && prod && (
                                         <Button variant="outline" size="sm"
                                           className="ml-auto h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            setAjusteTarget({ lote, nombre: prod?.nombre || `Producto #${lote.producto_id}` })
-                                            setAjusteDialogOpen(true)
-                                          }}
+                                          onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                         >
                                           <AlertTriangle className="h-3.5 w-3.5" /> Merma
                                         </Button>
@@ -664,10 +806,36 @@ export default function InventarioPage() {
           open={ajusteDialogOpen}
           onClose={() => { setAjusteDialogOpen(false); setAjusteTarget(null) }}
           onSuccess={() => loadData(true)}
-          lote={ajusteTarget.lote}
+          productoId={ajusteTarget.productoId}
           productoNombre={ajusteTarget.nombre}
+          lotes={ajusteTarget.lotes}
+          loteInicialId={ajusteTarget.loteId}
+          inicio={ajusteTarget.inicio}
+          esCajero={esCajero}
         />
       )}
+
+      {/* Confirmar «Desactivar»: con historial se desactiva, sin historial se borra */}
+      <Dialog open={!!productoAQuitar} onOpenChange={(v) => !v && !quitando && setProductoAQuitar(null)}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Desactivar «{productoAQuitar?.nombre}»</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Si ya tiene ventas o compras, se desactiva: deja de salir en Vender y su historial se conserva (lo puedes
+            reactivar en «Ver desactivados»). Si nunca se usó, se elimina del catálogo.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" disabled={quitando} onClick={() => setProductoAQuitar(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" disabled={quitando} onClick={confirmarQuitar} className="gap-2">
+              {quitando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+              Desactivar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <EditProductDialog
         open={editProductDialogOpen}
         onClose={() => { setEditProductDialogOpen(false); setEditProductTarget(null) }}

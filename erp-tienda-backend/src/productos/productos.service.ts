@@ -17,15 +17,49 @@ export const CATEGORIA_POR_REVISAR = 'Por revisar';
 export class ProductosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Alta atómica (ARQ-16 / COD-25): el producto y sus presentaciones se crean
+   * en una sola operación anidada de Prisma (una transacción). Un código de
+   * barras repetido (en la base o dentro del mismo cuerpo) da 409 y no se
+   * crea nada.
+   */
   async create(createProductoDto: CreateProductoDto) {
+    const { presentaciones = [], ...datos } = createProductoDto;
+
+    const codigos = presentaciones
+      .map((p) => p.codigo_barras)
+      .filter((c): c is string => !!c);
+    if (new Set(codigos).size !== codigos.length) {
+      throw new ConflictException(
+        'El mismo código de barras está en dos presentaciones',
+      );
+    }
+    for (const codigo of codigos) await this.validarCodigoLibre(codigo);
+
     try {
       return await this.prisma.productos.create({
-        data: createProductoDto,
+        data: {
+          ...datos,
+          presentaciones: {
+            create: presentaciones.map((p) => ({
+              descripcion: p.descripcion,
+              factor_conversion: p.factor_conversion,
+              precio_venta: p.precio_venta,
+              codigo_barras: p.codigo_barras ?? null,
+            })),
+          },
+        },
+        include: { categorias: true, presentaciones: true },
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2003') {
           throw new BadRequestException('La categoría especificada no existe');
+        }
+        if (error.code === 'P2002') {
+          // Otra persona dio de alta el mismo código justo ahora.
+          for (const codigo of codigos) await this.validarCodigoLibre(codigo);
+          throw new ConflictException('El código de barras ya existe');
         }
       }
       throw error;
@@ -88,8 +122,13 @@ export class ProductosService {
     }
   }
 
-  async findAll() {
+  /**
+   * Catálogo. Por defecto solo los productos activos (el POS no debe ofrecer
+   * lo desactivado); Inventario pide `incluirInactivos` para poder reactivar.
+   */
+  async findAll(incluirInactivos = false) {
     const productos = await this.prisma.productos.findMany({
+      where: incluirInactivos ? undefined : { activo: true },
       include: {
         categorias: true,
         presentaciones: true,
@@ -165,10 +204,60 @@ export class ProductosService {
     }
   }
 
+  /**
+   * Borrar (ARQ-16): con historial (ventas, lotes o deuda de stock) el producto
+   * se DESACTIVA para conservar el historial; sin historial se borra de verdad.
+   * Devuelve `{ id, nombre, desactivado }`.
+   */
   async remove(id: number) {
-    await this.findOne(id); // Validar existencia antes de eliminar
-    return this.prisma.productos.delete({
+    const producto = await this.findOne(id);
+
+    const [lotes, ventas, pendientes] = await Promise.all([
+      this.prisma.lotes_inventario.count({ where: { producto_id: id } }),
+      this.prisma.detalle_ventas.count({
+        where: { presentaciones: { producto_id: id } },
+      }),
+      this.prisma.pendientes_stock.count({ where: { producto_id: id } }),
+    ]);
+
+    const desactivar = async () => {
+      await this.prisma.productos.update({
+        where: { id },
+        data: { activo: false },
+      });
+      return { id, nombre: producto.nombre, desactivado: true };
+    };
+
+    if (lotes > 0 || ventas > 0 || pendientes > 0) return desactivar();
+
+    try {
+      await this.prisma.$transaction([
+        this.prisma.historial_precios_presentaciones.deleteMany({
+          where: { presentaciones: { producto_id: id } },
+        }),
+        this.prisma.presentaciones.deleteMany({ where: { producto_id: id } }),
+        this.prisma.productos.delete({ where: { id } }),
+      ]);
+      return { id, nombre: producto.nombre, desactivado: false };
+    } catch (error) {
+      // Apareció historial entre el conteo y el borrado (una venta en curso).
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        return desactivar();
+      }
+      throw error;
+    }
+  }
+
+  /** Vuelve a activar un producto desactivado. */
+  async reactivar(id: number) {
+    await this.findOne(id);
+    return this.prisma.productos.update({
       where: { id },
+      data: { activo: true },
+      include: { categorias: true, presentaciones: true },
     });
   }
 }

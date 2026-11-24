@@ -27,7 +27,9 @@ Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administr
 | Alta rápida de productos; ver inventario, productos y movimientos | sí | sí |
 | Crear, editar y borrar productos, presentaciones y categorías; **precios** | 403 (lectura de catálogo sí) | sí |
 | Registrar compras; ver historial de compras | 403 / sí | sí / sí |
-| Ajustes de inventario (mermas y conteos) | 403 | sí |
+| Mermas (`QUEBRADO`, `VENCIDO`, `ROBO`) con motivo obligatorio | sí | sí |
+| Conteos (`CONTEO`, `CONTEO_SOBRANTE`, incluido "encontré producto"); leer la lista de ajustes | 403 | sí |
+| Desactivar / reactivar productos (`DELETE /productos/:id`, `PATCH /productos/:id/reactivar`); ver desactivados | 403 | sí |
 | Deudas con proveedores y abonos | 403 | sí |
 | Reportes (estado de resultados, patrimonio, flujo, top, margen) | 403 | sí |
 | Cierre forzado de un turno | 403 | sí |

@@ -9,9 +9,15 @@ import {
 import { IsCantidad } from '../../common/validacion';
 
 export class CreateAjusteInventarioDto {
+  // Mermas: siempre sobre un lote. CONTEO_SOBRANTE: un lote o, en su lugar,
+  // `producto_id` (se suma al lote más reciente del producto, aunque esté en 0).
   @IsInt()
-  @IsNotEmpty()
-  lote_id: number;
+  @IsOptional()
+  lote_id?: number;
+
+  @IsInt()
+  @IsOptional()
+  producto_id?: number;
 
   // Decimal: se puede mermar fracción (media libra dañada) — Bloque 1 §5.3.
   @IsCantidad()

@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductosService } from './productos.service';
@@ -14,6 +15,7 @@ import { CreateProductoDto } from './dto/create-producto.dto';
 import { UpdateProductoDto } from './dto/update-producto.dto';
 import { CreateProductoRapidoDto } from './dto/create-producto-rapido.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Productos')
 @Roles('ADMIN', 'CAJERO')
@@ -52,9 +54,17 @@ export class ProductosController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los productos' })
-  findAll() {
-    return this.productosService.findAll();
+  @ApiOperation({
+    summary:
+      'Obtener los productos activos (?incluir_inactivos=true, solo ADMIN, suma los desactivados)',
+  })
+  findAll(
+    @Query('incluir_inactivos') incluirInactivos: string | undefined,
+    @CurrentUser('rol') rol: string,
+  ) {
+    return this.productosService.findAll(
+      incluirInactivos === 'true' && rol === 'ADMIN',
+    );
   }
 
   @Get(':id')
@@ -75,9 +85,19 @@ export class ProductosController {
     return this.productosService.update(id, updateProductoDto);
   }
 
+  @Patch(':id/reactivar')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Reactivar un producto desactivado' })
+  reactivar(@Param('id', ParseIntPipe) id: number) {
+    return this.productosService.reactivar(id);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Eliminar un producto por ID' })
+  @ApiOperation({
+    summary:
+      'Eliminar un producto; si tiene historial (ventas, lotes) se desactiva en su lugar',
+  })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productosService.remove(id);
   }
