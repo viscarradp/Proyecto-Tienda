@@ -21,7 +21,9 @@ import {
   Archive,
   ArchiveRestore,
   PackageSearch,
+  Undo2,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,6 +39,7 @@ import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
+import { GAVETA, BOVEDA } from "@/lib/glosario"
 import { aNumero, formatCantidad, normalizarBusqueda } from "@/lib/format"
 import { useShallow } from "zustand/react/shallow"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
@@ -45,6 +48,7 @@ import { CompraForm } from "@/components/inventario/CompraForm"
 import { AjusteInventarioDialog } from "@/components/inventario/AjusteInventarioDialog"
 import { EditProductDialog } from "@/components/inventario/EditProductDialog"
 import { PrecioRapido } from "@/components/inventario/PrecioRapido"
+import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { useInventoryStore, stockTotalDe, pendienteTotalDe, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
 
 interface Compra {
@@ -54,6 +58,9 @@ interface Compra {
   estado_pago: string
   origen_fondos: string
   fecha: string
+  anulado: boolean
+  motivo_anulacion: string | null
+  anulado_por?: { nombre: string } | null
   lotes_inventario: {
     id: number
     producto_id: number
@@ -63,6 +70,27 @@ interface Compra {
     fecha_ingreso: string
     fecha_vencimiento: string | null
   }[]
+}
+
+/** Una merma o conteo (ajuste de inventario); solo la dueña los lista. */
+interface Ajuste {
+  id: number
+  cantidad_ajustada: string
+  tipo_ajuste: string
+  costo_asumido: string
+  fecha: string | null
+  justificacion: string | null
+  anulado: boolean
+  motivo_anulacion: string | null
+  anulado_por?: { nombre: string } | null
+  lotes_inventario?: { productos?: { nombre: string } }
+}
+
+const ETIQUETA_MERMA: Record<string, string> = {
+  QUEBRADO: "Quebrado",
+  VENCIDO: "Vencido",
+  ROBO: "Robo",
+  CONTEO: "Conteo (faltante)",
 }
 
 export default function InventarioPage() {
@@ -80,6 +108,8 @@ export default function InventarioPage() {
     }))
   )
   const [compras, setCompras] = React.useState<Compra[]>([])
+  const [mermas, setMermas] = React.useState<Ajuste[]>([])
+  const [aAnular, setAAnular] = React.useState<AnularObjetivo | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [globalError, setGlobalError] = React.useState("")
   const [productDialogOpen, setProductDialogOpen] = React.useState(false)
@@ -129,6 +159,16 @@ export default function InventarioPage() {
       const resComp = await apiFetch<Compra[]>("/compras")
       setCompras(Array.isArray(resComp) ? resComp : [])
 
+      // Mermas (ajustes negativos) para el historial; solo la dueña las lista.
+      if (!esCajero) {
+        try {
+          const resAj = await apiFetch<Ajuste[]>("/ajustes-inventario")
+          setMermas(Array.isArray(resAj) ? resAj.filter(a => a.tipo_ajuste !== "CONTEO_SOBRANTE").slice(0, 30) : [])
+        } catch {
+          setMermas([])
+        }
+      }
+
       // Los desactivados no vienen en el catálogo normal (ni en el POS): solo
       // la dueña los pide, para poder reactivarlos.
       if (!esCajero) {
@@ -172,6 +212,31 @@ export default function InventarioPage() {
     prod.presentaciones.length > 1 ? `${prod.nombre} (${descripcion})` : prod.nombre
 
   // Merma / conteo: lotes con existencias, del más viejo al más nuevo.
+  const pedirAnularCompra = (c: Compra) => {
+    const monto = aNumero(c.monto_total).toLocaleString("en-US", { style: "currency", currency: "USD" })
+    const dinero =
+      c.estado_pago !== "PAGADO"
+        ? "la deuda con el proveedor quedará saldada"
+        : c.origen_fondos === "CAJA_POS"
+          ? `se devolverán ${monto} a la ${GAVETA.toLowerCase()} (solo si su turno sigue abierto)`
+          : c.origen_fondos === "CAJA_GENERAL"
+            ? `se devolverán ${monto} a la ${BOVEDA.toLowerCase()}`
+            : "no se mueve dinero (fue aporte en especie)"
+    setAAnular({
+      endpoint: `/compras/${c.id}/anular`,
+      titulo: `Anular compra #${c.id}`,
+      efecto: `Los lotes quedarán en 0 y ${dinero}. Solo se puede si nada de esta mercadería se ha vendido ni usado. Queda marcada como anulada, no se borra.`,
+    })
+  }
+
+  const pedirAnularMerma = (m: Ajuste) => {
+    setAAnular({
+      endpoint: `/ajustes-inventario/${m.id}/anular`,
+      titulo: `Anular merma #${m.id}`,
+      efecto: `Se devolverán ${formatCantidad(m.cantidad_ajustada)} unidades al lote y la merma dejará de contar como pérdida. Queda marcada como anulada, no se borra.`,
+    })
+  }
+
   const abrirAjuste = (prod: Producto, inicio: "quitar" | "agregar", loteId: number | null = null) => {
     const lotes = prod.lotes_inventario
       .filter(l => aNumero(l.cantidad_disponible) > 0)
@@ -705,16 +770,21 @@ export default function InventarioPage() {
                             </div>
                             <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground sm:block">#{compra.id}</div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{compra.proveedor}</p>
+                              <p className={cn("truncate text-sm font-medium", compra.anulado && "text-muted-foreground line-through")}>{compra.proveedor}</p>
+                              {compra.anulado && <AnuladoNota motivo={compra.motivo_anulacion} quien={compra.anulado_por?.nombre} />}
                               <p className="text-xs text-muted-foreground sm:hidden">{new Date(compra.fecha).toLocaleDateString('es-SV')}</p>
                             </div>
                             <div className="w-auto text-right sm:w-28">
                               <MoneyValue value={compra.monto_total} className="text-sm font-semibold" />
                             </div>
                             <div className="hidden w-24 text-right sm:block">
-                              <StatePill tone={compra.estado_pago === 'PAGADO' ? "success" : "warning"}>
-                                {compra.estado_pago === 'PAGADO' ? 'Pagado' : 'Crédito'}
-                              </StatePill>
+                              {compra.anulado ? (
+                                <StatePill tone="muted">Anulada</StatePill>
+                              ) : (
+                                <StatePill tone={compra.estado_pago === 'PAGADO' ? "success" : "warning"}>
+                                  {compra.estado_pago === 'PAGADO' ? 'Pagado' : 'Crédito'}
+                                </StatePill>
+                              )}
                             </div>
                             <div className="hidden w-28 text-right text-xs text-muted-foreground sm:block">
                               {new Date(compra.fecha).toLocaleDateString('es-SV')}
@@ -723,7 +793,15 @@ export default function InventarioPage() {
 
                           {isOpen && compra.lotes_inventario.length > 0 && (
                             <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
-                              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes generados</p>
+                              <div className="mb-2 flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes generados</p>
+                                {!esCajero && !compra.anulado && (
+                                  <Button variant="outline" size="sm" className="gap-1"
+                                    onClick={() => pedirAnularCompra(compra)}>
+                                    <Undo2 className="h-3.5 w-3.5" /> Anular compra
+                                  </Button>
+                                )}
+                              </div>
                               <div className="flex flex-col gap-1.5">
                                 {compra.lotes_inventario.map((lote, idx) => {
                                   const prod = productos.find(p => p.id === lote.producto_id)
@@ -754,6 +832,33 @@ export default function InventarioPage() {
                     })}
                   </div>
                 )}
+
+                {!esCajero && mermas.length > 0 && (
+                  <div className="mt-8">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Mermas y conteos recientes</p>
+                    <div className="overflow-hidden rounded-sm border border-border">
+                      {mermas.map(m => (
+                        <div key={m.id} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("truncate text-sm font-medium", m.anulado && "text-muted-foreground line-through")}>
+                              {m.lotes_inventario?.productos?.nombre ?? "Producto"} · {ETIQUETA_MERMA[m.tipo_ajuste] ?? m.tipo_ajuste} · {formatCantidad(m.cantidad_ajustada)} uds
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {m.fecha ? new Date(m.fecha).toLocaleDateString('es-SV') : ""}{m.justificacion ? ` · ${m.justificacion}` : ""}
+                            </p>
+                            {m.anulado && <AnuladoNota motivo={m.motivo_anulacion} quien={m.anulado_por?.nombre} />}
+                          </div>
+                          <MoneyValue value={m.costo_asumido} className={cn("text-sm font-semibold", m.anulado && "line-through")} />
+                          {!m.anulado && (
+                            <Button variant="outline" size="sm" className="gap-1" onClick={() => pedirAnularMerma(m)}>
+                              <Undo2 className="h-3.5 w-3.5" /> Anular
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </TabsContent>
             </>
           )}
@@ -761,6 +866,8 @@ export default function InventarioPage() {
       </div>
 
       {/* Dialogs */}
+      <AnularDialog objetivo={aAnular} onClose={() => setAAnular(null)} onHecho={() => loadData(true)} />
+
       <Dialog open={compraDialogOpen} onOpenChange={setCompraDialogOpen}>
         <DialogContent className="w-[95vw] max-w-[95vw] overflow-hidden p-0 lg:max-w-5xl" showCloseButton>
           <DialogHeader className="border-b border-border px-6 py-4">

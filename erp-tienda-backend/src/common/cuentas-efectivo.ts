@@ -28,6 +28,7 @@ export const BOVEDA_LEDGER_LOCK = 'boveda_ledger';
  * Saldo actual de la bóveda, DERIVADO del libro de movimientos:
  *   Σ(monto donde destino=BOVEDA) − Σ(monto donde origen=BOVEDA).
  * Reemplaza a la antigua tabla `caja_general` (eliminada en 1.C).
+ * Los movimientos anulados (L12, ADR 0012) no cuentan.
  */
 export async function saldoBovedaDerivado(
   client: Prisma.TransactionClient,
@@ -38,6 +39,7 @@ export async function saldoBovedaDerivado(
     SELECT COALESCE(SUM(monto) FILTER (WHERE cuenta_destino = 'BOVEDA'), 0)
          - COALESCE(SUM(monto) FILTER (WHERE cuenta_origen = 'BOVEDA'), 0) AS saldo
     FROM movimientos_financieros
+    WHERE anulado = false
   `;
   return new Prisma.Decimal(rows[0]?.saldo ?? 0);
 }

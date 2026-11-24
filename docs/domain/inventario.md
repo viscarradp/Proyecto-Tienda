@@ -116,6 +116,16 @@ crear los lotes se cubren los pendientes de stock de cada producto. La compra gu
 - Bloqueo del lote bajo `FOR UPDATE`; si hay turno abierto, se bloquea antes que el lote (orden global de locks). El
   sobrante por producto bloquea el lote más reciente y luego los pendientes (turno → lotes → pendientes).
 
-## Pendiente (no construido todavía)
+## Corregir errores (anular)
 
-Reversos de compras/gastos/ajustes (L12): ver [backlog](../roadmap/backlog-ciclo-2026-11.md).
+Anular marca el registro (quién, cuándo, por qué), nunca lo borra; solo ADMIN y con motivo obligatorio
+([ADR 0012](../decisions/0012-anular-sin-borrar.md), dinero: [`dinero-y-cuentas.md`](dinero-y-cuentas.md)).
+
+- **Compra** (`PATCH /compras/:id/anular`): solo si **ningún lote se usó**: cada lote con `cantidad_disponible ==
+  cantidad_inicial`, sin filas en `detalle_venta_lotes`, sin ajustes vigentes y sin haber cubierto deuda de stock; si no,
+  400 ("Ya se vendió o se usó mercadería de esta compra; no se puede anular. Registra una merma o un conteo"). Al anular
+  los lotes quedan en 0, su pago se revierte y, si fue al crédito sin abonos, la deuda queda en 0 (con abonos: 400
+  "Esta compra ya tiene pagos; primero corrige esos pagos").
+- **Merma** (`PATCH /ajustes-inventario/:id/anular`): devuelve la cantidad al lote y marca anulada su
+  `MERMA_INVENTARIO`, que deja de contar como pérdida. Los `CONTEO_SOBRANTE` no se anulan: se corrigen con otra merma o
+  conteo.

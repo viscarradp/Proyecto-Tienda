@@ -32,6 +32,7 @@ import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch, tipoDeError } from "@/lib/api"
 import { GAVETA, BOVEDA, etiquetaMovimiento } from "@/lib/glosario"
+import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -78,6 +79,9 @@ interface MovimientoTurno {
   cuenta_destino: string | null
   usuarios?: { nombre: string } | null
   categorias_gastos?: { nombre: string } | null
+  anulado?: boolean
+  motivo_anulacion?: string | null
+  anulado_por?: { nombre: string } | null
 }
 
 interface CajaTurno {
@@ -116,7 +120,7 @@ const movimientosDeDinero = (turno: CajaTurno) =>
   (turno.movimientos_financieros ?? []).filter(m => m.tipo_movimiento !== 'MERMA_INVENTARIO')
 
 /** Fila "Gasto: Pago de agua — $5.00 — karla": qué pasó, cuánto, cuándo y quién. */
-function MovimientoFila({ mov }: { mov: MovimientoTurno }) {
+function MovimientoFila({ mov, onAnular }: { mov: MovimientoTurno; onAnular?: (mov: MovimientoTurno) => void }) {
   // Respecto a la gaveta: sale, entra o ni la toca (se movió solo en la bóveda).
   const sale = mov.cuenta_origen === 'GAVETA'
   const entra = mov.cuenta_destino === 'GAVETA'
@@ -125,7 +129,7 @@ function MovimientoFila({ mov }: { mov: MovimientoTurno }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 last:border-0">
       <div className="min-w-0">
-        <p className="truncate text-sm">
+        <p className={cn("truncate text-sm", mov.anulado && "line-through opacity-60")}>
           <span className="font-medium">{etiquetaMovimiento(mov.tipo_movimiento)}</span>
           {mov.descripcion && <span className="text-muted-foreground">: {mov.descripcion}</span>}
         </p>
@@ -135,11 +139,17 @@ function MovimientoFila({ mov }: { mov: MovimientoTurno }) {
           {soloBoveda && <> · {mov.cuenta_origen === 'BOVEDA' ? `salió de la ${BOVEDA.toLowerCase()}` : `no tocó la ${GAVETA.toLowerCase()}`}</>}
           {nombre && <> · {nombre}</>}
         </p>
+        {mov.anulado && <AnuladoNota motivo={mov.motivo_anulacion} quien={mov.anulado_por?.nombre} />}
       </div>
+      {onAnular && (
+        <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => onAnular(mov)}>
+          <Undo2 className="h-3.5 w-3.5" /> Anular
+        </Button>
+      )}
       <span
         className={cn(
           "shrink-0 font-mono text-sm font-semibold tabular-nums",
-          sale ? "text-destructive" : entra ? "text-success" : "text-muted-foreground",
+          mov.anulado ? "text-muted-foreground line-through" : sale ? "text-destructive" : entra ? "text-success" : "text-muted-foreground",
         )}
       >
         {sale ? "−" : entra ? "+" : ""}{formatMoney(mov.monto)}
@@ -147,6 +157,13 @@ function MovimientoFila({ mov }: { mov: MovimientoTurno }) {
     </div>
   )
 }
+
+/** Movimientos de libre registro que la dueña puede anular (ADR 0012). */
+const TIPOS_ANULABLES = ['EGRESO_OPERATIVO', 'RETIRO_PERSONAL', 'INGRESO_CAPITAL']
+/** El aporte/retiro que genera la apertura del turno no se anula (no mueve el esperado). */
+const esDeApertura = (descripcion: string) =>
+  descripcion.startsWith('Aporte de la dueña al abrir la caja') ||
+  descripcion.startsWith('Retiro de la dueña (diferencia de apertura)')
 
 const TURNOS_POR_PAGINA = 7
 const TURNOS_MAX = 50
@@ -195,6 +212,22 @@ export default function MovimientosPage() {
   // Cierre forzado (ADMIN) — §7 Bloque 2
   const { user } = useCurrentUser()
   const esAdmin = user?.rol === "ADMIN"
+  const [aAnular, setAAnular] = React.useState<AnularObjetivo | null>(null)
+
+  const pedirAnular = (mov: MovimientoTurno) => {
+    const monto = formatMoney(mov.monto)
+    const entra = mov.cuenta_destino === 'GAVETA'
+    const efecto = entra
+      ? `Se quitarán ${monto} de la ${GAVETA.toLowerCase()} y «${mov.descripcion}» dejará de contar.`
+      : mov.tipo_movimiento === 'EGRESO_OPERATIVO'
+        ? `Se devolverán ${monto} a la ${GAVETA.toLowerCase()} y el gasto «${mov.descripcion}» dejará de contar.`
+        : `Se devolverán ${monto} a la ${GAVETA.toLowerCase()} y el retiro «${mov.descripcion}» dejará de contar.`
+    setAAnular({
+      endpoint: `/movimientos-financieros/${mov.id}/anular`,
+      titulo: `Anular ${etiquetaMovimiento(mov.tipo_movimiento).toLowerCase()}`,
+      efecto: `${efecto} Queda marcado como anulado, no se borra.`,
+    })
+  }
   const [forzarOpen, setForzarOpen] = React.useState(false)
   const [forzarTurnoId, setForzarTurnoId] = React.useState<number | null>(null)
   const [forzarEfectivo, setForzarEfectivo] = React.useState("")
@@ -715,7 +748,18 @@ export default function MovimientosPage() {
                             </p>
                           ) : (
                             <div className="mt-1">
-                              {movimientosDeDinero(turno).map(mov => <MovimientoFila key={mov.id} mov={mov} />)}
+                              {movimientosDeDinero(turno).map(mov => (
+                                <MovimientoFila
+                                  key={mov.id}
+                                  mov={mov}
+                                  onAnular={
+                                    esAdmin && isAbierta && !mov.anulado &&
+                                    TIPOS_ANULABLES.includes(mov.tipo_movimiento) && !esDeApertura(mov.descripcion)
+                                      ? pedirAnular
+                                      : undefined
+                                  }
+                                />
+                              ))}
                             </div>
                           )}
                         </div>
@@ -754,6 +798,8 @@ export default function MovimientosPage() {
           )}
         </div>
       </div>
+
+      <AnularDialog objetivo={aAnular} onClose={() => setAAnular(null)} onHecho={loadData} />
 
       {/* ════════ DIALOG: ANULAR VENTA ════════ */}
       <Dialog open={isAnulando} onOpenChange={setIsAnulando}>

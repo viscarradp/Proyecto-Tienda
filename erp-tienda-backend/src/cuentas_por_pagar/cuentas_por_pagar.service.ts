@@ -40,7 +40,12 @@ export class CuentasPorPagarService {
       where: soloPendientes ? { saldo_pendiente: { gt: 0 } } : undefined,
       include: {
         compras_inventario: {
-          select: { id: true, fecha: true, monto_total: true },
+          select: {
+            id: true,
+            fecha: true,
+            monto_total: true,
+            anulado: true,
+          },
         },
         abonos: { orderBy: { fecha: 'desc' } },
       },
@@ -55,6 +60,7 @@ export class CuentasPorPagarService {
       fecha_compra: c.compras_inventario?.fecha ?? c.fecha_creacion,
       monto_compra: c.compras_inventario?.monto_total ?? c.monto_deuda,
       monto_deuda: c.monto_deuda,
+      compra_anulada: c.compras_inventario?.anulado ?? false,
       saldo_pendiente: c.saldo_pendiente,
       abonos: c.abonos.map((a) => ({
         id: a.id,
