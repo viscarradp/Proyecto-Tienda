@@ -14,6 +14,11 @@ import {
   BOVEDA_LEDGER_LOCK,
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
+import {
+  avisoBovedaNegativa,
+  avisoGavetaNegativa,
+  soloAvisos,
+} from '../common/avisos-fondos';
 
 @Injectable()
 export class ComprasService {
@@ -58,9 +63,11 @@ export class ComprasService {
       // lotes y pendientes, una anulación (turno → … → pendientes) podría
       // deadlockear con esta compra.
 
-      // Paso 1: Fondos. Se bloquea el origen del dinero y se valida ANTES de
-      // crear nada (la política de bloquear vs. avisar no cambia aquí).
+      // Paso 1: Fondos. Se bloquea el origen del dinero ANTES de crear nada.
+      // Política registrar-y-avisar (ADR 0011): si el saldo del sistema no
+      // alcanza, la compra se registra igual y se devuelve un aviso.
       let cajaActivaId: number | null = null;
+      let avisoFondos: string | null = null;
       if (compraData.origen_fondos === 'CAJA_POS') {
         // Bloquea la fila del turno abierto: evita que dos compras concurrentes
         // lean el mismo efectivo_esperado y ambas pasen la validación de fondos
@@ -78,17 +85,12 @@ export class ComprasService {
           );
         }
 
-        // ── BUG 9: Validar fondos suficientes antes de decrementar ──
         const efectivoDisponible = new Prisma.Decimal(
           cajaActiva.efectivo_esperado ?? 0,
         );
-        if (efectivoDisponible.lessThan(montoCalculado)) {
-          throw new BadRequestException(
-            `Fondos insuficientes en caja POS. ` +
-              `Disponible: $${efectivoDisponible.toFixed(2)}, ` +
-              `Requerido: $${montoCalculado.toFixed(2)}`,
-          );
-        }
+        avisoFondos = avisoGavetaNegativa(
+          efectivoDisponible.sub(montoCalculado),
+        );
         cajaActivaId = cajaActiva.id;
       } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
         // El saldo de bóveda es un agregado derivado del libro (no una fila
@@ -97,13 +99,7 @@ export class ComprasService {
         await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
 
         const saldoDisponible = await saldoBovedaDerivado(tx);
-        if (saldoDisponible.lessThan(montoCalculado)) {
-          throw new BadRequestException(
-            `Fondos insuficientes en bóveda. ` +
-              `Disponible: $${saldoDisponible.toFixed(2)}, ` +
-              `Requerido: $${montoCalculado.toFixed(2)}`,
-          );
-        }
+        avisoFondos = avisoBovedaNegativa(saldoDisponible.sub(montoCalculado));
       }
 
       // Paso 2: Crear el registro de compra usando el monto calculado
@@ -191,7 +187,7 @@ export class ComprasService {
         await resolverPendientesConLote(tx, lote.producto_id, lote.id);
       }
 
-      return compra;
+      return { ...compra, avisos: soloAvisos([avisoFondos]) };
     }, TX_OPTIONS);
   }
 

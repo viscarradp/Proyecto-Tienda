@@ -94,14 +94,17 @@ describe('P&L — faltantes y merma sin turno (e2e, 2.A)', () => {
   });
 
   it('un faltante de caja baja la utilidad y se reporta como faltante', async () => {
-    const faltantesAntes = Number((await reporte()).faltantes);
-
     // Abrir con 100 y cerrar declarando 98 (faltante de 2) con justificación.
     const abrir = await request(app.getHttpServer())
       .post('/cajas-turnos/abrir')
       .set('Authorization', `Bearer ${token}`)
       .send({ fondo_inicial: 100 });
     const turnoId = (abrir.body as WithId).id;
+
+    // L6: si el fondo difiere del remanente, la apertura ya registra su propia
+    // diferencia (sin explicar, cuenta como faltante/sobrante); la base se mide
+    // DESPUÉS de abrir para aislar el faltante del cierre.
+    const faltantesAntes = Number((await reporte()).faltantes);
 
     const cerrar = await request(app.getHttpServer())
       .patch(`/cajas-turnos/${turnoId}/cerrar`)

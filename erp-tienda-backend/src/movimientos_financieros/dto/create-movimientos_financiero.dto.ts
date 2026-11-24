@@ -16,6 +16,8 @@ export class CreateMovimientosFinancieroDto {
     'RETIRO_BOVEDA',
     'EGRESO_OPERATIVO',
     'RETIRO_PERSONAL',
+    // Traer efectivo de la bóveda a la gaveta (turno abierto). Suma al esperado.
+    'TRASLADO_DESDE_BOVEDA',
   ])
   tipo_movimiento: string;
 

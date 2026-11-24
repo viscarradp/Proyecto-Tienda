@@ -12,25 +12,36 @@ import {
   CuentaEfectivo,
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
+import {
+  avisoBovedaNegativa,
+  avisoGavetaNegativa,
+  soloAvisos,
+} from '../common/avisos-fondos';
+import { categoriaOtrosId } from '../common/categoria-otros';
 
 @Injectable()
 export class MovimientosFinancierosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Registra un movimiento de efectivo. Política "registrar y avisar"
+   * (ADR 0011): una salida nunca se rechaza por falta de saldo según el
+   * sistema; se registra y la respuesta trae `avisos: string[]`.
+   */
   async create(
     createMovimientosFinancieroDto: CreateMovimientosFinancieroDto,
     userId?: number,
   ) {
-    const { tipo_movimiento, categoria_gasto_id, monto, descripcion } =
+    const { tipo_movimiento, monto, descripcion } =
       createMovimientosFinancieroDto;
+    let categoria_gasto_id = createMovimientosFinancieroDto.categoria_gasto_id;
     const origenFondos =
       createMovimientosFinancieroDto.origen_fondos ?? 'GAVETA';
 
-    // Los egresos operativos son gastos del P&L → exigen categoría.
+    // La categoría es un dato de análisis, no un control (NEG-13): un egreso
+    // operativo sin categoría cae en "Otros" (se crea sola si no existe).
     if (tipo_movimiento === 'EGRESO_OPERATIVO' && !categoria_gasto_id) {
-      throw new BadRequestException(
-        'Los egresos operativos requieren una categoría de gasto',
-      );
+      categoria_gasto_id = await categoriaOtrosId(this.prisma);
     }
     if (categoria_gasto_id) {
       const categoria = await this.prisma.categorias_gastos.findUnique({
@@ -49,16 +60,12 @@ export class MovimientosFinancierosService {
 
     if (desdeBoveda) {
       return await this.prisma.$transaction(async (tx) => {
-        // El saldo de bóveda es un agregado: advisory lock antes de validarlo.
+        // El saldo de bóveda es un agregado: advisory lock para que dos salidas
+        // concurrentes lean un saldo coherente (el lock sigue siendo necesario
+        // aunque ya no se rechace por saldo).
         await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
         const saldo = await saldoBovedaDerivado(tx);
-        if (saldo.lessThan(monto)) {
-          throw new BadRequestException(
-            `Fondos insuficientes en bóveda. ` +
-              `Disponible: $${saldo.toFixed(2)}, Requerido: $${monto}`,
-          );
-        }
-        return tx.movimientos_financieros.create({
+        const movimiento = await tx.movimientos_financieros.create({
           data: {
             tipo_movimiento,
             monto,
@@ -70,6 +77,10 @@ export class MovimientosFinancierosService {
             cuenta_destino: 'GASTO',
           },
         });
+        return {
+          ...movimiento,
+          avisos: soloAvisos([avisoBovedaNegativa(saldo.sub(monto))]),
+        };
       });
     }
 
@@ -91,6 +102,11 @@ export class MovimientosFinancierosService {
     switch (tipo_movimiento) {
       case 'INGRESO_CAPITAL':
         cuenta_origen = 'DUEÑOS';
+        cuenta_destino = 'GAVETA';
+        entraAGaveta = true;
+        break;
+      case 'TRASLADO_DESDE_BOVEDA': // traer efectivo de la bóveda a la gaveta
+        cuenta_origen = 'BOVEDA';
         cuenta_destino = 'GAVETA';
         entraAGaveta = true;
         break;
@@ -117,7 +133,7 @@ export class MovimientosFinancierosService {
 
     return await this.prisma.$transaction(async (tx) => {
       // Bloquea la fila del turno ANTES de insertar el movimiento (que la
-      // referencia por FK) y aprovecha la lectura para validar fondos en egresos
+      // referencia por FK) y lee el esperado coherente para el aviso
       // (ver docs/decisions/0001-concurrencia-for-update.md).
       const [cajaLocked] = await tx.$queryRaw<CajaTurnoRow[]>`
         SELECT id, estado, efectivo_esperado
@@ -134,6 +150,12 @@ export class MovimientosFinancierosService {
         );
       }
 
+      // Traer de la bóveda: además del turno se toma el lock de bóveda. Orden
+      // fijo turno → bóveda; ningún camino toma bóveda → turno (ADR 0001).
+      if (cuenta_origen === 'BOVEDA') {
+        await acquireAdvisoryLock(tx, BOVEDA_LEDGER_LOCK);
+      }
+
       const movimiento = await tx.movimientos_financieros.create({
         data: {
           tipo_movimiento,
@@ -147,26 +169,35 @@ export class MovimientosFinancierosService {
         },
       });
 
+      const esperadoAntes = new Prisma.Decimal(
+        cajaLocked.efectivo_esperado ?? 0,
+      );
+      let avisoGaveta: string | null = null;
+      let avisoBoveda: string | null = null;
+
       if (entraAGaveta) {
         await tx.cajas_turnos.update({
           where: { id: cajaTurno.id },
           data: { efectivo_esperado: { increment: monto } },
         });
-      } else if (saleDeGaveta) {
-        const esperado = new Prisma.Decimal(cajaLocked?.efectivo_esperado ?? 0);
-        if (esperado.lessThan(monto)) {
-          throw new BadRequestException(
-            `Fondos insuficientes en caja. ` +
-              `Disponible: $${esperado.toFixed(2)}, Requerido: $${monto}`,
-          );
+        if (cuenta_origen === 'BOVEDA') {
+          // El movimiento ya está en el libro: el saldo es el de DESPUÉS.
+          avisoBoveda = avisoBovedaNegativa(await saldoBovedaDerivado(tx));
         }
+      } else if (saleDeGaveta) {
+        // Registrar y avisar (ADR 0011): la salida se registra aunque el
+        // esperado no alcance; la cajera pagó con el dinero que tenía en mano.
         await tx.cajas_turnos.update({
           where: { id: cajaTurno.id },
           data: { efectivo_esperado: { decrement: monto } },
         });
+        avisoGaveta = avisoGavetaNegativa(esperadoAntes.sub(monto));
       }
 
-      return movimiento;
+      return {
+        ...movimiento,
+        avisos: soloAvisos([avisoGaveta, avisoBoveda]),
+      };
     });
   }
 

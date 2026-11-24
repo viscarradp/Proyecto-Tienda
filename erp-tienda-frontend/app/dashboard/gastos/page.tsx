@@ -12,6 +12,8 @@ import {
   Receipt,
 } from "lucide-react"
 
+import { toast } from "sonner"
+
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +29,9 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { StatCard } from "@/components/stat-card"
 import { apiFetch } from "@/lib/api"
+
+/** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
+const SIN_CATEGORIA = "sin-categoria"
 
 interface CategoriaGasto {
   id: number
@@ -122,42 +127,30 @@ export default function GastosPage() {
       return
     }
 
-    // Validar fondos suficientes
-    if (origenFondos === "CAJA_POS" && cajaActiva) {
-      const esperado = parseFloat(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial)
-      if (montoParsed > esperado) {
-        setError(`Fondos insuficientes en Caja POS. Disponible: $${esperado.toFixed(2)}`)
-        return
-      }
-    } else if (origenFondos === "CAJA_GENERAL" && cajaGeneral) {
-      const disponible = parseFloat(cajaGeneral.saldo_actual)
-      if (montoParsed > disponible) {
-        setError(`Fondos insuficientes en Bóveda. Disponible: $${disponible.toFixed(2)}`)
-        return
-      }
-    }
-
-    if (!categoriaId) {
-      setError("Selecciona una categoría de gasto.")
-      return
-    }
+    // Sin validar fondos aquí: si el sistema cree que no alcanza, el gasto se
+    // registra igual y el backend devuelve un aviso (registrar y avisar).
+    // La categoría es opcional: sin elegir, el backend usa "Otros".
+    const categoria = categoriaId && categoriaId !== SIN_CATEGORIA ? parseInt(categoriaId) : undefined
 
     setSubmitLoading(true)
     try {
       // Un gasto es un EGRESO_OPERATIVO; el origen (gaveta o bóveda) lo decide
       // origen_fondos. Desde 1.C la bóveda ya no se toca por la puerta trasera.
-      await apiFetch("/movimientos-financieros", {
+      const resp = await apiFetch<{ avisos?: string[] }>("/movimientos-financieros", {
         method: "POST",
         body: JSON.stringify({
           tipo_movimiento: 'EGRESO_OPERATIVO',
           monto: montoParsed,
           descripcion: descripcion,
-          categoria_gasto_id: parseInt(categoriaId),
+          categoria_gasto_id: categoria,
           origen_fondos: origenFondos === "CAJA_POS" ? "GAVETA" : "BOVEDA",
         })
       })
 
       setSuccess("¡Gasto registrado exitosamente!")
+      for (const aviso of resp.avisos ?? []) {
+        toast.warning(aviso, { duration: 12000 })
+      }
       setDescripcion("")
       setMonto("")
 
@@ -242,7 +235,13 @@ export default function GastosPage() {
               {cajaGeneral ? (
                 <>
                   <MoneyValue value={cajaGeneral.saldo_actual} className="text-3xl font-bold tracking-tight" />
-                  <p className="mt-1 text-xs font-medium text-success">Saldo disponible</p>
+                  {parseFloat(cajaGeneral.saldo_actual) < 0 ? (
+                    <p className="mt-1 text-xs font-medium text-warning">
+                      Negativo según el sistema: falta registrar efectivo. Haz el arqueo en Estadísticas.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs font-medium text-success">Saldo disponible</p>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -303,17 +302,18 @@ export default function GastosPage() {
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium text-muted-foreground">Categoría</Label>
+                    <Label className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
                     <Button type="button" variant="link" onClick={() => setShowNewCatDialog(true)}
                       className="h-auto p-0 text-xs text-primary">
                       + Nueva
                     </Button>
                   </div>
-                  <Select value={categoriaId} onValueChange={setCategoriaId} required>
+                  <Select value={categoriaId} onValueChange={setCategoriaId}>
                     <SelectTrigger className="h-12 w-full">
-                      <SelectValue placeholder="Selecciona una categoría…" />
+                      <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={SIN_CATEGORIA}>Sin categoría (Otros)</SelectItem>
                       {categorias.map(cat => (
                         <SelectItem key={cat.id} value={cat.id.toString()}>{cat.nombre}</SelectItem>
                       ))}

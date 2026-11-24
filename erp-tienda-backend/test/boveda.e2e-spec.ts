@@ -13,9 +13,6 @@ interface SaldoBody {
 interface WithId {
   id: number;
 }
-interface ErrorBody {
-  message: string;
-}
 
 /**
  * Cubre el modelo origen→destino del Bloque 1.C: el saldo de bóveda se DERIVA
@@ -76,19 +73,26 @@ describe('Bóveda — saldo derivado y gastos desde bóveda (e2e, 1.C)', () => {
     expect(gasto.status).toBe(201);
     expect(await saldoBoveda()).toBeCloseTo(inicial + 70);
 
-    // 4. Un gasto que excede el saldo de bóveda se rechaza.
+    // 4. Un gasto que excede el saldo de bóveda YA NO se rechaza (L6, ADR 0011,
+    //    antes esperaba 400): se registra, la bóveda queda en negativo y la
+    //    respuesta trae un aviso. Luego se repone para no afectar otros tests.
     const exceso = await request(app.getHttpServer())
       .post('/movimientos-financieros')
       .set('Authorization', `Bearer ${token}`)
       .send({
         tipo_movimiento: 'EGRESO_OPERATIVO',
-        monto: 999999,
+        monto: inicial + 70 + 25,
         descripcion: 'Exceso',
         categoria_gasto_id: catId,
         origen_fondos: 'BOVEDA',
       });
-    expect(exceso.status).toBe(400);
-    expect((exceso.body as ErrorBody).message).toMatch(/bóveda/i);
+    expect(exceso.status).toBe(201);
+    expect((exceso.body as { avisos: string[] }).avisos[0]).toMatch(/bóveda/i);
+    expect(await saldoBoveda()).toBeCloseTo(-25);
+    await request(app.getHttpServer())
+      .post('/caja-general/inyeccion')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ monto: inicial + 95 });
   });
 
   it('retiro personal: baja la gaveta, no toca la bóveda y se reporta como retiro (no gasto)', async () => {
