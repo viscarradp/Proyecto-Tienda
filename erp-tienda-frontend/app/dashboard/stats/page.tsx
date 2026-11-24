@@ -41,13 +41,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
-import { formatMoney } from "@/lib/format"
+import { formatMoney, formatCantidad, montoACentavos, centavosAMonto } from "@/lib/format"
 import { apiFetch } from "@/lib/api"
 
 /* ─────────────── Types ─────────────── */
 interface EstadoResultados {
   periodo: { desde: string; hasta: string }
   ingreso_bruto_ventas: string
+  devoluciones: string
   costo_de_ventas_fifo: string
   utilidad_bruta: string
   margen_bruto_porcentaje: string
@@ -137,7 +138,7 @@ function getPeriodoDates(periodo: Periodo): { desde: string; hasta: string } {
       return { desde: hasta, hasta }
     case "semana": {
       const weekAgo = new Date(now)
-      weekAgo.setDate(weekAgo.getDate() - 7)
+      weekAgo.setDate(weekAgo.getDate() - 6) // últimos 7 días contando hoy
       const wy = weekAgo.getFullYear()
       const wm = String(weekAgo.getMonth() + 1).padStart(2, "0")
       const wd = String(weekAgo.getDate()).padStart(2, "0")
@@ -187,7 +188,8 @@ export default function StatsPage() {
       ])
 
       setEstado(estadoRes)
-      setProductos(productosRes)
+      // Un producto devuelto por completo queda en cero: no aporta nada a la lista
+      setProductos(productosRes.filter(p => p.unidades_vendidas !== 0 || parseFloat(p.ingreso) !== 0))
       setSaldoBoveda(saldoRes)
       setPatrimonio(patrimonioRes)
       setFlujo(flujoRes)
@@ -208,6 +210,11 @@ export default function StatsPage() {
     mes: "Este mes",
     todo: "Historial",
   }
+
+  // Ingreso neto = ventas − devoluciones (centavos enteros, sin ruido decimal)
+  const ingresoNeto = estado
+    ? centavosAMonto(montoACentavos(estado.ingreso_bruto_ventas) - montoACentavos(estado.devoluciones))
+    : 0
 
   const chartData = productos.slice(0, 8).map(p => ({
     nombre: p.nombre.length > 16 ? p.nombre.slice(0, 15) + "…" : p.nombre,
@@ -324,8 +331,8 @@ export default function StatsPage() {
                 icon={parseFloat(estado.utilidad_neta) >= 0 ? TrendingUp : TrendingDown}
                 tone={parseFloat(estado.utilidad_neta) >= 0 ? "success" : "destructive"}
               />
-              <KPICard label="Ingreso bruto" value={formatMoney(estado.ingreso_bruto_ventas)} icon={DollarSign} tone="primary" />
-              <KPICard label="Costo FIFO" value={formatMoney(estado.costo_de_ventas_fifo)} icon={Package} tone="warning" />
+              <KPICard label="Ingreso neto" value={formatMoney(ingresoNeto)} icon={DollarSign} tone="primary" />
+              <KPICard label="Costo de ventas" value={formatMoney(estado.costo_de_ventas_fifo)} icon={Package} tone="warning" />
               <KPICard
                 label="Margen bruto"
                 value={pct(estado.margen_bruto_porcentaje)}
@@ -526,6 +533,9 @@ export default function StatsPage() {
 
                 <div className="flex flex-col gap-3">
                   <PLRow label="Ingreso bruto por ventas" value={estado.ingreso_bruto_ventas} type="income" />
+                  <PLRow label="Devoluciones a clientes" value={estado.devoluciones} type="expense" />
+                  <PLDivider />
+                  <PLRow label="Ingreso neto" value={String(ingresoNeto)} type="subtotal" />
                   <PLRow label="Costo de ventas (FIFO)" value={estado.costo_de_ventas_fifo} type="expense" />
                   <PLDivider />
                   <PLRow label="Utilidad bruta" value={estado.utilidad_bruta} type="subtotal" />
@@ -534,23 +544,16 @@ export default function StatsPage() {
                   <PLRow label="Gastos operativos" value={estado.gastos_operativos} type="expense" />
                   <PLRow label="Pérdidas por mermas" value={estado.mermas_inventario} type="expense" />
                   <PLRow label="Faltantes de caja" value={estado.faltantes} type="expense" />
-                  {parseFloat(estado.sobrantes) > 0 && (
-                    <PLRow label="Sobrantes de caja" value={estado.sobrantes} type="income" />
-                  )}
+                  <PLRow label="Sobrantes de caja" value={estado.sobrantes} type="plus" />
                   <PLDivider />
                   <PLRow label="Utilidad neta" value={estado.utilidad_neta} type="total" />
-                  {parseFloat(estado.retiros_duenos) > 0 && (
-                    <>
-                      <PLDivider />
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Retiros de dueños
-                          <span className="ml-1 text-xs opacity-70">(no baja la utilidad)</span>
-                        </span>
-                        <MoneyValue value={estado.retiros_duenos} tone="warning" className="text-sm font-semibold" />
-                      </div>
-                    </>
-                  )}
+                  <div className="mt-1 rounded-sm border border-dashed border-border bg-muted/30 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Retiros de la dueña</span>
+                      <MoneyValue value={estado.retiros_duenos} tone="warning" className="text-sm font-semibold" />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">No es gasto del negocio: no baja la utilidad.</p>
+                  </div>
                 </div>
 
                 <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
@@ -599,7 +602,7 @@ export default function StatsPage() {
                                 <span className="mr-2 text-xs text-muted-foreground">{i + 1}.</span>
                                 {p.nombre}
                               </td>
-                              <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{p.unidades_vendidas}</td>
+                              <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{formatCantidad(p.unidades_vendidas)}</td>
                               <td className="py-3 text-right"><MoneyValue value={p.ingreso} className="text-sm" /></td>
                               <td className="py-3 text-right"><MoneyValue value={p.costo_fifo} tone="warning" className="text-sm" /></td>
                               <td className="py-3 text-right"><MoneyValue value={p.margen} tone={tone} className="text-sm font-semibold" /></td>
@@ -720,11 +723,12 @@ function PLRow({
 }: {
   label: string
   value: string
-  type: "income" | "expense" | "subtotal" | "total" | "pct"
+  type: "income" | "expense" | "plus" | "subtotal" | "total" | "pct"
 }) {
   const numVal = parseFloat(value)
   const valueClass = {
     income: "text-foreground",
+    plus: "text-foreground",
     expense: "text-muted-foreground",
     subtotal: "font-semibold text-foreground",
     total: numVal >= 0 ? "text-lg font-bold text-success" : "text-lg font-bold text-destructive",
@@ -733,13 +737,14 @@ function PLRow({
 
   const labelClass = {
     income: "text-muted-foreground",
+    plus: "text-muted-foreground",
     expense: "text-muted-foreground",
     subtotal: "font-medium text-foreground",
     total: "font-semibold text-foreground",
     pct: "text-xs text-muted-foreground",
   }[type]
 
-  const prefix = type === "expense" ? "- " : ""
+  const prefix = type === "expense" ? "− " : type === "plus" ? "+ " : ""
   const displayValue = type === "pct" ? value : formatMoney(value)
 
   return (

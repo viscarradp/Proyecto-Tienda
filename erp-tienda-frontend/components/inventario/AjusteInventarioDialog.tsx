@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
+import { formatCantidad } from "@/lib/format"
 import { LoteStock } from "@/src/store/inventoryStore"
 
 interface AjusteInventarioDialogProps {
@@ -140,7 +141,7 @@ export function AjusteInventarioDialog({
             <div className="mt-2 flex gap-4 font-mono text-xs text-muted-foreground">
               <span>Lote ID: #{lote.id}</span>
               <span>·</span>
-              <span>Stock actual lote: {disponible} uds</span>
+              <span>Stock actual lote: {formatCantidad(disponible)} uds</span>
             </div>
           </div>
 

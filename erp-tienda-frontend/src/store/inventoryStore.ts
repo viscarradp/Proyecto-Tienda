@@ -10,17 +10,17 @@ export interface Presentacion {
   id: number
   descripcion: string
   codigo_barras: string | null
-  factor_conversion: number
+  factor_conversion: number | string
   precio_venta: string
 }
 
 export interface LoteStock {
   id: number
   producto_id: number
-  // OJO: en runtime la API los entrega como string (Decimal de Prisma); el tipo
-  // se deja en number para no romper otras pantallas. Operar con aNumero().
-  cantidad_inicial: number
-  cantidad_disponible: number
+  // En runtime la API los entrega como string (Decimal de Prisma). Operar
+  // siempre con aNumero() / formatCantidad() de lib/format.
+  cantidad_inicial: number | string
+  cantidad_disponible: number | string
   costo_unitario_adquisicion: string
   fecha_vencimiento: string | null
 }

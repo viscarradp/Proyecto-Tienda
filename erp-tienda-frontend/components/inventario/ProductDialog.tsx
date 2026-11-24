@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
+import { errorFactor, errorPrecio, avisoPrecio, MensajeCampo } from "./validacionPresentacion"
 
 // ─── Types ───
 interface Categoria {
@@ -59,8 +60,10 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
   }])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [intentado, setIntentado] = React.useState(false)
 
   const resetForm = () => {
+    setIntentado(false)
     setNombre("")
     setCategoriaId("")
     setNewCatName("")
@@ -121,6 +124,15 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIntentado(true)
+    // Nada se corrige en silencio: si algo está mal, se avisa en el campo.
+    const hayErrores = presentaciones.some(
+      (p) => p.descripcion.trim() && (errorFactor(p.factor_conversion) || errorPrecio(p.precio_venta)),
+    )
+    if (hayErrores) {
+      setError("Revisa los campos marcados en rojo")
+      return
+    }
     setLoading(true)
     setError("")
 
@@ -152,8 +164,8 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
             producto_id: producto.id,
             codigo_barras: pres.codigo_barras || undefined,
             descripcion: pres.descripcion,
-            factor_conversion: parseInt(pres.factor_conversion) || 1,
-            precio_venta: parseFloat(pres.precio_venta) || 0,
+            factor_conversion: Number(pres.factor_conversion),
+            precio_venta: Number(pres.precio_venta),
           }),
         })
       }
@@ -266,15 +278,20 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                   </div>
                   <div>
                     <Label className="mb-1 block text-xs font-medium text-muted-foreground">Factor conversión</Label>
-                    <Input type="number" min={1} value={pres.factor_conversion}
+                    <Input type="number" min={0.001} step="any" value={pres.factor_conversion}
                       onChange={(e) => updatePresentacion(pres.key, "factor_conversion", e.target.value)}
                       className="h-9 font-mono text-sm" />
+                    {intentado && <MensajeCampo error={errorFactor(pres.factor_conversion)} />}
                   </div>
                   <div className="col-span-2">
                     <Label className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
                     <Input type="number" min={0} step="0.01" value={pres.precio_venta}
                       onChange={(e) => updatePresentacion(pres.key, "precio_venta", e.target.value)}
                       className="h-9 font-mono text-sm" />
+                    <MensajeCampo
+                      error={intentado && pres.descripcion.trim() ? errorPrecio(pres.precio_venta) : null}
+                      aviso={avisoPrecio(pres.precio_venta)}
+                    />
                   </div>
                 </div>
               </div>
@@ -317,8 +334,10 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
   const [precioVenta, setPrecioVenta] = React.useState<string>("")
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [intentado, setIntentado] = React.useState(false)
 
   const resetForm = () => {
+    setIntentado(false)
     setDescripcion("")
     setCodigoBarras("")
     setFactorConversion("1")
@@ -336,6 +355,8 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIntentado(true)
+    if (errorFactor(factorConversion) || errorPrecio(precioVenta)) return
     setLoading(true)
     setError("")
     try {
@@ -345,8 +366,8 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
           producto_id: productoId,
           codigo_barras: codigoBarras || undefined,
           descripcion,
-          factor_conversion: parseInt(factorConversion) || 1,
-          precio_venta: parseFloat(precioVenta) || 0,
+          factor_conversion: Number(factorConversion),
+          precio_venta: Number(precioVenta),
         }),
       })
       handleClose()
@@ -388,9 +409,10 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
             </div>
             <div className="flex flex-col gap-2">
               <Label className="text-xs font-medium text-muted-foreground">Factor conversión</Label>
-              <Input type="number" min={1} value={factorConversion}
+              <Input type="number" min={0.001} step="any" value={factorConversion}
                 onChange={(e) => setFactorConversion(e.target.value)}
                 className="h-9 font-mono text-sm" />
+              {intentado && <MensajeCampo error={errorFactor(factorConversion)} />}
             </div>
           </div>
 
@@ -399,6 +421,7 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
             <Input type="number" min={0} step="0.01" value={precioVenta}
               onChange={(e) => setPrecioVenta(e.target.value)}
               className="h-11 font-mono" />
+            <MensajeCampo error={intentado ? errorPrecio(precioVenta) : null} aviso={avisoPrecio(precioVenta)} />
           </div>
 
           <div className="flex justify-end gap-3 border-t border-border pt-4">

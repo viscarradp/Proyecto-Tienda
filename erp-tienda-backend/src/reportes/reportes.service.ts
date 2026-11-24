@@ -346,6 +346,7 @@ export class ReportesService {
 
   /**
    * Productos más vendidos en el período, con cálculo de margen FIFO.
+   * Los números son NETOS de devoluciones del período.
    */
   async getProductosTop(desde: Date, hasta: Date, limit: number = 10) {
     // Obtener todos los detalles de venta del período (ventas completadas)
@@ -402,6 +403,43 @@ export class ReportesService {
           unidades_vendidas: unidadesBase,
           ingreso: new Prisma.Decimal(det.subtotal),
           costo_fifo: costoDetalles,
+        });
+      }
+    }
+
+    // Devoluciones del período (mismo criterio de fechas que el estado de
+    // resultados: por la fecha de la devolución). Restan unidades, ingreso y,
+    // solo si el destino es REINGRESO, el costo que volvió al inventario.
+    const devueltos = await this.prisma.detalle_devoluciones.findMany({
+      where: { devoluciones: { fecha: { gte: desde, lte: hasta } } },
+      include: {
+        detalle_ventas: {
+          include: { presentaciones: { include: { productos: true } } },
+        },
+      },
+    });
+
+    for (const dev of devueltos) {
+      const pres = dev.detalle_ventas.presentaciones;
+      const unidadesBase = new Prisma.Decimal(dev.cantidad)
+        .mul(pres.factor_conversion)
+        .toNumber();
+      const costoRevertido =
+        dev.destino === 'REINGRESO'
+          ? new Prisma.Decimal(dev.costo_revertido)
+          : new Prisma.Decimal(0);
+
+      const existing = productosMap.get(pres.producto_id);
+      if (existing) {
+        existing.unidades_vendidas -= unidadesBase;
+        existing.ingreso = existing.ingreso.sub(dev.subtotal_reembolsado);
+        existing.costo_fifo = existing.costo_fifo.sub(costoRevertido);
+      } else {
+        productosMap.set(pres.producto_id, {
+          nombre: pres.productos.nombre,
+          unidades_vendidas: -unidadesBase,
+          ingreso: new Prisma.Decimal(dev.subtotal_reembolsado).neg(),
+          costo_fifo: costoRevertido.neg(),
         });
       }
     }

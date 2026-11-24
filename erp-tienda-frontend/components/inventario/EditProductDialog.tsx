@@ -2,7 +2,7 @@ import * as React from "react"
 import { Loader2, History, ArrowRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { formatMoney } from "@/lib/format"
+import { formatMoney, aNumero, montoACentavos } from "@/lib/format"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
 import { useInventoryStore, Producto, Presentacion } from "@/src/store/inventoryStore"
+import { errorFactor, errorPrecio, avisoPrecio, MensajeCampo } from "./validacionPresentacion"
 
 interface EditProductDialogProps {
   open: boolean
@@ -54,6 +55,14 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [intentado, setIntentado] = React.useState(false)
+  // Lo último que se sabe guardado en el servidor. Se actualiza a medida que
+  // cada cambio se guarda, para no reenviar lo ya guardado si algo falla.
+  const [base, setBase] = React.useState<{ nombre: string; categoriaId: string; pres: Presentacion[] }>({
+    nombre: "",
+    categoriaId: "",
+    pres: [],
+  })
 
   // Historial de precios (Bloque 3.C): por presentación, bajo demanda.
   const [histFor, setHistFor] = React.useState<number | null>(null)
@@ -64,8 +73,15 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
     if (open && producto) {
       setNombre(producto.nombre)
       setCategoriaId(producto.categoria_id.toString())
-      setPresentaciones([...producto.presentaciones])
+      // El campo del factor se edita como texto: "1.000" → "1".
+      const pres = producto.presentaciones.map((p) => ({
+        ...p,
+        factor_conversion: String(aNumero(p.factor_conversion)),
+      }))
+      setPresentaciones(pres)
+      setBase({ nombre: producto.nombre, categoriaId: producto.categoria_id.toString(), pres })
       setError("")
+      setIntentado(false)
     }
   }, [open, producto])
 
@@ -77,51 +93,83 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
     setPresentaciones(newPres)
   }
 
+  const cambioPresentacion = (pres: Presentacion) => {
+    const original = base.pres.find((p) => p.id === pres.id)
+    if (!original) return false
+    return (
+      original.descripcion !== pres.descripcion ||
+      (original.codigo_barras ?? "") !== (pres.codigo_barras ?? "") ||
+      aNumero(original.factor_conversion) !== aNumero(pres.factor_conversion) ||
+      montoACentavos(original.precio_venta) !== montoACentavos(pres.precio_venta)
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIntentado(true)
     if (!nombre.trim() || !categoriaId) {
       setError("El nombre y la categoría son obligatorios")
+      return
+    }
+    // Nada se corrige en silencio: solo se valida lo que se cambió.
+    const cambiadas = presentaciones.filter(cambioPresentacion)
+    if (cambiadas.some((p) => !p.descripcion.trim() || errorFactor(String(p.factor_conversion)) || errorPrecio(p.precio_venta))) {
+      setError("Revisa los campos marcados en rojo")
       return
     }
 
     setLoading(true)
     setError("")
 
-    try {
-      // 1. Update Product
-      await apiFetch(`/productos/${producto.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          nombre: nombre.trim(),
-          categoria_id: parseInt(categoriaId, 10),
-        })
-      })
+    const guardado: string[] = []
+    const nuevaBase = { ...base, pres: [...base.pres] }
+    let paso = ""
 
-      // 2. Update all Presentaciones that changed
-      for (const pres of presentaciones) {
-        const original = producto.presentaciones.find(p => p.id === pres.id)
-        if (original && (
-          original.descripcion !== pres.descripcion ||
-          original.codigo_barras !== pres.codigo_barras ||
-          original.factor_conversion !== pres.factor_conversion ||
-          original.precio_venta !== pres.precio_venta
-        )) {
-          await apiFetch(`/presentaciones/${pres.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              descripcion: pres.descripcion.trim(),
-              codigo_barras: pres.codigo_barras?.trim() || undefined,
-              factor_conversion: pres.factor_conversion,
-              precio_venta: parseFloat(pres.precio_venta)
-            })
+    try {
+      // 1. Producto (solo si cambió nombre o categoría)
+      if (nombre.trim() !== base.nombre || categoriaId !== base.categoriaId) {
+        paso = "el nombre y la categoría"
+        await apiFetch(`/productos/${producto.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            nombre: nombre.trim(),
+            categoria_id: parseInt(categoriaId, 10),
           })
-        }
+        })
+        nuevaBase.nombre = nombre.trim()
+        nuevaBase.categoriaId = categoriaId
+        guardado.push("el nombre y la categoría")
+      }
+
+      // 2. Presentaciones que cambiaron, una por una
+      for (const pres of cambiadas) {
+        paso = `la presentación «${pres.descripcion.trim() || "sin nombre"}»`
+        await apiFetch(`/presentaciones/${pres.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            descripcion: pres.descripcion.trim(),
+            codigo_barras: pres.codigo_barras?.trim() || undefined,
+            factor_conversion: aNumero(pres.factor_conversion),
+            precio_venta: aNumero(pres.precio_venta),
+          })
+        })
+        nuevaBase.pres = nuevaBase.pres.map((p) => (p.id === pres.id ? { ...pres } : p))
+        guardado.push(paso)
       }
 
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al actualizar el producto")
+      const motivo = (err instanceof Error ? err.message : "Error desconocido").replace(/[.\s]+$/, "")
+      if (guardado.length > 0) {
+        setBase(nuevaBase)
+        setError(
+          `Se guardó: ${guardado.join(", ")}. No se pudo guardar ${paso}: ${motivo}. Corrígelo y vuelve a guardar; lo ya guardado no se repite.`,
+        )
+        onSuccess() // recarga el inventario para que la pantalla refleje lo guardado
+      } else {
+        setError(`No se pudo guardar ${paso || "el producto"}: ${motivo}.`)
+      }
     } finally {
       setLoading(false)
     }
@@ -221,11 +269,13 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                       <Label className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
                       <Input
                         type="number"
-                        min="1"
+                        min="0.001"
+                        step="any"
                         value={pres.factor_conversion}
-                        onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", parseInt(e.target.value) || 1)}
+                        onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", e.target.value)}
                         className="h-8 font-mono text-xs"
                       />
+                      {intentado && cambioPresentacion(pres) && <MensajeCampo error={errorFactor(String(pres.factor_conversion))} />}
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
@@ -249,6 +299,10 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                         value={pres.precio_venta}
                         onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
                         className="h-8 font-mono text-xs font-semibold text-success"
+                      />
+                      <MensajeCampo
+                        error={intentado && cambioPresentacion(pres) ? errorPrecio(pres.precio_venta) : null}
+                        aviso={avisoPrecio(pres.precio_venta)}
                       />
                     </div>
                   </div>
