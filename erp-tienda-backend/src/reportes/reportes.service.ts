@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { efectivoEnGaveta } from '../common/efectivo-gaveta';
 import { saldoBovedaDerivado } from '../common/cuentas-efectivo';
 
 @Injectable()
@@ -226,32 +227,7 @@ export class ReportesService {
    *    'CERRADA' como 'CERRADA_FORZADA' (2.B) para no derivar de un cierre viejo.
    */
   private async getEfectivoGaveta(): Promise<Prisma.Decimal> {
-    const turnoAbierto = await this.prisma.cajas_turnos.findFirst({
-      where: { estado: 'ABIERTA' },
-    });
-    if (turnoAbierto) {
-      return new Prisma.Decimal(turnoAbierto.efectivo_esperado ?? 0);
-    }
-
-    const ultimoCierre = await this.prisma.cajas_turnos.findFirst({
-      where: { estado: { in: ['CERRADA', 'CERRADA_FORZADA'] } },
-      orderBy: { fecha_cierre: 'desc' },
-      include: {
-        movimientos_financieros: {
-          where: { tipo_movimiento: 'TRASLADO_A_BOVEDA' },
-        },
-      },
-    });
-    if (!ultimoCierre) {
-      return new Prisma.Decimal(0);
-    }
-    const trasladado = ultimoCierre.movimientos_financieros.reduce(
-      (acc, m) => acc.add(m.monto),
-      new Prisma.Decimal(0),
-    );
-    return new Prisma.Decimal(ultimoCierre.efectivo_declarado ?? 0).sub(
-      trasladado,
-    );
+    return efectivoEnGaveta(this.prisma);
   }
 
   /**

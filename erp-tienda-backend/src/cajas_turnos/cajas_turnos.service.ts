@@ -14,6 +14,7 @@ import {
   BOVEDA_LEDGER_LOCK,
   saldoBovedaDerivado,
 } from '../common/cuentas-efectivo';
+import { remanenteDeUltimoCierre } from '../common/efectivo-gaveta';
 import { TOLERANCIA_DESCUADRE } from '../common/tolerancia';
 import { TX_OPTIONS } from '../common/transaccion';
 import { avisoBovedaNegativa } from '../common/avisos-fondos';
@@ -133,7 +134,7 @@ export class CajasTurnosService {
       // 2. Remanente: lo que quedó en la gaveta al último cierre, leído ya bajo
       //    el lock (no hay turno abierto, así que nadie lo cambia mientras tanto).
       //    El primer turno de la historia no tiene cierre previo: remanente 0.
-      const remanente = await this.remanenteDeUltimoCierre(tx);
+      const remanente = (await remanenteDeUltimoCierre(tx)).fondo_siguiente;
       const diferencia = fondoInicial.sub(remanente);
       const hayDiferencia = !diferencia.isZero();
       const avisos: string[] = [];
@@ -219,43 +220,7 @@ export class CajasTurnosService {
   }
 
   async getUltimoCierre() {
-    return this.leerUltimoCierre(this.prisma);
-  }
-
-  /** Lo que quedó en la gaveta al último cierre (0 si nunca hubo un cierre). */
-  private async remanenteDeUltimoCierre(
-    client: Prisma.TransactionClient,
-  ): Promise<Prisma.Decimal> {
-    return (await this.leerUltimoCierre(client)).fondo_siguiente;
-  }
-
-  private async leerUltimoCierre(client: Prisma.TransactionClient) {
-    const ultimoCierre = await client.cajas_turnos.findFirst({
-      // Incluye CERRADA_FORZADA (Bloque 3.C): si el último turno se cerró forzado
-      // (2.B), el fondo del siguiente debe derivarse de ESE cierre, no de uno viejo.
-      where: { estado: { in: ['CERRADA', 'CERRADA_FORZADA'] } },
-      orderBy: { fecha_cierre: 'desc' },
-      include: {
-        movimientos_financieros: {
-          where: { tipo_movimiento: 'TRASLADO_A_BOVEDA' },
-        },
-      },
-    });
-
-    if (!ultimoCierre) {
-      return { fondo_siguiente: new Prisma.Decimal(0), fecha_cierre: null };
-    }
-
-    // Lo que quedó en la gaveta = efectivo contado − lo trasladado a la bóveda.
-    const trasladado = ultimoCierre.movimientos_financieros.reduce(
-      (acc, m) => acc.add(m.monto),
-      new Prisma.Decimal(0),
-    );
-    const fondo_siguiente = new Prisma.Decimal(
-      ultimoCierre.efectivo_declarado ?? 0,
-    ).sub(trasladado);
-
-    return { fondo_siguiente, fecha_cierre: ultimoCierre.fecha_cierre };
+    return remanenteDeUltimoCierre(this.prisma);
   }
 
   async cerrar(
