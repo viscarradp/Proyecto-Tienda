@@ -350,6 +350,31 @@ describe('Mostrador flexible (e2e, lote L5a)', () => {
       expect(Number(prod.stock_total)).toBe(0);
     });
 
+    it('un pendiente sin costo (estimado 0) toma el costo real del lote que lo cubre; con costo > 0 sigue congelado', async () => {
+      // Sin costo: nunca hubo lotes.
+      const sin = await crearProducto('Costo-corregido', 4, 'Libra');
+      await vender(sin.presentacionId, { cantidad: 5 });
+      // Con costo: el estimado (2) queda congelado aunque la compra salga a 9.
+      const con = await crearProducto('Costo-congelado', 4, 'Libra');
+      await comprar(con.productoId, 1, 2);
+      await vender(con.presentacionId, { cantidad: 3 }); // 1 de lote + 2 pendientes a 2
+
+      const antes = Number((await resultados()).costo_de_ventas_fifo);
+      // Costo previo: solo lo del producto "con" (1×2 + 2×2 = 6) ya está incluido.
+
+      await comprar(sin.productoId, 5, 1.5); // cubre los 5 → costo real 1.5
+      await comprar(con.productoId, 5, 9);
+
+      const [ps] = await pendientesDe(sin.productoId);
+      expect(Number(ps.costo_unitario_estimado)).toBe(1.5);
+      const [pc] = await pendientesDe(con.productoId);
+      expect(Number(pc.costo_unitario_estimado)).toBe(2);
+
+      // El P&L ganó exactamente el costo real de la venta sin costo: 5 × 1.5.
+      const despues = Number((await resultados()).costo_de_ventas_fifo);
+      expect(despues - antes).toBeCloseTo(7.5, 2);
+    });
+
     it('anular con pendiente abierto lo cancela', async () => {
       const { productoId, presentacionId } = await crearProducto(
         'Anular-abierto',
@@ -575,6 +600,35 @@ describe('Mostrador flexible (e2e, lote L5a)', () => {
         where: { nombre: 'Por revisar' },
       });
       expect(categorias).toBe(1);
+    });
+
+    it('la presentación del alta rápida puede llevar su propio nombre (descripcion)', async () => {
+      const res = await http()
+        .post('/productos/rapido')
+        .set(auth(tokenCajero))
+        .send({
+          nombre: 'Queso duro rápido',
+          precio_venta: 4,
+          descripcion: 'Libra',
+        });
+      expect(res.status).toBe(201);
+      const prod = res.body as ProductoBody;
+      expect(prod.presentaciones[0].descripcion).toBe('Libra');
+
+      const venta = await vender(
+        prod.presentaciones[0].id,
+        { cantidad: 1 },
+        tokenCajero,
+      );
+      expect((venta.body as VentaBody).avisos[0]).toContain(
+        '"Queso duro rápido (Libra)"',
+      );
+
+      const largo = await http()
+        .post('/productos/rapido')
+        .set(auth(tokenCajero))
+        .send({ nombre: 'X', precio_venta: 1, descripcion: 'a'.repeat(101) });
+      expect(largo.status).toBe(400);
     });
 
     it('código de barras repetido → 409 con el nombre del producto; precio 0 → 400', async () => {

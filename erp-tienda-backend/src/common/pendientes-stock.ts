@@ -14,6 +14,11 @@ import { Prisma } from '@prisma/client';
  * `detalle_venta_lotes` ni cambia el costo ya congelado de la venta (el
  * estimado). La diferencia entre el costo estimado y el costo real del lote se
  * absorbe en el inventario.
+ *
+ * Única excepción: un estimado de 0 significa "no sabíamos el costo", no un
+ * costo real. Al cubrir ese pendiente (aunque sea en parte) su
+ * `costo_unitario_estimado` pasa al costo del lote que lo cubre, para que el
+ * estado de resultados muestre el costo verdadero. Los estimados > 0 no se tocan.
  */
 
 const DECIMALES_CANTIDAD = 3;
@@ -87,9 +92,12 @@ export async function resolverPendientesConLote(
   loteId: number,
 ): Promise<Prisma.Decimal> {
   const [lote] = await tx.$queryRaw<
-    { cantidad_disponible: Prisma.Decimal | string }[]
+    {
+      cantidad_disponible: Prisma.Decimal | string;
+      costo_unitario_adquisicion: Prisma.Decimal | string;
+    }[]
   >`
-    SELECT cantidad_disponible
+    SELECT cantidad_disponible, costo_unitario_adquisicion
     FROM lotes_inventario
     WHERE id = ${loteId}
   `;
@@ -97,9 +105,13 @@ export async function resolverPendientesConLote(
   if (restante.lte(0)) return new Prisma.Decimal(0);
 
   const abiertos = await tx.$queryRaw<
-    { id: number; cantidad_pendiente: Prisma.Decimal | string }[]
+    {
+      id: number;
+      cantidad_pendiente: Prisma.Decimal | string;
+      costo_unitario_estimado: Prisma.Decimal | string;
+    }[]
   >`
-    SELECT id, cantidad_pendiente
+    SELECT id, cantidad_pendiente, costo_unitario_estimado
     FROM pendientes_stock
     WHERE producto_id = ${productoId}
       AND resuelto_en IS NULL
@@ -120,6 +132,10 @@ export async function resolverPendientesConLote(
         cantidad_pendiente: queda,
         lote_resuelto_id: loteId,
         resuelto_en: queda.lte(0) ? new Date() : null,
+        // Estimado 0 = "no sabíamos": se corrige al costo real del lote.
+        ...(new Prisma.Decimal(p.costo_unitario_estimado).isZero()
+          ? { costo_unitario_estimado: lote.costo_unitario_adquisicion }
+          : {}),
       },
     });
     restante = restante.sub(cubierto);

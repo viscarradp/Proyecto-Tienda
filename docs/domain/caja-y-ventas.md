@@ -82,7 +82,11 @@ afectada, en la unidad de la presentación).
 - **Aproximación aceptada:** cubrir un pendiente NO crea filas en
   `detalle_venta_lotes` ni cambia el costo ya congelado. La diferencia entre el
   costo estimado y el costo real del lote que lo cubrió no se corrige: se
-  absorbe en el valor del inventario. Si un pendiente lo cubrieron varios lotes,
+  absorbe en el valor del inventario. **Excepción:** un estimado de $0 significa
+  «no sabíamos el costo», no un costo real; al cubrir ese pendiente (aunque sea
+  en parte) su `costo_unitario_estimado` pasa al costo del lote que lo cubre, y
+  el estado de resultados muestra el costo verdadero. Los estimados mayores a 0
+  siguen congelados. Si un pendiente lo cubrieron varios lotes,
   lo cubierto vuelve entero al último si la venta se anula.
 - **Anular** una venta con pendientes: la parte no cubierta se cancela
   (`cantidad_pendiente = 0`) y la cubierta vuelve a su lote.
@@ -101,7 +105,8 @@ afectada, en la unidad de la presentación).
 Si un producto no está en el catálogo, la cajera lo da de alta con nombre +
 precio (`POST /productos/rapido`, roles ADMIN y CAJERO) y puede venderlo en el
 acto. Queda en la categoría «Por revisar» con una presentación «Unidad»
-(factor 1) y `por_revisar = true`; la dueña lo completa y lo marca revisado
+(factor 1; el nombre de la presentación es opcional con `descripcion`, p. ej.
+«Libra») y `por_revisar = true`; la dueña lo completa y lo marca revisado
 (`PATCH /productos/:id` con `por_revisar: false`, solo ADMIN). Un código de
 barras repetido da 409 con el nombre del producto que ya lo tiene.
 
