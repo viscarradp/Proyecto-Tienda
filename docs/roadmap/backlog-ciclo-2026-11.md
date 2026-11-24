@@ -142,6 +142,7 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
 | L3b | ⏸ decisión de infraestructura | — |
-| L4 | ⏳ | — |
-| L5a, L5b, L6 | ⏳ decisiones tomadas el 2026-11-24 | — |
+| L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
+| L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
+| L5b, L6 | ⏳ Ola 4. Nota para L5b: el POS hoy vende sin stock sin mostrar los `avisos` que ya devuelve la API | — |
 | L7, L8 | ⏸ decisiones D-06, D-05 y ARQ-03 | — |
