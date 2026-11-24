@@ -86,6 +86,11 @@ type BusquedaVenta =
   | { estado: "no_existe"; numero: string }
   | { estado: "error"; mensaje: string }
 
+// Un turno cerrado a la fuerza también cuenta como cerrado y entra al descuadre
+const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERRADA_FORZADA'
+const etiquetaEstado = (estado: string) =>
+  estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
+
 const TURNOS_POR_PAGINA = 7
 const TURNOS_MAX = 50
 
@@ -246,10 +251,6 @@ export default function MovimientosPage() {
   )
   const ingresosPeriodo = centavosAMonto(vendidoCentavos - devueltoCentavos)
 
-  // Un turno cerrado a la fuerza también cuenta como cerrado y entra al descuadre
-  const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERRADA_FORZADA'
-  const etiquetaEstado = (estado: string) =>
-    estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
   const turnosCerradosPeriodo = filteredTurnos.filter(t => estaCerrado(t.estado))
   const descuadreTotal = turnosCerradosPeriodo.reduce((acc, t) => acc + parseFloat(t.diferencia || "0"), 0)
   const cajaActiva = turnos.find(t => t.estado === 'ABIERTA')
