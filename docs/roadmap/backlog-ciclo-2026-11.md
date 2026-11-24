@@ -41,7 +41,7 @@ descuadre, D-09 vencimientos, D-10 stock bajo, D-11 conteo físico, D-12 recarga
 D-14 margen mínimo, D-16 desactivar usuarios (recomendado: sí), VIVO-09 conteo "a ciegas" al
 cerrar (hoy se muestra el esperado antes de contar).
 
-**✅ Backup decidido 2026-11-24:** Supabase plan gratuito + respaldo nocturno propio ( cifrado a la nube con un job programado) y ensayo de restauración — L3b.
+**✅ Backup decidido 2026-11-24:** Supabase plan gratuito + respaldo nocturno propio (`pg_dump` cifrado a la nube con un job programado) y ensayo de restauración — L3b.
 
 **Infraestructura (dueño del proyecto):** proveedor del API (GCP u otro) y plan de Supabase
 con backups — desbloquea L3b.
@@ -142,7 +142,7 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L1b | ✅ 2026-11-24 — verificado en navegador (precio editable, Estadísticas cuadra, Movimientos) | `feature/l1b-inventario-estadisticas` |
 | L2 | ✅ 2026-11-24 — 62 e2e en verde. **Cambio de schema:** `ventas.clave_idempotencia` (aplicar con `db push` en Supabase) | `feature/l2-integridad-dinero-stock` |
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
-| L3b | ⏳ Ola 5 (decidido: respaldo propio con ) | — |
+| L3b | ⏳ Ola 5 (decidido: respaldo propio con `pg_dump`) | — |
 | L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
 | L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
 | L5b | ✅ 2026-11-24 — verificado en navegador (alta rápida, cantidad decimal, venta por monto, avisos de stock al cobrar, "7 Six-pack + 2") | `feature/l5b-mostrador-pantalla` |
