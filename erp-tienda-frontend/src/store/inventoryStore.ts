@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { apiFetch } from '@/lib/api'
+import { aNumero } from '@/lib/format'
 
 export interface Categoria {
   id: number
@@ -32,6 +33,23 @@ export interface Producto {
   categorias: Categoria
   presentaciones: Presentacion[]
   lotes_inventario: LoteStock[]
+  // Decimal como string, en unidades base. Pueden faltar en respuestas viejas:
+  // usar stockTotalDe() / pendienteTotalDe().
+  stock_total?: number | string
+  pendiente_total?: number | string
+  /** Creado con alta rápida en el POS; la dueña debe completar precio/categoría. */
+  por_revisar?: boolean
+}
+
+/** Stock total en unidades base; si el servidor no lo manda, suma los lotes. */
+export function stockTotalDe(prod: Producto): number {
+  if (prod.stock_total !== undefined && prod.stock_total !== null) return aNumero(prod.stock_total)
+  return prod.lotes_inventario.reduce((s, l) => s + aNumero(l.cantidad_disponible), 0)
+}
+
+/** Unidades vendidas sin stock registrado, aún por cuadrar. */
+export function pendienteTotalDe(prod: Producto): number {
+  return aNumero(prod.pendiente_total)
 }
 
 interface InventoryState {
