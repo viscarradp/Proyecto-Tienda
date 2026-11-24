@@ -126,7 +126,7 @@ describe('Ventas — motor FIFO (e2e)', () => {
 
     expect(res.status).toBe(400);
     expect((res.body as ErrorResponseBody).message).toMatch(
-      /Stock insuficiente/i,
+      /No hay suficiente/i,
     );
     // La venta rechazada no debe haber tocado el stock.
     expect(await stockDisponible()).toBe(STOCK_INICIAL - 3);

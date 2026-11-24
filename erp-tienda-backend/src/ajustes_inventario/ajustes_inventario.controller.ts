@@ -1,4 +1,11 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { AjustesInventarioService } from './ajustes_inventario.service';
 import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,7 +35,7 @@ export class AjustesInventarioController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ajustesInventarioService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.ajustesInventarioService.findOne(id);
   }
 }

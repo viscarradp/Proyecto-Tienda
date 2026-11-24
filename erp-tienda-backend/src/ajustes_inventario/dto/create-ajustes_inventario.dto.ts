@@ -1,12 +1,12 @@
 import {
   IsInt,
-  IsNumber,
   IsString,
-  Min,
   IsIn,
   IsOptional,
   IsNotEmpty,
+  MaxLength,
 } from 'class-validator';
+import { IsCantidad } from '../../common/validacion';
 
 export class CreateAjusteInventarioDto {
   @IsInt()
@@ -14,9 +14,8 @@ export class CreateAjusteInventarioDto {
   lote_id: number;
 
   // Decimal: se puede mermar fracción (media libra dañada) — Bloque 1 §5.3.
-  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsCantidad()
   @IsNotEmpty()
-  @Min(0.001)
   cantidad_ajustada: number;
 
   // CONTEO_SOBRANTE es un ajuste POSITIVO (encontrar stock / conteo hacia
@@ -28,5 +27,8 @@ export class CreateAjusteInventarioDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(500, {
+    message: 'La justificación no puede pasar de 500 caracteres',
+  })
   justificacion?: string;
 }

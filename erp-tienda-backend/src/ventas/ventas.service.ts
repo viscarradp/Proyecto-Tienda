@@ -9,6 +9,27 @@ import { CreateDevolucionDto } from './dto/create-devolucion.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
+import { TX_OPTIONS } from '../common/transaccion';
+import { redondearDinero } from '../common/redondeo';
+
+/** Máximo de días hacia atrás que acepta la fecha de contingencia. */
+const DIAS_MAX_CONTINGENCIA = 30;
+
+/** Qué se devuelve al crear (o al repetir una creación idempotente) una venta. */
+const VENTA_INCLUDE = {
+  detalle_ventas: {
+    include: {
+      presentaciones: true,
+    },
+  },
+} satisfies Prisma.ventasInclude;
+
+/** Cantidad legible: hasta 3 decimales, redondeo hacia abajo, sin ceros sobrantes. */
+function cantidadLegible(valor: Prisma.Decimal.Value): string {
+  return new Prisma.Decimal(valor)
+    .toDecimalPlaces(3, Prisma.Decimal.ROUND_DOWN)
+    .toString();
+}
 
 /** Fila de ventas leída con FOR UPDATE. */
 interface VentaRow {
@@ -20,7 +41,67 @@ interface VentaRow {
 export class VentasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createVentaDto: CreateVentaDto, userId?: number) {
+  /**
+   * Crea una venta. Con `claveIdempotencia` (header Idempotency-Key) un
+   * reintento —p. ej. tras un corte de red— devuelve la venta ya creada en
+   * lugar de duplicarla (ver docs/domain/caja-y-ventas.md).
+   */
+  async create(
+    createVentaDto: CreateVentaDto,
+    userId?: number,
+    claveIdempotencia?: string,
+  ) {
+    // Atajo: si el reintento llega cuando la venta original ya está guardada
+    // (incluso con el turno ya cerrado), se responde con ella. La garantía real
+    // contra carreras está dentro de la transacción, bajo el lock del turno.
+    if (claveIdempotencia) {
+      const previa = await this.buscarPorClave(this.prisma, claveIdempotencia);
+      if (previa) return previa;
+    }
+
+    try {
+      return await this.crearVenta(createVentaDto, userId, claveIdempotencia);
+    } catch (error) {
+      // Defensa: si aun así salta la restricción única de la clave (dos
+      // peticiones que se cruzaron), la venta ya existe: se devuelve esa.
+      if (claveIdempotencia && this.esViolacionDeClave(error)) {
+        const existente = await this.buscarPorClave(
+          this.prisma,
+          claveIdempotencia,
+        );
+        if (existente) return existente;
+      }
+      throw error;
+    }
+  }
+
+  private buscarPorClave(
+    db: Prisma.TransactionClient | PrismaService,
+    clave: string,
+  ) {
+    return db.ventas.findUnique({
+      where: { clave_idempotencia: clave },
+      include: VENTA_INCLUDE,
+    });
+  }
+
+  private esViolacionDeClave(error: unknown): boolean {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002'
+    ) {
+      return false;
+    }
+    // Con el adaptador de pg el target puede venir como lista de columnas o
+    // dentro del error del driver; se busca el nombre de la columna en meta.
+    return JSON.stringify(error.meta ?? {}).includes('clave_idempotencia');
+  }
+
+  private async crearVenta(
+    createVentaDto: CreateVentaDto,
+    userId?: number,
+    claveIdempotencia?: string,
+  ) {
     // 1. Caja Activa: Busca la caja con estado: 'ABIERTA'
     const cajaTurno = await this.prisma.cajas_turnos.findFirst({
       where: { estado: 'ABIERTA' },
@@ -40,6 +121,13 @@ export class VentasService {
       if (fechaVenta.getTime() > Date.now()) {
         throw new BadRequestException(
           'La fecha de la venta no puede estar en el futuro',
+        );
+      }
+      const limiteAtras =
+        Date.now() - DIAS_MAX_CONTINGENCIA * 24 * 60 * 60 * 1000;
+      if (fechaVenta.getTime() < limiteAtras) {
+        throw new BadRequestException(
+          `La fecha de la venta no puede ser de hace más de ${DIAS_MAX_CONTINGENCIA} días`,
         );
       }
     }
@@ -66,6 +154,14 @@ export class VentasService {
         );
       }
 
+      // Idempotencia: con el turno ya bloqueado, cualquier otra venta con la
+      // misma clave o ya está confirmada (la vemos) o espera detrás de este
+      // lock; así dos peticiones simultáneas con la misma clave no duplican.
+      if (claveIdempotencia) {
+        const existente = await this.buscarPorClave(tx, claveIdempotencia);
+        if (existente) return existente;
+      }
+
       // 2. Inicializar Venta: Crea el registro en tx.ventas con total: 0
       const venta = await tx.ventas.create({
         data: {
@@ -73,6 +169,7 @@ export class VentasService {
           total: 0,
           usuario_id: userId,
           fecha: fechaVenta,
+          clave_idempotencia: claveIdempotencia ?? null,
         },
       });
 
@@ -83,6 +180,7 @@ export class VentasService {
         // Busca la Presentacion (incluyendo su producto_id, factor_conversion y precio_venta)
         const presentacion = await tx.presentaciones.findUnique({
           where: { id: item.presentacion_id },
+          include: { productos: { select: { nombre: true } } },
         });
 
         if (!presentacion) {
@@ -95,12 +193,16 @@ export class VentasService {
         const cantidadItem = new Prisma.Decimal(item.cantidad);
 
         // unidades_base_requeridas = cantidad * factor_conversion
-        let unidades_base_requeridas = cantidadItem.mul(
+        const unidades_base_totales = cantidadItem.mul(
           presentacion.factor_conversion,
         );
+        let unidades_base_requeridas = unidades_base_totales;
 
-        // subtotal_venta = cantidad * precio_venta
-        const subtotal_venta = cantidadItem.mul(presentacion.precio_venta);
+        // subtotal_venta = cantidad * precio_venta, redondeado a 2 decimales
+        // (half-up) ANTES de sumar: el total es la suma de lo guardado.
+        const subtotal_venta = redondearDinero(
+          cantidadItem.mul(presentacion.precio_venta),
+        );
         total_venta_acumulado = total_venta_acumulado.add(subtotal_venta);
 
         // Crea el tx.detalle_ventas vinculándolo a la venta y la presentación
@@ -132,8 +234,13 @@ export class VentasService {
         while (unidades_base_requeridas.greaterThan(0)) {
           // Si no hay más lotes y aún faltan unidades → stock insuficiente
           if (loteIndex >= lotes.length) {
+            // Lo que queda, en unidades de ESTA presentación (no unidades base).
+            const quedan = unidades_base_totales
+              .sub(unidades_base_requeridas)
+              .div(presentacion.factor_conversion);
             throw new BadRequestException(
-              `Stock insuficiente para el producto ID ${presentacion.producto_id}. Faltan ${unidades_base_requeridas.toFixed(3)} unidades base.`,
+              `No hay suficiente "${presentacion.productos.nombre} (${presentacion.descripcion})": ` +
+                `quedan ${cantidadLegible(quedan)} y estás vendiendo ${cantidadLegible(cantidadItem)}.`,
             );
           }
 
@@ -181,13 +288,7 @@ export class VentasService {
         data: {
           total: total_venta_acumulado,
         },
-        include: {
-          detalle_ventas: {
-            include: {
-              presentaciones: true,
-            },
-          },
-        },
+        include: VENTA_INCLUDE,
       });
 
       // 6. Actualizar Cajas Turnos: Suma el efectivo de la venta al esperado de la caja
@@ -199,7 +300,7 @@ export class VentasService {
       });
 
       return ventaFinal;
-    });
+    }, TX_OPTIONS);
   }
 
   findAll() {
@@ -339,7 +440,7 @@ export class VentasService {
       });
 
       return ventaAnulada;
-    });
+    }, TX_OPTIONS);
   }
 
   /**
@@ -359,6 +460,19 @@ export class VentasService {
     });
     if (!existe) {
       throw new NotFoundException(`Venta con ID ${ventaId} no encontrada`);
+    }
+
+    // La misma línea dos veces en un request haría que cada ítem se validara
+    // contra lo ya devuelto en la BD y la suma superara lo vendido.
+    const lineasVistas = new Set<number>();
+    for (const item of dto.detalles) {
+      if (lineasVistas.has(item.detalle_venta_id)) {
+        throw new BadRequestException(
+          'Hay una línea de la venta repetida en la devolución. ' +
+            'Junta las cantidades en una sola línea e inténtalo de nuevo.',
+        );
+      }
+      lineasVistas.add(item.detalle_venta_id);
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -437,20 +551,54 @@ export class VentasService {
 
         // Proporción devuelta de la línea (sobre lo vendido).
         const proporcion = cantidadDevolver.div(cantidadVendida);
-        // Monto a reembolsar = subtotal congelado × proporción.
-        const subtotalReembolsado = new Prisma.Decimal(detalle.subtotal)
-          .mul(proporcion)
-          .toDecimalPlaces(2);
+        // ¿Con esta devolución la línea queda devuelta por completo?
+        const lineaCompleta = cantidadDevolver.equals(disponibleDevolver);
+
+        // Monto a reembolsar: subtotal congelado × proporción, a 2 decimales.
+        // Si la línea queda completa se reembolsa EXACTAMENTE el saldo
+        // (subtotal − ya reembolsado) para no dejar centavos sueltos.
+        const subtotalLinea = new Prisma.Decimal(detalle.subtotal);
+        const yaReembolsado = detalle.detalle_devoluciones.reduce(
+          (acc, d) => acc.add(d.subtotal_reembolsado),
+          new Prisma.Decimal(0),
+        );
+        const saldoSubtotal = subtotalLinea.sub(yaReembolsado);
+        const subtotalReembolsado = lineaCompleta
+          ? saldoSubtotal
+          : Prisma.Decimal.min(
+              redondearDinero(subtotalLinea.mul(proporcion)),
+              saldoSubtotal,
+            );
+
+        // Costo FIFO de la línea completa (a 2 decimales) y su saldo por revertir.
+        const costoLinea = redondearDinero(
+          detalle.detalle_venta_lotes.reduce(
+            (acc, dvl) =>
+              acc.add(
+                new Prisma.Decimal(dvl.cantidad_descargada).mul(
+                  dvl.costo_aplicado,
+                ),
+              ),
+            new Prisma.Decimal(0),
+          ),
+        );
+        const yaRevertido = detalle.detalle_devoluciones.reduce(
+          (acc, d) => acc.add(d.costo_revertido),
+          new Prisma.Decimal(0),
+        );
+        const saldoCosto = costoLinea.sub(yaRevertido);
+        const costoRevertido = lineaCompleta
+          ? saldoCosto
+          : Prisma.Decimal.min(
+              redondearDinero(costoLinea.mul(proporcion)),
+              saldoCosto,
+            );
 
         // Reversión FIFO: cada lote de la línea recupera (descargado × proporción)
         // a su costo congelado. REINGRESO devuelve el stock; MERMA no.
-        let costoRevertido = new Prisma.Decimal(0);
         for (const dvl of detalle.detalle_venta_lotes) {
           const cantidadLote = new Prisma.Decimal(dvl.cantidad_descargada).mul(
             proporcion,
-          );
-          costoRevertido = costoRevertido.add(
-            cantidadLote.mul(dvl.costo_aplicado),
           );
           if (item.destino === 'REINGRESO') {
             await tx.lotes_inventario.update({
@@ -465,7 +613,7 @@ export class VentasService {
           cantidad: cantidadDevolver,
           destino: item.destino,
           subtotal_reembolsado: subtotalReembolsado,
-          costo_revertido: costoRevertido.toDecimalPlaces(2),
+          costo_revertido: costoRevertido,
         });
         totalReembolsado = totalReembolsado.add(subtotalReembolsado);
       }
@@ -489,6 +637,6 @@ export class VentasService {
       });
 
       return devolucion;
-    });
+    }, TX_OPTIONS);
   }
 }

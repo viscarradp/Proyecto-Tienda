@@ -31,6 +31,12 @@ códigos de error de Prisma más relevantes para este CRUD:
 | `P2002` | Violación de constraint único (`@unique`) | `409 Conflict` |
 | `P2003` | Violación de llave foránea | `400 Bad Request` |
 | `P2025` | Registro no encontrado (update/delete) | `404 Not Found` |
+| `P2028` | Transacción interactiva superó su timeout / ya cerrada | `503` «El sistema está ocupado, intenta de nuevo en unos segundos» |
+| `P2034` | Conflicto de escritura / deadlock | `503` (mismo mensaje) |
+| `P2010` con SQLSTATE `40P01`/`40001` | Deadlock o fallo de serialización en consulta cruda (`$queryRaw`, p. ej. `FOR UPDATE`) | `503` (mismo mensaje) |
+| `P2020` | Valor fuera de rango para la columna (`numeric field overflow`) | `400` «Un número es demasiado grande» |
+| `P2010` con SQLSTATE `22003` | Desborde numérico en consulta cruda | `400` «Un número es demasiado grande» |
+| `P2000` | Texto más largo que la columna | `400` «Un texto es demasiado largo» |
 | Cualquier otro | — | Se delega al manejo por defecto de Nest (500 genérico, sin detalles internos) |
 
 El filtro extiende `BaseExceptionFilter` de `@nestjs/core` y usa
@@ -75,3 +81,19 @@ Probado end-to-end vía HTTP contra un PostgreSQL 16 desechable:
 - Si en el futuro un servicio necesita un mensaje más específico para un
   `P2002`/`P2003`/`P2025` particular, puede seguir manejándolo localmente
   (como ya hace `categorias.service.ts`) — el filtro global no lo impide.
+
+## Ampliación (lote L2: timeouts y desbordes)
+
+- Las transacciones de ventas (crear, anular, devolver), compras, cierre de
+  turno y ajustes usan `{ timeout: 15000, maxWait: 5000 }`
+  (`src/common/transaccion.ts`); el default de Prisma (5 s) se quedaba corto
+  para una venta de varias líneas contra Supabase.
+- El mapeo vive en la función pura `mapearErrorPrisma()` (con pruebas
+  unitarias en `prisma-exception.filter.spec.ts`); el filtro solo la invoca.
+  Los `503` dejan un `warn` en el log con el código de Prisma.
+- Los límites de los DTOs (`src/common/validacion.ts`) hacen que un número
+  enorme dé `400` antes de llegar a la base; el mapeo `P2020` es la segunda
+  línea de defensa.
+- En Prisma 7 con el adaptador de pg, el SQLSTATE viaja en
+  `meta.driverAdapterError.cause.originalCode`: así se reconocen los
+  deadlocks que Prisma etiqueta como `P2010`.

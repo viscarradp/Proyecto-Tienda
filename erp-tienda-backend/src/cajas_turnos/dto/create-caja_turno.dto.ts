@@ -1,13 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, Min, IsOptional } from 'class-validator';
+import { IsOptional } from 'class-validator';
+import { IsDinero } from '../../common/validacion';
 
 export class CreateCajaTurnoDto {
   @ApiProperty({
     description: 'Monto de efectivo con el que se inicia el turno',
     minimum: 0,
   })
-  @IsNumber()
-  @Min(0, { message: 'El fondo inicial no puede ser negativo' })
+  @IsDinero({ mensajeMin: 'El fondo inicial no puede ser negativo' })
   fondo_inicial: number;
 
   @ApiProperty({
@@ -17,7 +17,6 @@ export class CreateCajaTurnoDto {
     minimum: 0,
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @IsDinero()
   desde_boveda?: number;
 }

@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { CategoriasGastosService } from './categorias_gastos.service';
 import { CreateCategoriasGastoDto } from './dto/create-categorias_gasto.dto';
@@ -30,20 +31,20 @@ export class CategoriasGastosController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.categoriasGastosService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.categoriasGastosService.findOne(id);
   }
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateCategoriasGastoDto: UpdateCategoriasGastoDto,
   ) {
-    return this.categoriasGastosService.update(+id, updateCategoriasGastoDto);
+    return this.categoriasGastosService.update(id, updateCategoriasGastoDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.categoriasGastosService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.categoriasGastosService.remove(id);
   }
 }

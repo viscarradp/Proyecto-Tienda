@@ -1,8 +1,15 @@
-import { IsString, IsNotEmpty, IsIn, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsIn,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateUsuarioDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100, { message: 'El nombre no puede pasar de 100 caracteres' })
   nombre: string;
 
   @IsString()

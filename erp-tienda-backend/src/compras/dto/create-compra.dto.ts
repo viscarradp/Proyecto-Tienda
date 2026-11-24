@@ -6,13 +6,13 @@ import {
   IsDateString,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
-  Min,
+  MaxLength,
   ValidateNested,
   IsIn,
 } from 'class-validator';
+import { IsCantidad, IsDinero } from '../../common/validacion';
 
 export class CreateLoteDto {
   @ApiProperty({ description: 'ID del producto' })
@@ -21,13 +21,12 @@ export class CreateLoteDto {
   producto_id: number;
 
   @ApiProperty({ description: 'Costo unitario de adquisición', minimum: 0 })
-  @IsNumber()
-  @Min(0)
+  // La columna es Decimal(10,4): un costo unitario admite hasta 4 decimales.
+  @IsDinero({ decimales: 4 })
   costo_unitario_adquisicion: number;
 
   @ApiProperty({ description: 'Cantidad inicial comprada', minimum: 0.001 })
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
+  @IsCantidad()
   cantidad_inicial: number;
 
   @ApiPropertyOptional({ description: 'Fecha de vencimiento del lote' })
@@ -40,6 +39,9 @@ export class CreateCompraDto {
   @ApiProperty({ description: 'Nombre del proveedor' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(150, {
+    message: 'El nombre del proveedor no puede pasar de 150 caracteres',
+  })
   proveedor: string;
 
   // monto_total se acepta por compatibilidad con el frontend, pero el backend
@@ -48,8 +50,7 @@ export class CreateCompraDto {
     description: 'Ignorado por el backend, se calcula desde los lotes',
   })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
+  @IsDinero()
   monto_total?: number;
 
   @ApiProperty({

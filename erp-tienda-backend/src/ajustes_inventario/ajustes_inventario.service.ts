@@ -6,6 +6,9 @@ import {
 import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
+import { TX_OPTIONS } from '../common/transaccion';
+import { redondearDinero } from '../common/redondeo';
 
 @Injectable()
 export class AjustesInventarioService {
@@ -19,10 +22,32 @@ export class AjustesInventarioService {
     const esPositivo = tipo_ajuste === 'CONTEO_SOBRANTE';
 
     return await this.prisma.$transaction(async (tx) => {
-      // 1. Buscar y Validar el Lote
-      const lote = await tx.lotes_inventario.findUnique({
-        where: { id: lote_id },
-      });
+      // Orden global de locks: turno → (venta) → lotes
+      // (ver docs/decisions/0001-concurrencia-for-update.md). Una merma inserta
+      // un movimiento que referencia al turno por FK; si se bloqueara el lote
+      // primero, una venta concurrente (que bloquea turno → lotes) podría
+      // deadlockear con este ajuste. Por eso, si hay turno abierto, se bloquea
+      // PRIMERO y solo después el lote. Un sobrante no genera movimiento, así
+      // que no necesita el turno.
+      let cajaActivaId: number | null = null;
+      if (!esPositivo) {
+        const [cajaActiva] = await tx.$queryRaw<CajaTurnoRow[]>`
+          SELECT id, estado
+          FROM cajas_turnos
+          WHERE estado = 'ABIERTA'
+          FOR UPDATE
+        `;
+        cajaActivaId = cajaActiva?.id ?? null;
+      }
+
+      // 1. Buscar el lote BAJO LOCK y validarlo: una venta concurrente no puede
+      //    descontarlo entre esta lectura y la escritura.
+      const [lote] = await tx.$queryRaw<LoteInventarioRow[]>`
+        SELECT id, producto_id, cantidad_disponible, costo_unitario_adquisicion
+        FROM lotes_inventario
+        WHERE id = ${lote_id}
+        FOR UPDATE
+      `;
 
       if (!lote) {
         throw new NotFoundException(`Lote con ID ${lote_id} no encontrado`);
@@ -30,15 +55,22 @@ export class AjustesInventarioService {
 
       // 2. Validar Cantidad (Decimal desde 1.B). Para un ajuste positivo no hay
       //    tope: se está AGREGANDO stock, no quitando.
-      if (!esPositivo && lote.cantidad_disponible.lessThan(cantidad_ajustada)) {
+      if (
+        !esPositivo &&
+        new Prisma.Decimal(lote.cantidad_disponible).lessThan(cantidad_ajustada)
+      ) {
         throw new BadRequestException(
-          'La cantidad a ajustar supera la disponibilidad del lote',
+          'La cantidad a ajustar supera la disponibilidad del lote: ' +
+            `quedan ${new Prisma.Decimal(lote.cantidad_disponible).toString()} ` +
+            'en el lote. Revisa la cantidad (puede haberse vendido hace un momento).',
         );
       }
 
-      // 3. Costo del ajuste (valorado al costo del lote)
-      const costo_asumido = new Prisma.Decimal(cantidad_ajustada).mul(
-        lote.costo_unitario_adquisicion,
+      // 3. Costo del ajuste (valorado al costo del lote), a 2 decimales
+      const costo_asumido = redondearDinero(
+        new Prisma.Decimal(cantidad_ajustada).mul(
+          lote.costo_unitario_adquisicion,
+        ),
       );
 
       // 4. Actualizar el Lote: incrementa (positivo) o decrementa (merma).
@@ -77,13 +109,9 @@ export class AjustesInventarioService {
       // haya o no turno abierto (caja_turno_id nullable): una merma un domingo sin
       // turno también debe llegar al P&L del período.
       if (!esPositivo) {
-        const cajaActiva = await tx.cajas_turnos.findFirst({
-          where: { estado: 'ABIERTA' },
-        });
-
         await tx.movimientos_financieros.create({
           data: {
-            caja_turno_id: cajaActiva?.id ?? null,
+            caja_turno_id: cajaActivaId,
             tipo_movimiento: 'MERMA_INVENTARIO',
             monto: costo_asumido,
             descripcion:
@@ -96,7 +124,7 @@ export class AjustesInventarioService {
       }
 
       return ajuste;
-    });
+    }, TX_OPTIONS);
   }
 
   findAll() {

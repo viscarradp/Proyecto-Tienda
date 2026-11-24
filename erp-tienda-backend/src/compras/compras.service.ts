@@ -7,6 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompraDto } from './dto/create-compra.dto';
 import { Prisma } from '@prisma/client';
 import { acquireAdvisoryLock, CajaTurnoRow } from '../common/concurrency';
+import { TX_OPTIONS } from '../common/transaccion';
+import { redondearDinero } from '../common/redondeo';
 import {
   BOVEDA_LEDGER_LOCK,
   saldoBovedaDerivado,
@@ -34,11 +36,14 @@ export class ComprasService {
 
     // ── BUG 3: Calcular monto_total desde los lotes (no confiar en el cliente) ──
     // En Decimal (cantidad fraccionable × costo) para no mezclar floats con dinero.
+    // Cada lote se redondea a 2 decimales (half-up) ANTES de sumar.
     const montoCalculado = detalles_lotes.reduce(
       (sum, lote) =>
         sum.add(
-          new Prisma.Decimal(lote.cantidad_inicial).mul(
-            lote.costo_unitario_adquisicion,
+          redondearDinero(
+            new Prisma.Decimal(lote.cantidad_inicial).mul(
+              lote.costo_unitario_adquisicion,
+            ),
           ),
         ),
       new Prisma.Decimal(0),
@@ -164,7 +169,7 @@ export class ComprasService {
       }
 
       return compra;
-    });
+    }, TX_OPTIONS);
   }
 
   async findAll() {

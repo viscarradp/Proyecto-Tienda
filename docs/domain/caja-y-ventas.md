@@ -24,6 +24,17 @@ línea por línea (para eso está el código y `architecture/data-model.md`).
 - Toda venta requiere un turno `ABIERTA`.
 - El **total lo calcula siempre el backend** a partir de las presentaciones y
   cantidades enviadas — nunca se confía en un total declarado por el cliente.
+- **Idempotencia:** `POST /ventas` acepta el header opcional
+  `Idempotency-Key` (texto de 8 a 64 caracteres, p. ej. un UUID). Si llega una
+  segunda petición con la misma clave, devuelve la venta ya creada sin tocar
+  stock ni efectivo; así un reintento tras un corte de red no duplica la venta.
+  Sin el header todo funciona como antes.
+- **Redondeo por línea:** cada línea vale `cantidad × precio` redondeado a 2
+  decimales (mitad hacia arriba) **antes** de sumar; `ventas.total` y el
+  aumento de `efectivo_esperado` son la suma de esas líneas redondeadas. En una
+  devolución parcial el reembolso se prorratea y redondea por línea, y cuando
+  la línea queda devuelta por completo se reembolsa exactamente el saldo
+  (subtotal − ya reembolsado); lo mismo para `costo_revertido`.
 - El motor FIFO (ver `data-model.md`) descuenta stock de los lotes más
   antiguos primero. Si no hay stock suficiente en ningún lote, la venta
   completa se rechaza (no hay ventas parciales).
