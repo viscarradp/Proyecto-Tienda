@@ -192,6 +192,7 @@ export class CajasTurnosService {
             usuario_id: userId,
             cuenta_origen: asiento.cuenta_origen,
             cuenta_destino: asiento.cuenta_destino,
+            es_apertura: true,
           },
         });
 

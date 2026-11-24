@@ -225,6 +225,10 @@ model movimientos_financieros {
   cuenta_destino     String?             @db.VarChar(20)
   // Anular = marcar, nunca borrar (L12 · ADR 0012). Lo anulado no cuenta en
   // reportes ni en el saldo de bóveda.
+  // Asiento de la diferencia de apertura de turno (D-15). El turno ya arrancó en
+  // el fondo, así que este movimiento NO mueve efectivo_esperado: anularlo
+  // descuadraría la gaveta. `anular` lo rechaza por esta marca (no por texto).
+  es_apertura        Boolean             @default(false)
   anulado            Boolean             @default(false)
   anulado_en         DateTime?           @db.Timestamptz(6)
   anulado_por_id     Int?
