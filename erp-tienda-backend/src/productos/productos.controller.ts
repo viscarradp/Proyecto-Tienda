@@ -12,6 +12,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductosService } from './productos.service';
 import { CreateProductoDto } from './dto/create-producto.dto';
 import { UpdateProductoDto } from './dto/update-producto.dto';
+import { CreateProductoRapidoDto } from './dto/create-producto-rapido.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('Productos')
@@ -33,6 +34,21 @@ export class ProductosController {
   })
   create(@Body() createProductoDto: CreateProductoDto) {
     return this.productosService.create(createProductoDto);
+  }
+
+  @Post('rapido')
+  @Roles('ADMIN', 'CAJERO')
+  @ApiOperation({
+    summary:
+      'Alta rápida (cajera): nombre + precio; queda "por revisar" en la categoría "Por revisar"',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Producto creado con su presentación.',
+  })
+  @ApiResponse({ status: 409, description: 'El código de barras ya existe.' })
+  createRapido(@Body() dto: CreateProductoRapidoDto) {
+    return this.productosService.createRapido(dto);
   }
 
   @Get()

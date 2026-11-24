@@ -51,7 +51,7 @@ Implementado en `erp-tienda-backend/src/common/concurrency.ts`
 |---|---|---|
 | `ventas/ventas.service.ts` | `create()` (FIFO) | `FOR UPDATE` sobre lotes candidatos |
 | `ventas/ventas.service.ts` | `anular()` | `FOR UPDATE` sobre el turno de caja |
-| `compras/compras.service.ts` | `create()` (CAJA_POS) | `FOR UPDATE` sobre el turno abierto |
+| `compras/compras.service.ts` | `create()` (CAJA_POS) | `FOR UPDATE` sobre el turno abierto (primero, antes de crear la compra) |
 | `compras/compras.service.ts` | `create()` (CAJA_GENERAL) | advisory lock (`caja_general_ledger`) |
 | `movimientos_financieros/movimientos_financieros.service.ts` | `create()` (egresos) | `FOR UPDATE` sobre el turno |
 | `cajas_turnos/cajas_turnos.service.ts` | `abrir()` | advisory lock (`caja_turno_abrir`) |
@@ -127,7 +127,7 @@ fix: `500 Internal Server Error` bajo carga. Después: respuestas limpias
 (`201`/`400`/`409` según corresponda), aritmética exacta (nunca stock ni
 saldo negativo) y cero deadlocks en el log del servidor.
 
-## Orden global de locks: turno → venta → lotes
+## Orden global de locks: turno → venta → lotes → pendientes
 
 Para que dos transacciones nunca se esperen en círculo, **todas** las
 operaciones que toman más de un lock lo hacen siempre en este orden:
@@ -135,9 +135,46 @@ operaciones que toman más de un lock lo hacen siempre en este orden:
 1. **Turno** (`cajas_turnos`, `FOR UPDATE`).
 2. **Venta** (`ventas`, `FOR UPDATE`; solo anular y devolver).
 3. **Lotes** (`lotes_inventario`, `FOR UPDATE`).
+4. **Pendientes** (`pendientes_stock`, `FOR UPDATE`; "deuda de stock", L5a).
 
 Un `INSERT` que referencia una fila por FK toma `FOR KEY SHARE` sobre ella, así
 que la regla "lock antes de INSERT" de arriba aplica a cada nivel.
+
+**Pendientes de stock (L5a).** Una venta sin stock registrado crea filas en
+`pendientes_stock`; cuando entra stock (compra nueva o conteo sobrante) esas
+filas se cubren, y anular/devolver las cancelan o las devuelven al lote. Quién
+toma qué:
+
+| Operación | Locks, en orden |
+|---|---|
+| `ventas.create` | turno → lotes del producto (FIFO) → *inserta* pendientes (filas nuevas: nada que bloquear) |
+| `ventas.anular` | turno → venta → lotes (los de `detalle_venta_lotes` y los que cubrieron pendientes) → pendientes de la venta |
+| `ventas.devolver` | turno → venta → lotes (solo si hay REINGRESO con pendientes) → pendientes de esas líneas |
+| `compras.create` | turno (`CAJA_POS`) o advisory de bóveda → *(compra y lotes nuevos: privados de la transacción)* → pendientes abiertos del producto |
+| `ajustes_inventario` (sobrante) | lote → pendientes abiertos del producto |
+
+**Reordenamiento de `compras.create`.** Antes creaba compra y lotes y **al
+final** bloqueaba el turno (`CAJA_POS`). Con la resolución de pendientes eso
+deadlockea contra una anulación (que tiene turno → … → pendientes): la compra
+tendría los pendientes y esperaría el turno, y la anulación tendría el turno y
+esperaría los pendientes. Ahora la compra toma **primero** los locks de fondos
+(turno `FOR UPDATE` en `CAJA_POS`, advisory de bóveda en `CAJA_GENERAL`) y valida
+los fondos; recién después crea compra, lotes, cuenta por pagar y movimiento, y
+al final resuelve pendientes. La política de fondos (bloquear vs. avisar) no
+cambió.
+
+**Detalles que importan.**
+
+- En `anular`/`devolver` los lotes que cubrieron un pendiente se conocen leyendo
+  la fila; se bloquean ordenados por id *antes* de bloquear los pendientes. Si
+  una compra cubrió el pendiente entre esa lectura y el lock, el lote nuevo se
+  bloquea después de los pendientes (fuera del orden). Solo podría deadlockear
+  contra un conteo sobrante sobre ese mismo lote nuevo en esa ventana de
+  milisegundos; el filtro global lo traduciría a `503` (ver 0006).
+- Una venta que se cruza con una compra del mismo producto puede quedar con un
+  pendiente abierto aunque el lote nuevo ya exista (la venta leyó los lotes antes
+  de que la compra confirmara). Es una ventana de milisegundos, no corrompe
+  dinero ni deja stock negativo; el siguiente ingreso de stock la cubre.
 
 **Caso del ajuste de inventario (merma).** `ajustes_inventario.service.ts`
 leía el lote sin bloquearlo (una venta concurrente podía dejarlo negativo) y,

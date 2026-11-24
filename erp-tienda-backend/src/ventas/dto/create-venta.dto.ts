@@ -7,15 +7,24 @@ import {
   IsOptional,
   ValidateNested,
 } from 'class-validator';
-import { IsCantidad } from '../../common/validacion';
+import { IsCantidad, IsDinero } from '../../common/validacion';
 
 export class DetalleVentaInputDto {
   @IsInt()
   presentacion_id: number;
 
   // Decimal para ventas fraccionadas (media libra, granel) — Bloque 1 §5.3.
+  // Exactamente UNO de `cantidad` o `monto` (lo valida VentasService antes de
+  // tocar la base de datos, con un 400 claro).
+  @IsOptional()
   @IsCantidad()
-  cantidad: number;
+  cantidad?: number;
+
+  // Venta por monto (L5a · D-03): "dame $1 de queso". El backend calcula la
+  // cantidad = monto ÷ precio (3 decimales) y el subtotal queda en el monto.
+  @IsOptional()
+  @IsDinero({ min: 0.01, mensajeMin: 'El monto debe ser de al menos $0.01' })
+  monto?: number;
 }
 
 export class CreateVentaDto {

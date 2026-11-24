@@ -11,6 +11,14 @@ import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
 import { TX_OPTIONS } from '../common/transaccion';
 import { redondearDinero } from '../common/redondeo';
+import { MAX_CANTIDAD } from '../common/validacion';
+import {
+  bloquearLotes,
+  bloquearPendientesDeDetalles,
+  redondearCantidad,
+  reingresarPendiente,
+  revertirPendientesPorAnulacion,
+} from '../common/pendientes-stock';
 
 /** Máximo de días hacia atrás que acepta la fecha de contingencia. */
 const DIAS_MAX_CONTINGENCIA = 30;
@@ -24,11 +32,27 @@ const VENTA_INCLUDE = {
   },
 } satisfies Prisma.ventasInclude;
 
-/** Cantidad legible: hasta 3 decimales, redondeo hacia abajo, sin ceros sobrantes. */
+/**
+ * Cantidad legible para un aviso: hasta 3 decimales, redondeo hacia arriba
+ * (para que una fracción mínima no se lea como 0), sin ceros sobrantes.
+ */
 function cantidadLegible(valor: Prisma.Decimal.Value): string {
   return new Prisma.Decimal(valor)
-    .toDecimalPlaces(3, Prisma.Decimal.ROUND_DOWN)
+    .toDecimalPlaces(3, Prisma.Decimal.ROUND_UP)
     .toString();
+}
+
+/** Arma el texto de aviso de una línea vendida sin stock registrado. */
+function textoAviso(
+  nombre: string,
+  descripcion: string,
+  cantidad: Prisma.Decimal.Value,
+  sinCosto: boolean,
+): string {
+  const base = `Vendiste ${cantidadLegible(cantidad)} "${nombre} (${descripcion})" sin stock registrado.`;
+  return sinCosto
+    ? `${base} Este producto no tiene costo registrado: la ganancia de esta venta saldrá alta hasta que registres la compra.`
+    : `${base} Registra la compra o un conteo en Inventario.`;
 }
 
 /** Fila de ventas leída con FOR UPDATE. */
@@ -51,6 +75,8 @@ export class VentasService {
     userId?: number,
     claveIdempotencia?: string,
   ) {
+    this.validarCantidadOMonto(createVentaDto);
+
     // Atajo: si el reintento llega cuando la venta original ya está guardada
     // (incluso con el turno ya cerrado), se responde con ella. La garantía real
     // contra carreras está dentro de la transacción, bajo el lock del turno.
@@ -75,13 +101,72 @@ export class VentasService {
     }
   }
 
-  private buscarPorClave(
+  /**
+   * Cada línea lleva exactamente UNO de `cantidad` o `monto` (D-03). Se valida
+   * antes de abrir la transacción para dar un 400 claro.
+   */
+  private validarCantidadOMonto(dto: CreateVentaDto) {
+    for (const item of dto.detalles) {
+      const tieneCantidad =
+        item.cantidad !== undefined && item.cantidad !== null;
+      const tieneMonto = item.monto !== undefined && item.monto !== null;
+      if (tieneCantidad && tieneMonto) {
+        throw new BadRequestException(
+          'Cada producto se vende por cantidad o por monto, no por las dos cosas a la vez',
+        );
+      }
+      if (!tieneCantidad && !tieneMonto) {
+        throw new BadRequestException(
+          'Indica la cantidad o el monto de cada producto',
+        );
+      }
+    }
+  }
+
+  private async buscarPorClave(
     db: Prisma.TransactionClient | PrismaService,
     clave: string,
   ) {
-    return db.ventas.findUnique({
+    const venta = await db.ventas.findUnique({
       where: { clave_idempotencia: clave },
       include: VENTA_INCLUDE,
+    });
+    if (!venta) return null;
+    return { ...venta, avisos: await this.avisosDeVenta(db, venta.id) };
+  }
+
+  /**
+   * Avisos de las líneas de una venta que quedaron con stock pendiente (D-01),
+   * uno por línea, en la unidad de su presentación.
+   */
+  private async avisosDeVenta(
+    db: Prisma.TransactionClient | PrismaService,
+    ventaId: number,
+  ): Promise<string[]> {
+    const pendientes = await db.pendientes_stock.findMany({
+      where: {
+        detalle_ventas: { venta_id: ventaId },
+        cantidad_pendiente: { gt: 0 },
+      },
+      orderBy: { id: 'asc' },
+      include: {
+        detalle_ventas: {
+          include: {
+            presentaciones: {
+              include: { productos: { select: { nombre: true } } },
+            },
+          },
+        },
+      },
+    });
+    return pendientes.map((p) => {
+      const pres = p.detalle_ventas.presentaciones;
+      return textoAviso(
+        pres.productos.nombre,
+        pres.descripcion,
+        new Prisma.Decimal(p.cantidad_pendiente).div(pres.factor_conversion),
+        new Prisma.Decimal(p.costo_unitario_estimado).isZero(),
+      );
     });
   }
 
@@ -190,7 +275,32 @@ export class VentasService {
         }
 
         // Cantidad fraccionable → Decimal en todo el cálculo (Bloque 1 §5.3).
-        const cantidadItem = new Prisma.Decimal(item.cantidad);
+        // Venta por monto (D-03): cantidad = monto ÷ precio (3 decimales,
+        // half-up) y el subtotal es EXACTAMENTE el monto pedido.
+        let cantidadItem: Prisma.Decimal;
+        let montoExacto: Prisma.Decimal | null = null;
+        if (item.monto !== undefined && item.monto !== null) {
+          const precio = new Prisma.Decimal(presentacion.precio_venta);
+          if (precio.lte(0)) {
+            throw new BadRequestException(
+              'No se puede vender por monto un producto sin precio',
+            );
+          }
+          montoExacto = redondearDinero(item.monto);
+          cantidadItem = redondearCantidad(montoExacto.div(precio));
+          if (cantidadItem.lte(0)) {
+            throw new BadRequestException(
+              `El monto de $${montoExacto.toFixed(2)} es muy pequeño para "${presentacion.productos.nombre} (${presentacion.descripcion})"`,
+            );
+          }
+          if (cantidadItem.gt(MAX_CANTIDAD)) {
+            throw new BadRequestException(
+              `El monto de $${montoExacto.toFixed(2)} es demasiado grande para "${presentacion.productos.nombre} (${presentacion.descripcion})"`,
+            );
+          }
+        } else {
+          cantidadItem = new Prisma.Decimal(item.cantidad as number);
+        }
 
         // unidades_base_requeridas = cantidad * factor_conversion
         const unidades_base_totales = cantidadItem.mul(
@@ -200,9 +310,9 @@ export class VentasService {
 
         // subtotal_venta = cantidad * precio_venta, redondeado a 2 decimales
         // (half-up) ANTES de sumar: el total es la suma de lo guardado.
-        const subtotal_venta = redondearDinero(
-          cantidadItem.mul(presentacion.precio_venta),
-        );
+        const subtotal_venta =
+          montoExacto ??
+          redondearDinero(cantidadItem.mul(presentacion.precio_venta));
         total_venta_acumulado = total_venta_acumulado.add(subtotal_venta);
 
         // Crea el tx.detalle_ventas vinculándolo a la venta y la presentación
@@ -230,20 +340,13 @@ export class VentasService {
         `;
 
         let loteIndex = 0;
-        // Bucle FIFO en Decimal: mientras falten unidades base por cubrir
-        while (unidades_base_requeridas.greaterThan(0)) {
-          // Si no hay más lotes y aún faltan unidades → stock insuficiente
-          if (loteIndex >= lotes.length) {
-            // Lo que queda, en unidades de ESTA presentación (no unidades base).
-            const quedan = unidades_base_totales
-              .sub(unidades_base_requeridas)
-              .div(presentacion.factor_conversion);
-            throw new BadRequestException(
-              `No hay suficiente "${presentacion.productos.nombre} (${presentacion.descripcion})": ` +
-                `quedan ${cantidadLegible(quedan)} y estás vendiendo ${cantidadLegible(cantidadItem)}.`,
-            );
-          }
-
+        // Bucle FIFO en Decimal: mientras falten unidades base por cubrir y
+        // queden lotes con stock. Si se acaban los lotes, la venta NO falla
+        // (D-01): lo que falta queda como "deuda de stock" (más abajo).
+        while (
+          unidades_base_requeridas.greaterThan(0) &&
+          loteIndex < lotes.length
+        ) {
           const lote = lotes[loteIndex];
           // $queryRaw puede devolver el Decimal como string → normalizar
           const disponible = new Prisma.Decimal(lote.cantidad_disponible);
@@ -280,6 +383,27 @@ export class VentasService {
             unidades_base_requeridas.sub(cantidad_a_descontar);
           loteIndex++;
         }
+
+        // Faltó stock registrado: se vende igual y se anota la deuda. El costo
+        // se congela al del lote MÁS RECIENTE del producto (aunque esté
+        // agotado), o 0 si nunca tuvo lotes.
+        if (unidades_base_requeridas.greaterThan(0)) {
+          const ultimoLote = await tx.lotes_inventario.findFirst({
+            where: { producto_id: presentacion.producto_id },
+            orderBy: [{ fecha_ingreso: 'desc' }, { id: 'desc' }],
+            select: { costo_unitario_adquisicion: true },
+          });
+          await tx.pendientes_stock.create({
+            data: {
+              detalle_venta_id: detalleVenta.id,
+              producto_id: presentacion.producto_id,
+              cantidad_base: unidades_base_requeridas,
+              cantidad_pendiente: unidades_base_requeridas,
+              costo_unitario_estimado:
+                ultimoLote?.costo_unitario_adquisicion ?? 0,
+            },
+          });
+        }
       }
 
       // 5. Finalizar Venta: Actualiza el registro maestro tx.ventas seteando su total final
@@ -299,7 +423,10 @@ export class VentasService {
         },
       });
 
-      return ventaFinal;
+      return {
+        ...ventaFinal,
+        avisos: await this.avisosDeVenta(tx, venta.id),
+      };
     }, TX_OPTIONS);
   }
 
@@ -333,6 +460,7 @@ export class VentasService {
           include: {
             presentaciones: true,
             detalle_venta_lotes: true,
+            pendientes_stock: true,
           },
         },
       },
@@ -400,15 +528,45 @@ export class VentasService {
         );
       }
 
-      // Lectura de líneas y lotes ya bajo lock.
+      // Lectura de líneas, lotes y pendientes ya bajo lock de venta.
       const venta = await tx.ventas.findUniqueOrThrow({
         where: { id },
         include: {
           detalle_ventas: {
-            include: { detalle_venta_lotes: true },
+            include: { detalle_venta_lotes: true, pendientes_stock: true },
           },
         },
       });
+
+      // Orden global: turno → venta → LOTES → PENDIENTES. Los lotes a tocar son
+      // los de donde salió el stock y los que cubrieron pendientes.
+      const lotesBloqueados = new Set<number>();
+      const idsLotes = venta.detalle_ventas.flatMap((d) => [
+        ...d.detalle_venta_lotes.map((l) => l.lote_id),
+        ...d.pendientes_stock.flatMap((p) =>
+          p.lote_resuelto_id !== null ? [p.lote_resuelto_id] : [],
+        ),
+      ]);
+      await bloquearLotes(tx, idsLotes);
+      idsLotes.forEach((l) => lotesBloqueados.add(l));
+
+      const pendientes = await bloquearPendientesDeDetalles(
+        tx,
+        venta.detalle_ventas
+          .filter((d) => d.pendientes_stock.length > 0)
+          .map((d) => d.id),
+      );
+      // Una compra pudo cubrir un pendiente entre la lectura y el lock: si hay
+      // un lote nuevo, se bloquea ahora (ver ADR 0001, "pendientes").
+      await bloquearLotes(
+        tx,
+        pendientes.flatMap((p) =>
+          p.lote_resuelto_id !== null &&
+          !lotesBloqueados.has(p.lote_resuelto_id)
+            ? [p.lote_resuelto_id]
+            : [],
+        ),
+      );
 
       // 1. Marcar como anulada
       const ventaAnulada = await tx.ventas.update({
@@ -433,6 +591,10 @@ export class VentasService {
           });
         }
       }
+
+      // 2b. Deuda de stock: lo no cubierto se cancela; lo cubierto vuelve al
+      // lote que lo cubrió.
+      await revertirPendientesPorAnulacion(tx, pendientes);
 
       // 3. Reducir el efectivo esperado del turno activo
       // (Ya validamos arriba que el turno está ABIERTA)
@@ -521,10 +683,57 @@ export class VentasService {
         where: { id: ventaId },
         include: {
           detalle_ventas: {
-            include: { detalle_venta_lotes: true, detalle_devoluciones: true },
+            include: {
+              detalle_venta_lotes: true,
+              detalle_devoluciones: true,
+              pendientes_stock: true,
+            },
           },
         },
       });
+
+      // Pendientes que se tocan: los de líneas con destino REINGRESO. Orden
+      // global de locks: lotes → pendientes (ver ADR 0001).
+      const lineasReingreso = new Set(
+        dto.detalles
+          .filter((i) => i.destino === 'REINGRESO')
+          .map((i) => i.detalle_venta_id),
+      );
+      const detallesConPendientes = venta.detalle_ventas.filter(
+        (d) => lineasReingreso.has(d.id) && d.pendientes_stock.length > 0,
+      );
+      const pendientesPorLinea = new Map<
+        number,
+        Awaited<ReturnType<typeof bloquearPendientesDeDetalles>>
+      >();
+      if (detallesConPendientes.length > 0) {
+        const idsLotes = detallesConPendientes.flatMap((d) => [
+          ...d.detalle_venta_lotes.map((l) => l.lote_id),
+          ...d.pendientes_stock.flatMap((p) =>
+            p.lote_resuelto_id !== null ? [p.lote_resuelto_id] : [],
+          ),
+        ]);
+        await bloquearLotes(tx, idsLotes);
+        const bloqueados = await bloquearPendientesDeDetalles(
+          tx,
+          detallesConPendientes.map((d) => d.id),
+        );
+        // Lotes que cubrieron pendientes después de la lectura (compra nueva).
+        const conocidos = new Set(idsLotes);
+        await bloquearLotes(
+          tx,
+          bloqueados.flatMap((p) =>
+            p.lote_resuelto_id !== null && !conocidos.has(p.lote_resuelto_id)
+              ? [p.lote_resuelto_id]
+              : [],
+          ),
+        );
+        for (const p of bloqueados) {
+          const lista = pendientesPorLinea.get(p.detalle_venta_id) ?? [];
+          lista.push(p);
+          pendientesPorLinea.set(p.detalle_venta_id, lista);
+        }
+      }
 
       let totalReembolsado = new Prisma.Decimal(0);
       const detalleRows: Prisma.detalle_devolucionesCreateManyDevolucionesInput[] =
@@ -576,17 +785,29 @@ export class VentasService {
               saldoSubtotal,
             );
 
-        // Costo FIFO de la línea completa (a 2 decimales) y su saldo por revertir.
-        const costoLinea = redondearDinero(
-          detalle.detalle_venta_lotes.reduce(
-            (acc, dvl) =>
-              acc.add(
-                new Prisma.Decimal(dvl.cantidad_descargada).mul(
-                  dvl.costo_aplicado,
-                ),
+        // Costo de la línea completa (a 2 decimales) y su saldo por revertir:
+        // costo FIFO congelado de sus lotes + costo estimado de lo que se
+        // vendió sin stock registrado (D-01).
+        const costoLineaLotes = detalle.detalle_venta_lotes.reduce(
+          (acc, dvl) =>
+            acc.add(
+              new Prisma.Decimal(dvl.cantidad_descargada).mul(
+                dvl.costo_aplicado,
               ),
-            new Prisma.Decimal(0),
-          ),
+            ),
+          new Prisma.Decimal(0),
+        );
+        const costoLineaPendientes = detalle.pendientes_stock.reduce(
+          (acc, p) =>
+            acc.add(
+              new Prisma.Decimal(p.cantidad_base).mul(
+                p.costo_unitario_estimado,
+              ),
+            ),
+          new Prisma.Decimal(0),
+        );
+        const costoLinea = redondearDinero(
+          costoLineaLotes.add(costoLineaPendientes),
         );
         const yaRevertido = detalle.detalle_devoluciones.reduce(
           (acc, d) => acc.add(d.costo_revertido),
@@ -611,6 +832,27 @@ export class VentasService {
               where: { id: dvl.lote_id },
               data: { cantidad_disponible: { increment: cantidadLote } },
             });
+          }
+        }
+
+        // Deuda de stock de la línea (solo REINGRESO la toca; MERMA no: la
+        // unidad se descartó y la compra igual debe cubrirla). La parte
+        // devuelta es proporcional con redondeo ACUMULADO, para que la suma de
+        // devoluciones parciales dé exactamente lo que se vendió sin stock.
+        if (item.destino === 'REINGRESO') {
+          const yaReingresado = detalle.detalle_devoluciones
+            .filter((d) => d.destino === 'REINGRESO')
+            .reduce((acc, d) => acc.add(d.cantidad), new Prisma.Decimal(0));
+          const propAntes = yaReingresado.div(cantidadVendida);
+          const propDespues = yaReingresado
+            .add(cantidadDevolver)
+            .div(cantidadVendida);
+          for (const p of pendientesPorLinea.get(detalle.id) ?? []) {
+            const base = new Prisma.Decimal(p.cantidad_base);
+            const parte = redondearCantidad(base.mul(propDespues)).sub(
+              redondearCantidad(base.mul(propAntes)),
+            );
+            await reingresarPendiente(tx, p, parte);
           }
         }
 

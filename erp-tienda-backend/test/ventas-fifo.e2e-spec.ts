@@ -15,14 +15,13 @@ interface ProductoResponseBody {
   presentaciones: WithId[];
   // cantidad_disponible es Decimal desde 1.B → JSON lo serializa como string.
   lotes_inventario: { cantidad_disponible: number | string }[];
+  stock_total: string;
+  pendiente_total: string;
 }
 
 interface VentaResponseBody {
   total: string | number;
-}
-
-interface ErrorResponseBody {
-  message: string;
+  avisos: string[];
 }
 
 /**
@@ -118,21 +117,67 @@ describe('Ventas — motor FIFO (e2e)', () => {
     expect(await stockDisponible()).toBe(STOCK_INICIAL - 3);
   });
 
-  it('rechaza la venta si no hay stock suficiente', async () => {
+  // L5a · D-01: antes esta venta se rechazaba con 400; ahora se vende igual,
+  // se anota la deuda de stock y se avisa a la cajera.
+  it('vende igual aunque no haya stock suficiente y avisa (D-01)', async () => {
+    const cat = await request(app.getHttpServer())
+      .post('/categorias')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'SinStock-E2E' });
+    const prod = await request(app.getHttpServer())
+      .post('/productos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nombre: 'Galleta-E2E', categoria_id: (cat.body as WithId).id });
+    const pres = await request(app.getHttpServer())
+      .post('/presentaciones')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        producto_id: (prod.body as WithId).id,
+        descripcion: 'Unidad',
+        factor_conversion: 1,
+        precio_venta: 2,
+      });
+    const presId = (pres.body as WithId).id;
+    await request(app.getHttpServer())
+      .post('/compras')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        proveedor: 'SinStock-E2E',
+        estado_pago: 'PAGADO',
+        origen_fondos: 'CAPITAL_DUEÑOS',
+        detalles_lotes: [
+          {
+            producto_id: (prod.body as WithId).id,
+            costo_unitario_adquisicion: 1,
+            cantidad_inicial: 2,
+          },
+        ],
+      });
+
     const res = await request(app.getHttpServer())
       .post('/ventas')
       .set('Authorization', `Bearer ${token}`)
-      .send({ detalles: [{ presentacion_id: presentacionId, cantidad: 999 }] });
+      .send({ detalles: [{ presentacion_id: presId, cantidad: 5 }] });
 
-    expect(res.status).toBe(400);
-    expect((res.body as ErrorResponseBody).message).toMatch(
-      /No hay suficiente/i,
-    );
-    // La venta rechazada no debe haber tocado el stock.
-    expect(await stockDisponible()).toBe(STOCK_INICIAL - 3);
+    expect(res.status).toBe(201);
+    const body = res.body as VentaResponseBody;
+    expect(Number(body.total)).toBe(10); // se cobra TODO lo vendido
+    expect(body.avisos).toHaveLength(1);
+    expect(body.avisos[0]).toContain('Vendiste 3 "Galleta-E2E (Unidad)"');
+
+    const lista = await request(app.getHttpServer())
+      .get('/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const p = (lista.body as ProductoResponseBody[]).find(
+      (x) => x.id === (prod.body as WithId).id,
+    )!;
+    expect(Number(p.stock_total)).toBe(0);
+    expect(Number(p.pendiente_total)).toBe(3);
+    // Solo se listan los lotes con stock (el agotado ya no viene).
+    expect(p.lotes_inventario).toHaveLength(0);
   });
 
-  it('bajo concurrencia, nunca vende más de lo que hay (regresión hallazgo H1)', async () => {
+  it('bajo concurrencia, nunca queda stock negativo: lo que falta queda como pendiente (regresión H1 + D-01)', async () => {
     const antes = await stockDisponible(); // 7 en este punto
     const CANTIDAD_POR_VENTA = 2;
     const NUM_REQUESTS = 5; // 5 × 2 = 10, más que los 7 disponibles
@@ -150,19 +195,27 @@ describe('Ventas — motor FIFO (e2e)', () => {
       ),
     );
 
-    const exitosas = respuestas.filter((r) => r.status === 201);
-    const rechazadas = respuestas.filter((r) => r.status === 400);
+    // Ya no se rechaza nada: todas se venden.
+    expect(respuestas.every((r) => r.status === 201)).toBe(true);
+    // Con 7 en stock: tres ventas completas (6), una con 1 + 1 pendiente y una
+    // con 2 pendientes → exactamente dos llevan aviso.
+    const conAviso = respuestas.filter(
+      (r) => (r.body as VentaResponseBody).avisos.length > 0,
+    );
+    expect(conAviso).toHaveLength(2);
 
-    // Con contención real, algunas deben pasar y otras deben chocar contra
-    // el límite de stock — si todas pasaran o todas fallaran, el escenario
-    // de concurrencia no se estaría ejerciendo de verdad.
-    expect(exitosas.length + rechazadas.length).toBe(NUM_REQUESTS);
-    expect(exitosas.length).toBeGreaterThan(0);
-    expect(rechazadas.length).toBeGreaterThan(0);
-
+    // El stock nunca es negativo y es exacto: se agotó y lo demás es deuda.
     const despues = await stockDisponible();
-    expect(despues).toBeGreaterThanOrEqual(0); // nunca negativo
-    expect(despues).toBe(antes - exitosas.length * CANTIDAD_POR_VENTA); // aritmética exacta
+    expect(despues).toBe(0);
+    const lista = await request(app.getHttpServer())
+      .get('/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const p = (lista.body as ProductoResponseBody[]).find((x) =>
+      x.presentaciones.some((pr) => pr.id === presentacionId),
+    )!;
+    expect(Number(p.pendiente_total)).toBe(
+      NUM_REQUESTS * CANTIDAD_POR_VENTA - antes,
+    );
   });
 
   it('vende cantidades fraccionadas (media libra) y descuenta el lote en decimales (1.B)', async () => {

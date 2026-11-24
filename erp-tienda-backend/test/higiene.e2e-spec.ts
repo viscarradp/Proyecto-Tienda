@@ -18,6 +18,7 @@ interface ProductoBody {
   lotes_inventario: {
     id: number;
     cantidad_disponible: string | number;
+    costo_unitario_adquisicion: string | number;
   }[];
 }
 interface UltimoCierre {
@@ -162,9 +163,11 @@ describe('Higiene — historial de precios, FIFO por id, cierre forzado (e2e, 3.
       .get('/productos')
       .set(auth());
     const p = (prods.body as ProductoBody[]).find((x) => x.id === prodId);
-    const lotes = [...p!.lotes_inventario].sort((a, b) => a.id - b.id);
-    expect(Number(lotes[0].cantidad_disponible)).toBeCloseTo(0); // menor id, consumido
-    expect(Number(lotes[1].cantidad_disponible)).toBeCloseTo(5); // mayor id, intacto
+    // L5a: GET /productos ya no lista los lotes agotados. El de menor id
+    // (costo 3) se consumió y desaparece; queda solo el de mayor id (costo 9).
+    expect(p!.lotes_inventario).toHaveLength(1);
+    expect(Number(p!.lotes_inventario[0].cantidad_disponible)).toBeCloseTo(5);
+    expect(Number(p!.lotes_inventario[0].costo_unitario_adquisicion)).toBe(9);
 
     await ensureNoOpenShift(app, token);
   });

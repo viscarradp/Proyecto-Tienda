@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { CajaTurnoRow, LoteInventarioRow } from '../common/concurrency';
 import { TX_OPTIONS } from '../common/transaccion';
 import { redondearDinero } from '../common/redondeo';
+import { resolverPendientesConLote } from '../common/pendientes-stock';
 
 @Injectable()
 export class AjustesInventarioService {
@@ -82,6 +83,13 @@ export class AjustesInventarioService {
             : { decrement: cantidad_ajustada },
         },
       });
+
+      // 4b. Deuda de stock (D-01): un sobrante de conteo es stock nuevo; cubre
+      //     los pendientes abiertos del producto con este lote (ya bloqueado).
+      //     Orden de locks: lotes → pendientes.
+      if (esPositivo) {
+        await resolverPendientesConLote(tx, lote.producto_id, lote_id);
+      }
 
       // 5. Registrar el Ajuste
       const ajuste = await tx.ajustes_inventario.create({
