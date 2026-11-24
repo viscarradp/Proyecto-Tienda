@@ -114,7 +114,7 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 Código muerto y archivos sueltos (COD-24, ARQ-20, `getResumen` cuenta anuladas — NEG-09);
 modelo de datos al adoptar migraciones (ARQ-17, backlog técnico 1–2); imagen de producción del backend pesa 521 MB (prisma, typescript y effect entran como dependencias de producción); activos fijos sin
 pantalla (NEG-05); hidratación de `ThemeToggle`; período "Semana" de 8 días; textos de marca
-del login (UX-02); pulido general (UX-30).
+del login (UX-02); pulido general (UX-30); el ticket cuenta "10.286 artículos" al sumar cantidades fraccionadas.
 
 **Documentación (Fase 5):** `domain/caja-y-ventas.md` y `architecture/data-model.md`
 desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
@@ -144,5 +144,6 @@ desactualizados (NEG-06, NEG-07); comentario D7 de `navigation.ts`.
 | L3b | ⏸ decisión de infraestructura | — |
 | L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
 | L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
-| L5b, L6 | ⏳ Ola 4. Nota para L5b: el POS hoy vende sin stock sin mostrar los `avisos` que ya devuelve la API | — |
+| L5b | ✅ 2026-11-24 — verificado en navegador (alta rápida, cantidad decimal, venta por monto, avisos de stock al cobrar, "7 Six-pack + 2") | `feature/l5b-mostrador-pantalla` |
+| L6 | ✅ 2026-11-24 — 125 e2e; verificado en navegador (pregunta de diferencia de apertura → INGRESO_CAPITAL; gasto mayor al esperado pasa con aviso y cae en "Otros"; asistente de bóveda) | `feature/l6-fondos-apertura` |
 | L7, L8 | ⏸ decisiones D-06, D-05 y ARQ-03 | — |
