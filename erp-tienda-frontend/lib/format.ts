@@ -88,3 +88,8 @@ export function stockEnPresentacion(
   const sueltas = redondear3(Math.max(0, stock - enteras * f))
   return { enteras, sueltas, haySueltas: sueltas > 0 }
 }
+
+/** Para buscar: minusculas y sin acentos ("Jamon" -> "jamon"). */
+export function normalizarBusqueda(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036F]/g, "").toLowerCase().trim()
+}
