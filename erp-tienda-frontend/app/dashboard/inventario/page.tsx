@@ -30,6 +30,7 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
 import { apiFetch } from "@/lib/api"
+import { aNumero, formatCantidad } from "@/lib/format"
 import { useShallow } from "zustand/react/shallow"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/ProductDialog"
@@ -49,8 +50,8 @@ interface Compra {
     id: number
     producto_id: number
     costo_unitario_adquisicion: string
-    cantidad_inicial: number
-    cantidad_disponible: number
+    cantidad_inicial: number | string
+    cantidad_disponible: number | string
     fecha_ingreso: string
     fecha_vencimiento: string | null
   }[]
@@ -123,7 +124,7 @@ export default function InventarioPage() {
 
   // ─── Stock calculator ───
   const getStock = (prod: Producto): number => {
-    return prod.lotes_inventario.reduce((sum, l) => sum + l.cantidad_disponible, 0)
+    return prod.lotes_inventario.reduce((sum, l) => sum + aNumero(l.cantidad_disponible), 0)
   }
 
   // ─── Category create handler ───
@@ -285,7 +286,7 @@ export default function InventarioPage() {
                             </div>
                             <div className="w-auto shrink-0 text-right sm:w-24">
                               <StatePill tone={stock > 0 ? "success" : "destructive"} className="font-mono tabular-nums">
-                                {stock} uds
+                                {formatCantidad(stock)} uds
                               </StatePill>
                             </div>
                             <div className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
@@ -324,7 +325,7 @@ export default function InventarioPage() {
                                           {pres.codigo_barras && (
                                             <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{pres.codigo_barras}</span>
                                           )}
-                                          <span className="font-mono text-xs text-muted-foreground">×{pres.factor_conversion}</span>
+                                          <span className="font-mono text-xs text-muted-foreground">×{formatCantidad(pres.factor_conversion)}</span>
                                           <MoneyValue value={pres.precio_venta} className="font-semibold" />
                                         </div>
                                       ))}
@@ -336,7 +337,7 @@ export default function InventarioPage() {
                                 <div>
                                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes de inventario activos</p>
                                   {(() => {
-                                    const activeLotes = prod.lotes_inventario.filter(l => l.cantidad_disponible > 0)
+                                    const activeLotes = prod.lotes_inventario.filter(l => aNumero(l.cantidad_disponible) > 0)
                                     if (activeLotes.length === 0) {
                                       return <p className="text-xs italic text-muted-foreground">No hay existencias almacenadas para ningún lote.</p>
                                     }
@@ -345,7 +346,7 @@ export default function InventarioPage() {
                                         {activeLotes.map((lote, idx) => (
                                           <div key={`lote-${lote.id}-${idx}`} className="group flex items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
                                             <span className="w-12 font-mono text-xs text-muted-foreground">#{lote.id}</span>
-                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{lote.cantidad_disponible} uds</span>
+                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{formatCantidad(lote.cantidad_disponible)} uds</span>
                                             <span className="flex-1 font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                             {lote.fecha_vencimiento && (
                                               <span className="text-xs text-warning">
@@ -500,12 +501,12 @@ export default function InventarioPage() {
                                   return (
                                     <div key={`compra-lote-${lote.id}-${idx}`} className="flex flex-wrap items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
                                       <span className="flex-1 truncate font-medium">{prod?.nombre || `Producto #${lote.producto_id}`}</span>
-                                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{lote.cantidad_disponible}/{lote.cantidad_inicial} uds</span>
+                                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatCantidad(lote.cantidad_disponible)}/{formatCantidad(lote.cantidad_inicial)} uds</span>
                                       <span className="font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                       {lote.fecha_vencimiento && (
                                         <span className="text-xs text-warning">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
                                       )}
-                                      {lote.cantidad_disponible > 0 && !esCajero && (
+                                      {aNumero(lote.cantidad_disponible) > 0 && !esCajero && (
                                         <Button variant="outline" size="sm"
                                           className="ml-auto h-7 gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
                                           onClick={(e) => {

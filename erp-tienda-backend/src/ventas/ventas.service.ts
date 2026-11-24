@@ -310,9 +310,15 @@ export class VentasService {
         // Solo el conteo: la UI decide si ofrece «Anular» (no se puede anular
         // una venta con devoluciones).
         _count: { select: { devoluciones: true } },
+        // Solo los montos reembolsados: la pantalla descuenta las devoluciones
+        // de los «Ingresos del período».
+        devoluciones: { select: { total_reembolsado: true } },
         detalle_ventas: {
           include: {
-            presentaciones: true,
+            // Nombre del producto para mostrar «Frijol rojo · Libra».
+            presentaciones: {
+              include: { productos: { select: { nombre: true } } },
+            },
           },
         },
       },

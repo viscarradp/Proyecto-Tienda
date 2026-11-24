@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { MoneyValue } from "@/components/money-value"
-import { formatMoney } from "@/lib/format"
+import { formatMoney, aNumero, formatCantidad, montoACentavos, centavosAMonto } from "@/lib/format"
 import { StatePill } from "@/components/state-pill"
 import { StatCard } from "@/components/stat-card"
 import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
@@ -40,13 +40,14 @@ interface Presentacion {
   id: number
   descripcion: string
   producto_id: number
+  productos?: { nombre: string }
 }
 
 interface DetalleVenta {
   id: number
   venta_id: number
   presentacion_id: number
-  cantidad: number
+  cantidad: number | string
   subtotal: string
   presentaciones: Presentacion
 }
@@ -60,6 +61,7 @@ interface Venta {
   justificacion_nula: string | null
   detalle_ventas: DetalleVenta[]
   _count?: { devoluciones: number }
+  devoluciones?: { total_reembolsado: string }[]
 }
 
 interface CajaTurno {
@@ -151,7 +153,7 @@ export default function MovimientosPage() {
       base = base.filter(turno => {
         const matchId = String(turno.id).includes(searchLower)
         const matchDate = format(new Date(turno.fecha_apertura), "dd/MMM/yyyy HH:mm", { locale: es }).toLowerCase().includes(searchLower)
-        const matchEstado = turno.estado.toLowerCase().includes(searchLower)
+        const matchEstado = turno.estado.toLowerCase().includes(searchLower) || etiquetaEstado(turno.estado).toLowerCase().includes(searchLower)
         return matchId || matchDate || matchEstado
       })
     }
@@ -160,12 +162,20 @@ export default function MovimientosPage() {
   }, [turnos, periodFilter, searchTerm])
 
   const ventasFiltradas = ventas.filter(v => filteredTurnos.some(t => t.id === v.caja_turno_id))
-  // Solo sumamos ingresos de ventas que no esten anuladas
-  const ingresosPeriodo = ventasFiltradas
-    .filter(v => v.estado === 'COMPLETADA')
-    .reduce((acc, v) => acc + parseFloat(v.total), 0)
+  // Solo sumamos ventas que no estén anuladas, y descontamos lo devuelto
+  const ventasCompletadas = ventasFiltradas.filter(v => v.estado === 'COMPLETADA')
+  const vendidoCentavos = ventasCompletadas.reduce((acc, v) => acc + montoACentavos(v.total), 0)
+  const devueltoCentavos = ventasCompletadas.reduce(
+    (acc, v) => acc + (v.devoluciones ?? []).reduce((a, d) => a + montoACentavos(d.total_reembolsado), 0),
+    0,
+  )
+  const ingresosPeriodo = centavosAMonto(vendidoCentavos - devueltoCentavos)
 
-  const turnosCerradosPeriodo = filteredTurnos.filter(t => t.estado === 'CERRADA')
+  // Un turno cerrado a la fuerza también cuenta como cerrado y entra al descuadre
+  const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERRADA_FORZADA'
+  const etiquetaEstado = (estado: string) =>
+    estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
+  const turnosCerradosPeriodo = filteredTurnos.filter(t => estaCerrado(t.estado))
   const descuadreTotal = turnosCerradosPeriodo.reduce((acc, t) => acc + parseFloat(t.diferencia || "0"), 0)
   const cajaActiva = turnos.find(t => t.estado === 'ABIERTA')
 
@@ -299,7 +309,7 @@ export default function MovimientosPage() {
               </div>
             </StatCard>
 
-            <StatCard label="Ingresos del período" className="md:col-span-2" footer={`en ${ventasFiltradas.length} ventas`}>
+            <StatCard label="Ingresos del período" className="md:col-span-2" footer={`en ${ventasCompletadas.length} ventas${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}>
               <MoneyValue value={ingresosPeriodo} className="text-3xl font-bold tracking-tight" />
             </StatCard>
 
@@ -352,7 +362,7 @@ export default function MovimientosPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold">Turno #{turno.id}</h3>
-                            <StatePill tone={isAbierta ? "success" : "muted"}>{turno.estado}</StatePill>
+                            <StatePill tone={isAbierta ? "success" : turno.estado === 'CERRADA_FORZADA' ? "warning" : "muted"}>{etiquetaEstado(turno.estado)}</StatePill>
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Calendar className="h-3.5 w-3.5" />
@@ -374,7 +384,7 @@ export default function MovimientosPage() {
                           <p className="text-xs text-muted-foreground">Ventas</p>
                           <p className="font-mono text-sm font-medium text-success tabular-nums">{ventasDelTurno.length} op.</p>
                         </div>
-                        {turno.estado === 'CERRADA' ? (
+                        {estaCerrado(turno.estado) ? (
                           <>
                             <div>
                               <p className="text-xs text-muted-foreground">Cierre declarado</p>
@@ -441,7 +451,7 @@ export default function MovimientosPage() {
                           <div>
                             {ventasDelTurno.map(venta => {
                               const isVentaExpanded = expandedVenta === venta.id
-                              const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + d.cantidad, 0)
+                              const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + aNumero(d.cantidad), 0)
                               const anulada = venta.estado === 'ANULADA'
 
                               return (
@@ -460,7 +470,7 @@ export default function MovimientosPage() {
                                       {format(new Date(venta.fecha), "HH:mm:ss")}
                                     </div>
                                     <div className="hidden w-24 text-right sm:block">
-                                      <StatePill tone="muted">{totalArticulos} uds</StatePill>
+                                      <StatePill tone="muted">{formatCantidad(totalArticulos)} uds</StatePill>
                                     </div>
                                     <div className="flex flex-1 items-center justify-end gap-2">
                                       {anulada && <StatePill tone="destructive">Anulada</StatePill>}
@@ -480,9 +490,11 @@ export default function MovimientosPage() {
                                                 <Package className="h-4 w-4" />
                                               </div>
                                               <div>
-                                                <p className="font-medium">{detalle.presentaciones?.descripcion || `Producto ID #${detalle.presentacion_id}`}</p>
+                                                <p className="font-medium">{detalle.presentaciones
+                                                    ? [detalle.presentaciones.productos?.nombre, detalle.presentaciones.descripcion].filter(Boolean).join(" · ")
+                                                    : `Producto ID #${detalle.presentacion_id}`}</p>
                                                 <p className="text-xs text-muted-foreground">
-                                                  {detalle.cantidad} uds · <MoneyValue value={parseFloat(detalle.subtotal) / detalle.cantidad} tone="muted" className="text-xs" /> c/u
+                                                  {formatCantidad(detalle.cantidad)} uds · <MoneyValue value={aNumero(detalle.subtotal) / (aNumero(detalle.cantidad) || 1)} tone="muted" className="text-xs" /> c/u
                                                 </p>
                                               </div>
                                             </div>

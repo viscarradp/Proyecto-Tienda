@@ -16,14 +16,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoneyValue } from "@/components/money-value"
-import { formatMoney } from "@/lib/format"
+import { formatMoney, aNumero, formatCantidad } from "@/lib/format"
 import { apiFetch } from "@/lib/api"
 
 interface DetalleVenta {
   id: number
-  cantidad: number
+  cantidad: number | string
   subtotal: string
-  presentaciones?: { descripcion: string }
+  presentaciones?: { descripcion: string; productos?: { nombre: string } }
   presentacion_id: number
 }
 interface Venta {
@@ -75,7 +75,7 @@ export function DevolucionDialog({
   const setLinea = (id: number, patch: Partial<LineaEstado>) =>
     setLineas((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
 
-  const precioUnit = (d: DetalleVenta) => parseFloat(d.subtotal) / d.cantidad
+  const precioUnit = (d: DetalleVenta) => aNumero(d.subtotal) / (aNumero(d.cantidad) || 1)
 
   const totalReembolso = venta.detalle_ventas.reduce((acc, d) => {
     const c = parseFloat(lineas[d.id]?.cantidad || "0")
@@ -138,10 +138,12 @@ export function DevolucionDialog({
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {d.presentaciones?.descripcion || `Presentación #${d.presentacion_id}`}
+                        {d.presentaciones
+                          ? [d.presentaciones.productos?.nombre, d.presentaciones.descripcion].filter(Boolean).join(" · ")
+                          : `Presentación #${d.presentacion_id}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Vendidas {d.cantidad} ·{" "}
+                        Vendidas {formatCantidad(d.cantidad)} ·{" "}
                         <MoneyValue value={precioUnit(d)} tone="muted" className="text-xs" /> c/u
                       </p>
                     </div>
@@ -150,7 +152,7 @@ export function DevolucionDialog({
                       <Input
                         type="number"
                         min={0}
-                        max={d.cantidad}
+                        max={aNumero(d.cantidad)}
                         step="0.001"
                         inputMode="decimal"
                         placeholder="0"
