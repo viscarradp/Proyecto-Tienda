@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { CajasTurnosModule } from './cajas_turnos/cajas_turnos.module';
 import { VentasModule } from './ventas/ventas.module';
 import { ComprasModule } from './compras/compras.module';
+import { CuentasPorPagarModule } from './cuentas_por_pagar/cuentas_por_pagar.module';
 import { CategoriasGastosModule } from './categorias_gastos/categorias_gastos.module';
 import { MovimientosFinancierosModule } from './movimientos_financieros/movimientos_financieros.module';
 import { AjustesInventarioModule } from './ajustes_inventario/ajustes_inventario.module';
@@ -45,6 +46,7 @@ import { GLOBAL_THROTTLE_LIMIT } from './common/throttler-limits';
     CajasTurnosModule,
     VentasModule,
     ComprasModule,
+    CuentasPorPagarModule,
     CategoriasGastosModule,
     MovimientosFinancierosModule,
     AjustesInventarioModule,

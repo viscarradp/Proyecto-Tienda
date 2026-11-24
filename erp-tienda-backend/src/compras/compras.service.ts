@@ -27,18 +27,16 @@ export class ComprasService {
   async create(createCompraDto: CreateCompraDto, userId?: number) {
     const { detalles_lotes, ...compraData } = createCompraDto;
 
-    // ── BUG 2: Validar coherencia lógica AL_CREDITO vs origen_fondos ──
-    // Una compra a crédito significa que todavía no se paga.
-    // No puede descontar dinero real de la caja POS ni de la caja general.
-    if (
-      compraData.estado_pago === 'AL_CREDITO' &&
-      compraData.origen_fondos !== 'CAPITAL_DUEÑOS'
-    ) {
+    // Una compra al crédito no mueve dinero: no tiene origen de fondos (se
+    // ignora lo que llegue y se guarda como CREDITO). Una compra pagada sí
+    // necesita saber de dónde salió el dinero.
+    const alCredito = compraData.estado_pago === 'AL_CREDITO';
+    if (!alCredito && !compraData.origen_fondos) {
       throw new BadRequestException(
-        'Una compra a crédito no puede descontar fondos de caja. ' +
-          'Usa "CAPITAL_DUEÑOS" como origen o cambia el estado de pago a "PAGADO".',
+        'Indica de dónde salió el dinero: caja del día, bóveda o capital de la dueña.',
       );
     }
+    const origenFondos = alCredito ? 'CREDITO' : compraData.origen_fondos!;
 
     // ── BUG 3: Calcular monto_total desde los lotes (no confiar en el cliente) ──
     // En Decimal (cantidad fraccionable × costo) para no mezclar floats con dinero.
@@ -68,7 +66,7 @@ export class ComprasService {
       // alcanza, la compra se registra igual y se devuelve un aviso.
       let cajaActivaId: number | null = null;
       let avisoFondos: string | null = null;
-      if (compraData.origen_fondos === 'CAJA_POS') {
+      if (origenFondos === 'CAJA_POS') {
         // Bloquea la fila del turno abierto: evita que dos compras concurrentes
         // lean el mismo efectivo_esperado y ambas pasen la validación de fondos
         // (ver docs/decisions/0001-concurrencia-for-update.md).
@@ -92,7 +90,7 @@ export class ComprasService {
           efectivoDisponible.sub(montoCalculado),
         );
         cajaActivaId = cajaActiva.id;
-      } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
+      } else if (origenFondos === 'CAJA_GENERAL') {
         // El saldo de bóveda es un agregado derivado del libro (no una fila
         // bloqueable con FOR UPDATE). Un advisory lock serializa esta sección
         // crítica (ver docs/decisions/0001-concurrencia-for-update.md).
@@ -108,7 +106,8 @@ export class ComprasService {
           proveedor: compraData.proveedor,
           monto_total: montoCalculado, // ← monto real, no el del cliente
           estado_pago: compraData.estado_pago,
-          origen_fondos: compraData.origen_fondos,
+          origen_fondos: origenFondos,
+          usuario_id: userId ?? null,
         },
       });
 
@@ -131,9 +130,9 @@ export class ComprasService {
       }
 
       // Paso 4: Cuentas por Pagar
-      // Gracias a la validación del Bug 2, si llegamos aquí con AL_CREDITO,
-      // el origen_fondos es CAPITAL_DUEÑOS → no habrá doble impacto financiero.
-      if (compraData.estado_pago === 'AL_CREDITO') {
+      // Una compra al crédito no mueve efectivo (origen CREDITO): la deuda se
+      // paga después con abonos (módulo cuentas_por_pagar).
+      if (alCredito) {
         await tx.cuentas_por_pagar.create({
           data: {
             compra_id: compra.id,
@@ -165,7 +164,7 @@ export class ComprasService {
             efectivo_esperado: { decrement: montoCalculado },
           },
         });
-      } else if (compraData.origen_fondos === 'CAJA_GENERAL') {
+      } else if (origenFondos === 'CAJA_GENERAL') {
         // Pago desde bóveda: BOVEDA→PROVEEDOR (no requiere turno abierto).
         await tx.movimientos_financieros.create({
           data: {

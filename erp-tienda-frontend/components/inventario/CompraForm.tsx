@@ -123,11 +123,12 @@ interface CompraFormProps {
 export function CompraForm({ productos, onSuccess, inicial = false }: CompraFormProps) {
   const [proveedor, setProveedor] = React.useState("")
   const [estadoPago, setEstadoPago] = React.useState("PAGADO")
-  const [origenFondos, setOrigenFondos] = React.useState("CAPITAL_DUEÑOS")
+  const [origenFondos, setOrigenFondos] = React.useState("")
   const [lineas, setLineas] = React.useState<LoteLineForm[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const [success, setSuccess] = React.useState("")
+  const [avisos, setAvisos] = React.useState<string[]>([])
 
   const addLinea = () => {
     setLineas([...lineas, {
@@ -179,6 +180,17 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
     setLoading(true)
     setError("")
     setSuccess("")
+    setAvisos([])
+
+    const alCredito = !inicial && estadoPago === "AL_CREDITO"
+    // La carga inicial siempre es aporte en especie; una compra pagada exige
+    // elegir de dónde salió el dinero (sin valor por defecto: así no se olvida).
+    const origen = inicial ? "CAPITAL_DUEÑOS" : origenFondos
+    if (!alCredito && !origen) {
+      setError("Elige de dónde salió el dinero: caja del día, bóveda o capital de la dueña.")
+      setLoading(false)
+      return
+    }
 
     if (lineas.length === 0) {
       setError("Debes agregar al menos un lote de producto")
@@ -194,13 +206,13 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
     }
 
     try {
-      await apiFetch("/compras", {
+      const res = await apiFetch<{ avisos?: string[] }>("/compras", {
         method: "POST",
         body: JSON.stringify({
           proveedor,
           monto_total: montoTotal,
           estado_pago: estadoPago,
-          origen_fondos: origenFondos,
+          ...(alCredito ? {} : { origen_fondos: origen }),
           detalles_lotes: lineas.map(l => ({
             producto_id: parseInt(l.producto_id),
             cantidad_inicial: parseFloat(l.cantidad_inicial) || 0,
@@ -210,10 +222,15 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
         }),
       })
 
-      setSuccess("Compra registrada exitosamente. Los lotes de inventario fueron creados.")
+      setSuccess(
+        alCredito
+          ? "Compra registrada. Quedó como deuda con el proveedor; la pagas desde Gastos → Deudas."
+          : "Compra registrada exitosamente. Los lotes de inventario fueron creados.",
+      )
+      setAvisos(res?.avisos ?? [])
       setProveedor("")
       setEstadoPago("PAGADO")
-      setOrigenFondos("CAPITAL_DUEÑOS")
+      setOrigenFondos("")
       setLineas([])
       onSuccess()
     } catch (err: unknown) {
@@ -233,6 +250,14 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
       {success && (
         <div className="rounded-sm border border-success/20 bg-success/10 p-3 text-sm font-medium text-success">
           {success}
+        </div>
+      )}
+
+      {avisos.length > 0 && (
+        <div className="flex flex-col gap-1 rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning-foreground">
+          {avisos.map((a, i) => (
+            <p key={i}>{a}</p>
+          ))}
         </div>
       )}
 
@@ -271,22 +296,30 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
                 </Select>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium text-muted-foreground">Origen de fondos</Label>
-                <Select value={origenFondos} onValueChange={setOrigenFondos}>
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CAPITAL_DUEÑOS">Capital dueños</SelectItem>
-                    <SelectItem value="CAJA_GENERAL">Caja general</SelectItem>
-                    <SelectItem value="CAJA_POS">Caja POS (requiere turno abierto)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {estadoPago !== "AL_CREDITO" && (
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs font-medium text-muted-foreground">¿De dónde salió el dinero?</Label>
+                  <Select value={origenFondos} onValueChange={setOrigenFondos}>
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Elige una opción" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CAJA_POS">Caja del día (requiere turno abierto)</SelectItem>
+                      <SelectItem value="CAJA_GENERAL">Bóveda</SelectItem>
+                      <SelectItem value="CAPITAL_DUEÑOS">Capital de la dueña</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </>
           )}
         </div>
+
+        {!inicial && estadoPago === "AL_CREDITO" && (
+          <p className="rounded-sm bg-muted/50 p-3 text-xs text-muted-foreground">
+            Quedará como deuda con el proveedor; la pagas después en Gastos → Deudas.
+          </p>
+        )}
       </div>
 
       {/* Líneas de lotes */}

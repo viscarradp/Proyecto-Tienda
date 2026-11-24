@@ -61,13 +61,16 @@ export class CreateCompraDto {
   @IsIn(['PAGADO', 'AL_CREDITO'])
   estado_pago: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     enum: ['CAJA_POS', 'CAJA_GENERAL', 'CAPITAL_DUEÑOS'],
-    description: 'Origen de los fondos',
+    description:
+      'Origen de los fondos. Obligatorio con estado PAGADO; con AL_CREDITO ' +
+      'se ignora (la compra se guarda con origen CREDITO).',
   })
+  @IsOptional()
   @IsString()
   @IsIn(['CAJA_POS', 'CAJA_GENERAL', 'CAPITAL_DUEÑOS'])
-  origen_fondos: string;
+  origen_fondos?: string;
 
   @ApiProperty({
     type: [CreateLoteDto],

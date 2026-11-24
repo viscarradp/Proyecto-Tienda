@@ -119,7 +119,6 @@ describe('Reportes — patrimonio y flujo de efectivo (e2e, 3.A)', () => {
       .send({
         proveedor: 'Patrimonio-E2E',
         estado_pago: 'AL_CREDITO',
-        origen_fondos: 'CAPITAL_DUEÑOS',
         detalles_lotes: [
           {
             producto_id: prodId,
