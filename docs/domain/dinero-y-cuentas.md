@@ -23,7 +23,7 @@ el libro: mueven `efectivo_esperado` directamente (ver [`ventas-y-devoluciones.m
 
 | Tipo | Origen → destino | Nace de | Efecto en `efectivo_esperado` |
 |---|---|---|---|
-| `INGRESO_CAPITAL` | DUEÑOS → GAVETA | Sacar dinero (solo dueña); apertura con "aporte" | Suma |
+| `INGRESO_CAPITAL` | DUEÑOS → GAVETA | Apertura con "aporte de la dueña"; `POST /movimientos-financieros` (solo dueña; no está en "Sacar dinero") | Suma |
 | `INGRESO_CAPITAL` | DUEÑOS → BOVEDA | `POST /caja-general/inyeccion` (solo dueña, sin turno) | Ninguno |
 | `TRASLADO_DESDE_BOVEDA` | BOVEDA → GAVETA | "Traer de la bóveda" (solo dueña); apertura con "de la bóveda" | Suma |
 | `RETIRO_BOVEDA` | GAVETA → BOVEDA | "Guardar en bóveda" durante el turno | Resta |

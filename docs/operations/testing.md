@@ -5,7 +5,7 @@
 - **Tests unitarios** (`erp-tienda-backend/src/**/*.spec.ts`): lógica pura sin base de datos — zona horaria del negocio,
   validación de configuración de producción y `TRUST_PROXY`, filtro de excepciones de Prisma, deuda de
   stock, entre otros.
-- **Tests e2e** (`erp-tienda-backend/test/*.e2e-spec.ts`, ~150 casos en 19 archivos): levantan la app real de Nest contra un
+- **Tests e2e** (`erp-tienda-backend/test/*.e2e-spec.ts`, 156 casos en 19 archivos al cierre del Ciclo 2026-11): levantan la app real de Nest contra un
   Postgres real y cubren las invariantes del negocio — motor FIFO y sobreventa concurrente, turnos de caja, apertura con
   diferencia y origen, política "registrar y avisar", bóveda y arqueo, estado de resultados y patrimonio, devoluciones y
   anulación, venta por monto y sin stock (mostrador flexible), idempotencia, contingencia, permisos y trazabilidad (D-06),

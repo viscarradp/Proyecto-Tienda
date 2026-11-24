@@ -249,7 +249,8 @@ export default function POSPage() {
     try {
       // Cerrar: se declara el efectivo FÍSICO contado (para el descuadre real) y
       // cuánto se traslada a la bóveda. El backend registra el TRASLADO_A_BOVEDA
-      // (no un "faltante") — ver docs/modelo-contable §5.5.
+      // (no un "faltante") — ver docs/domain/caja-y-turnos.md y
+      // docs/historial/modelo-contable/00-especificaciones.md §5.5.
       await apiFetch(`/cajas-turnos/${cajaActiva.id}/cerrar`, {
         method: "PATCH",
         body: JSON.stringify({
