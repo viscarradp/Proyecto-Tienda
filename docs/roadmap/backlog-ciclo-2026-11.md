@@ -38,8 +38,8 @@ Desbloquean los lotes L5–L8. Detalle y alternativas en la auditoría de reglas
 
 **Pueden esperar al primer mes de uso:** D-07 resumen diario, D-08 nota obligatoria en
 descuadre, D-09 vencimientos, D-10 stock bajo, D-11 conteo físico, D-12 recargas, D-13 fiado,
-D-14 margen mínimo, D-16 desactivar usuarios (recomendado: sí), VIVO-09 conteo "a ciegas" al
-cerrar (hoy se muestra el esperado antes de contar).
+D-14 margen mínimo, VIVO-09 conteo "a ciegas" al cerrar (hoy se muestra el esperado antes de
+contar). D-16 (desactivar usuarios en vez de borrarlos) ya quedó hecho en L7.
 
 **✅ Backup decidido 2026-11-24:** Supabase plan gratuito + respaldo nocturno propio (`pg_dump` cifrado a la nube con un job programado) y ensayo de restauración — L3b.
 
@@ -133,7 +133,9 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | 3 | **L4** paginación + **L5a** mostrador (backend): deuda de stock, alta rápida, venta por monto | D-01/02/03 ✅ |
 | 4 | **L5b** mostrador (frontend: ticket decimal y por monto, alta rápida, avisos de stock) + **L6** fondos y apertura | D-04/15 ✅ |
 | 5 | **L7** permisos y trazabilidad + **L8** compras a crédito y deudas + **L3b** respaldo nocturno (aislado: solo scripts, CI y docs) | D-05, D-06, ARQ-03 y backup ✅ |
-| después | Nivel 2 y 3, Fase 5 (docs) | Primera semana de uso real |
+| 6–9 | **L9** + Fase 5 · **L10** + **L11** · **L12** + **L13** · **L14** (Nivel 2) | ✅ hechas |
+| ⏸ pausa | Prueba con la tienda real ([plan-fases](plan-fases.md#pausa-para-la-prueba-real)) | Pasos manuales de Supabase, respaldo y despliegue |
+| después | Lo que reporte la prueba; decisiones D-07…D-14; Nivel 3; UX-01 si se prueba por HTTP | Fin de la prueba real |
 
 ## 4. Estado
 
@@ -145,7 +147,7 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | L3a | ✅ 2026-11-24 — imagen de producción verificada (build + arranque + config inválida rechazada) | `feature/l3a-despliegue-seguro` |
 | L3b | ✅ 2026-11-24 — scripts + job nocturno + guía; ensayo de restauración local con conteos iguales. **Falta activarlo:** cargar secretos `BACKUP_DATABASE_URL` y `BACKUP_PASSPHRASE` en GitHub (ver `operations/respaldos.md`) | `feature/l3b-respaldo-nocturno` |
 | L4 | ✅ 2026-11-24 — verificado en navegador (paginación y búsqueda por número); incluye fix del buscador que rompía Movimientos (venía de L1b) | `feature/l4-paginacion` |
-| L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo /usr/bin/bash). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
+| L5a | ✅ 2026-11-24 — 104 e2e; probado de punta a punta contra la API (alta rápida → venta por monto sin stock → compra salda la deuda y corrige el costo de $0). **Cambios de schema:** `pendientes_stock`, `productos.por_revisar` | `feature/l5a-mostrador-flexible` |
 | L5b | ✅ 2026-11-24 — verificado en navegador (alta rápida, cantidad decimal, venta por monto, avisos de stock al cobrar, "7 Six-pack + 2") | `feature/l5b-mostrador-pantalla` |
 | L6 | ✅ 2026-11-24 — 125 e2e; verificado en navegador (pregunta de diferencia de apertura → INGRESO_CAPITAL; gasto mayor al esperado pasa con aviso y cae en "Otros"; asistente de bóveda) | `feature/l6-fondos-apertura` |
 | L7 | ✅ 2026-11-24 — verificado en navegador como dueña y como cajera (pantalla Usuarios, opciones de Sacar dinero, 403 con mensaje). **Cambios de schema:** `usuarios.activo`, `ventas.anulada_por_id`, `cajas_turnos.cerrado_por_id` | `feature/l7-permisos-trazabilidad` |
@@ -156,4 +158,4 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | L12 | ✅ 2026-11-24 — anular gastos, compras y mermas sin borrar (ADR 0012); verificado en navegador (gasto de $60 anulado: gaveta y estado de resultados vuelven). Ajuste en revisión: asientos de apertura marcados con `es_apertura` en vez de por texto. **Cambios de schema** en la lista de plan-fases | `feature/l12-anular-sin-borrar` |
 | L13 | ✅ 2026-11-24 — gaveta en una sola función; e2e de cuadre de un día, matriz de roles D-06 y compras. En revisión se detectó y corrigió un test dependiente del orden. Total: 284 e2e y 41 unitarios | `feature/l13-tests-gaveta-unica` |
 | L14 | ✅ 2026-11-24 — verificado en navegador: menú de usuario con «Cerrar sesión» en celular; 0 controles < 44 px a 375 px; escritorio sin cambios visuales; consola sin errores de hidratación. Etiquetas sin asociar 56 → 0 y botones de ícono sin nombre 7 → 0 | `feature/l14-accesibilidad-celular` |
-| Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | (por commitear) |
+| Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | `feature/fase5-documentacion` |
