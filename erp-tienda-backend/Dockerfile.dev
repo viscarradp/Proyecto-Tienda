@@ -1,0 +1,30 @@
+# SOLO DESARROLLO (lo usa docker-compose.yml). NUNCA desplegar esta imagen:
+# usa el Dockerfile de producción (ver docs/operations/deployment.md).
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY package*.json ./
+COPY prisma ./prisma
+
+# Instalar dependencias
+RUN npm ci
+
+# Copiar el resto del código
+COPY . .
+
+# Generar cliente de Prisma
+RUN npm run build
+
+# Exposer puerto
+EXPOSE 3000
+
+# ADVERTENCIA: `db push --accept-data-loss` borra datos si el esquema pierde
+# columnas/tablas. Es aceptable únicamente porque en docker-compose.yml
+# DATABASE_URL apunta a la base LOCAL del contenedor `postgres`. Si esta imagen
+# se ejecutara con DATABASE_URL de Supabase/producción, destruiría datos.
+# Script de entrada: sincroniza el esquema con la BD y arranca en modo watch.
+# --accept-data-loss evita que el comando quede esperando confirmación
+# interactiva (el contenedor no tiene TTY) ante cambios de esquema.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run start:dev"]

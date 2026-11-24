@@ -27,7 +27,7 @@ services:
   backend:
     build:
       context: ./erp-tienda-backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: tienda_backend
     depends_on:
       postgres:
@@ -54,7 +54,7 @@ services:
   frontend:
     build:
       context: ./erp-tienda-frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: tienda_frontend
     depends_on:
       - backend

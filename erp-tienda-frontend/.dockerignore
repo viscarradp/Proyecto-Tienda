@@ -1,0 +1,11 @@
+# Contexto de build del frontend (docker build ./erp-tienda-frontend).
+node_modules
+.next
+coverage
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile*
+.dockerignore
+*.md

@@ -17,6 +17,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { AuthModule } from './auth/auth.module';
 import { CajaGeneralModule } from './caja_general/caja_general.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { SaludModule } from './salud/salud.module';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -51,6 +52,7 @@ import { GLOBAL_THROTTLE_LIMIT } from './common/throttler-limits';
     AuthModule,
     CajaGeneralModule,
     ReportesModule,
+    SaludModule,
   ],
   controllers: [AppController],
   providers: [
