@@ -56,6 +56,11 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const [intentado, setIntentado] = React.useState(false)
+  // NEG-17: aviso (no bloqueo) al cambiar el múltiplo de una presentación con
+  // ventas. `factorAvisado` guarda qué cambio ya se avisó; con el mismo cambio,
+  // el segundo «Guardar» sigue adelante.
+  const [avisoFactor, setAvisoFactor] = React.useState("")
+  const [factorAvisado, setFactorAvisado] = React.useState("")
   // Lo último que se sabe guardado en el servidor. Se actualiza a medida que
   // cada cambio se guarda, para no reenviar lo ya guardado si algo falla.
   const [base, setBase] = React.useState<{ nombre: string; categoriaId: string; pres: Presentacion[] }>({
@@ -82,6 +87,8 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
       setBase({ nombre: producto.nombre, categoriaId: producto.categoria_id.toString(), pres })
       setError("")
       setIntentado(false)
+      setAvisoFactor("")
+      setFactorAvisado("")
     }
   }, [open, producto])
 
@@ -120,6 +127,31 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
     setLoading(true)
     setError("")
+
+    // Aviso de múltiplo con ventas (no bloquea: puede ser una corrección legítima).
+    const factorCambiado = cambiadas.filter(
+      (p) => aNumero(base.pres.find((b) => b.id === p.id)?.factor_conversion) !== aNumero(p.factor_conversion),
+    )
+    if (factorCambiado.length > 0) {
+      const firma = factorCambiado.map((p) => `${p.id}:${aNumero(p.factor_conversion)}`).join("|")
+      if (firma !== factorAvisado) {
+        const usos = await Promise.all(
+          factorCambiado.map((p) =>
+            apiFetch<{ ventas: number }>(`/presentaciones/${p.id}/uso`).catch(() => ({ ventas: 0 })),
+          ),
+        )
+        if (usos.some((u) => u.ventas > 0)) {
+          setFactorAvisado(firma)
+          setAvisoFactor(
+            "Esta presentación ya tiene ventas: cambiar el múltiplo cambia cómo se cuentan las unidades vendidas antes. " +
+              "Si es una corrección, toca «Guardar de todos modos».",
+          )
+          setLoading(false)
+          return
+        }
+      }
+    }
+    setAvisoFactor("")
 
     const guardado: string[] = []
     const nuevaBase = { ...base, pres: [...base.pres] }
@@ -208,6 +240,12 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
           {error && (
             <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
               {error}
+            </div>
+          )}
+
+          {avisoFactor && (
+            <div className="rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning">
+              {avisoFactor}
             </div>
           )}
 
@@ -342,7 +380,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar cambios"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : avisoFactor ? "Guardar de todos modos" : "Guardar cambios"}
             </Button>
           </div>
         </form>

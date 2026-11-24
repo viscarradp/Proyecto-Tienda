@@ -247,6 +247,9 @@ model productos {
   created_at       DateTime?          @default(now()) @db.Timestamptz(6)
   // L5a (D-02): alta rápida de la cajera; la dueña lo revisa y lo apaga.
   por_revisar      Boolean            @default(false)
+  // L11 (ARQ-16): un producto con historial no se borra, se desactiva. Los
+  // inactivos no salen en GET /productos (ni en el POS) salvo incluir_inactivos.
+  activo           Boolean            @default(true)
   lotes_inventario lotes_inventario[]
   presentaciones   presentaciones[]
   pendientes_stock pendientes_stock[]

@@ -1,8 +1,10 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { MENSAJE_SOLO_DUENA } from '../common/permisos';
 import { CreateAjusteInventarioDto } from './dto/create-ajustes_inventario.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -11,16 +13,52 @@ import { TX_OPTIONS } from '../common/transaccion';
 import { redondearDinero } from '../common/redondeo';
 import { resolverPendientesConLote } from '../common/pendientes-stock';
 
+/** Tipos de ajuste negativo (mermas): la cajera puede registrarlos. */
+const MERMAS = ['QUEBRADO', 'VENCIDO', 'ROBO'];
+
 @Injectable()
 export class AjustesInventarioService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createAjusteDto: CreateAjusteInventarioDto, userId?: number) {
-    const { lote_id, cantidad_ajustada, tipo_ajuste, justificacion } =
-      createAjusteDto;
+  async create(
+    createAjusteDto: CreateAjusteInventarioDto,
+    userId?: number,
+    rol: string = 'ADMIN',
+  ) {
+    const { cantidad_ajustada, tipo_ajuste, producto_id } = createAjusteDto;
+    const justificacion = createAjusteDto.justificacion?.trim() || undefined;
 
     // Ajuste POSITIVO (encontrar stock / conteo hacia arriba) vs merma (§6, 2.D).
     const esPositivo = tipo_ajuste === 'CONTEO_SOBRANTE';
+
+    // D-06: la cajera registra mermas (con autor y motivo); los conteos son
+    // de la dueña.
+    if (rol !== 'ADMIN') {
+      if (!MERMAS.includes(tipo_ajuste)) {
+        throw new ForbiddenException(MENSAJE_SOLO_DUENA);
+      }
+      if (!justificacion) {
+        throw new BadRequestException(
+          'Escribe el motivo de la merma (qué pasó con el producto).',
+        );
+      }
+    }
+
+    if (createAjusteDto.lote_id !== undefined && producto_id !== undefined) {
+      throw new BadRequestException(
+        'Indica el lote o el producto, no los dos a la vez.',
+      );
+    }
+    if (createAjusteDto.lote_id === undefined) {
+      if (producto_id === undefined) {
+        throw new BadRequestException('Indica el lote o el producto.');
+      }
+      if (!esPositivo) {
+        throw new BadRequestException(
+          'Las mermas se registran sobre un lote. Elige el lote.',
+        );
+      }
+    }
 
     return await this.prisma.$transaction(async (tx) => {
       // Orden global de locks: turno → (venta) → lotes
@@ -43,16 +81,46 @@ export class AjustesInventarioService {
 
       // 1. Buscar el lote BAJO LOCK y validarlo: una venta concurrente no puede
       //    descontarlo entre esta lectura y la escritura.
-      const [lote] = await tx.$queryRaw<LoteInventarioRow[]>`
-        SELECT id, producto_id, cantidad_disponible, costo_unitario_adquisicion
-        FROM lotes_inventario
-        WHERE id = ${lote_id}
-        FOR UPDATE
-      `;
-
-      if (!lote) {
-        throw new NotFoundException(`Lote con ID ${lote_id} no encontrado`);
+      //    Con `producto_id` (solo sobrante) el lote es el más reciente del
+      //    producto aunque esté en 0 (NEG-16).
+      let lote: LoteInventarioRow | undefined;
+      if (createAjusteDto.lote_id !== undefined) {
+        [lote] = await tx.$queryRaw<LoteInventarioRow[]>`
+          SELECT id, producto_id, cantidad_disponible, costo_unitario_adquisicion
+          FROM lotes_inventario
+          WHERE id = ${createAjusteDto.lote_id}
+          FOR UPDATE
+        `;
+        if (!lote) {
+          throw new NotFoundException(
+            `Lote con ID ${createAjusteDto.lote_id} no encontrado`,
+          );
+        }
+      } else {
+        [lote] = await tx.$queryRaw<LoteInventarioRow[]>`
+          SELECT id, producto_id, cantidad_disponible, costo_unitario_adquisicion
+          FROM lotes_inventario
+          WHERE producto_id = ${producto_id}
+          ORDER BY fecha_ingreso DESC, id DESC
+          LIMIT 1
+          FOR UPDATE
+        `;
+        if (!lote) {
+          const producto = await tx.productos.findUnique({
+            where: { id: producto_id },
+            select: { id: true },
+          });
+          if (!producto) {
+            throw new NotFoundException(
+              `Producto con ID ${producto_id} no encontrado`,
+            );
+          }
+          throw new BadRequestException(
+            'Registra una compra o el inventario inicial de este producto',
+          );
+        }
       }
+      const lote_id = lote.id;
 
       // 2. Validar Cantidad (Decimal desde 1.B). Para un ajuste positivo no hay
       //    tope: se está AGREGANDO stock, no quitando.

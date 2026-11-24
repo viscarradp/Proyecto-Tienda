@@ -86,6 +86,18 @@ export class PresentacionesService {
     });
   }
 
+  /**
+   * Uso de la presentación (NEG-17): cuántas líneas de venta la tienen. Sirve
+   * para avisar antes de cambiar su múltiplo; no es un bloqueo.
+   */
+  async getUso(id: number) {
+    await this.findOne(id);
+    const ventas = await this.prisma.detalle_ventas.count({
+      where: { presentacion_id: id },
+    });
+    return { presentacion_id: id, ventas };
+  }
+
   async remove(id: number) {
     try {
       await this.findOne(id);

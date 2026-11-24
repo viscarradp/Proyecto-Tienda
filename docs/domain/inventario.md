@@ -14,6 +14,29 @@
 - Catálogo (crear/editar/borrar productos, presentaciones y categorías) y **precios**: solo la dueña. La cajera lee el
   catálogo y puede hacer **alta rápida**.
 
+### Alta, búsqueda y cambio rápido de precio
+
+- **Alta atómica.** `POST /productos` acepta `presentaciones` (descripción, factor, precio, código opcional; máx. 20) y
+  crea producto + presentaciones en una sola transacción. Un código de barras repetido (en la base o dentro del mismo
+  cuerpo) da 409 ("Ese código de barras ya es de «X»") y no se crea nada; una presentación inválida da 400 y tampoco
+  crea nada. En la UI el diálogo arranca con la última categoría usada y una presentación "Unidad" ×1; el campo de
+  código de barras va primero y con el foco, para que el lector escriba ahí y no en "Nombre".
+- **Buscador y precio.** El catálogo se busca sin acentos ni mayúsculas por nombre, presentación o código. Tocar el
+  precio de una presentación lo vuelve editable (Enter o "Guardar") y usa `PATCH /presentaciones/:id`, así que deja
+  historial.
+- **Múltiplo con ventas.** `GET /presentaciones/:id/uso` devuelve cuántas líneas de venta tiene la presentación; la UI lo
+  consulta al guardar un cambio de `factor_conversion` y, si hay ventas, avisa ("cambiar el múltiplo cambia cómo se
+  cuentan las unidades vendidas antes") y deja guardar de todos modos. No bloquea.
+
+### Desactivar en vez de borrar
+
+`productos.activo` (default `true`). `DELETE /productos/:id` (solo ADMIN) **desactiva** el producto si tiene historial
+(lotes, ventas o deuda de stock) y lo borra de verdad —con sus presentaciones— si nunca se usó; responde
+`{ id, nombre, desactivado }`. `GET /productos` devuelve solo los activos (así el POS no ofrece lo desactivado);
+`?incluir_inactivos=true` suma los desactivados y **solo lo respeta para ADMIN**. `PATCH /productos/:id/reactivar` (solo
+ADMIN) lo devuelve al catálogo. En Inventario: "Desactivar" en el producto y el filtro "Ver desactivados" con
+"Reactivar".
+
 ### Historial de precios
 
 Cada vez que `PATCH /presentaciones/:id` cambia `precio_venta`, se guarda una fila en
@@ -67,23 +90,32 @@ Registran lotes; el `monto_total` lo calcula el backend (suma por lote de `canti
 2 decimales antes de sumar). Origen del dinero, crédito y abonos: [`dinero-y-cuentas.md`](dinero-y-cuentas.md). Al
 crear los lotes se cubren los pendientes de stock de cada producto. La compra guarda quién la registró.
 
-## Mermas y conteos (solo ADMIN)
+## Mermas y conteos
 
-`POST /ajustes-inventario` sobre un lote, con `tipo_ajuste`:
+`POST /ajustes-inventario`, con `tipo_ajuste`:
 
-| Tipo | Efecto | Movimiento financiero |
-|---|---|---|
-| `QUEBRADO`, `VENCIDO`, `ROBO`, `CONTEO` | Resta del lote (no puede superar lo disponible, 400) | `MERMA_INVENTARIO` por `costo_asumido` (sin cuentas origen/destino) |
-| `CONTEO_SOBRANTE` | **Suma** al lote (sin tope) y cubre pendientes de stock | Ninguno |
+| Tipo | Quién | Efecto | Movimiento financiero |
+|---|---|---|---|
+| `QUEBRADO`, `VENCIDO`, `ROBO` (mermas) | ADMIN y **CAJERO** (con motivo obligatorio) | Resta del lote (no puede superar lo disponible, 400) | `MERMA_INVENTARIO` por `costo_asumido` (sin cuentas origen/destino) |
+| `CONTEO` | solo ADMIN | Resta del lote | igual que una merma |
+| `CONTEO_SOBRANTE` | solo ADMIN | **Suma** (sin tope) y cubre pendientes de stock | Ninguno |
 
+- **La cajera registra mermas** (D-06: opera con autor y motivo): `justificacion` es obligatoria para ella (400 si falta o
+  son solo espacios) y el ajuste y su movimiento quedan con su `usuario_id`. Un conteo de la cajera da 403 ("Esto lo hace
+  la dueña (administradora)."). Leer la lista de ajustes sigue siendo solo de la dueña.
+- Las mermas y `CONTEO` van siempre sobre un `lote_id`. En Inventario, "Registrar merma" está en cada producto (elige
+  lote si hay varios, el más viejo por defecto).
+- **Encontré producto (conteo hacia arriba sin lote con stock).** `CONTEO_SOBRANTE` acepta `producto_id` en lugar de
+  `lote_id` (uno u otro, 400 si vienen los dos o ninguno): se suma al **lote más reciente del producto aunque esté en 0**
+  (orden `fecha_ingreso` desc, `id` desc), así un producto agotado que aparece en la bodega se puede sumar sin una
+  compra falsa. Si el producto nunca tuvo lotes, 400: "Registra una compra o el inventario inicial de este producto".
 - `costo_asumido = cantidad × costo del lote`, redondeado a 2 decimales; es informativo/contable: **una merma no mueve
   efectivo** (es pérdida de inventario ya pagado), pero sí baja la utilidad en el estado de resultados.
 - La merma se registra **haya o no turno abierto** (`caja_turno_id` nullable): una merma un domingo sin turno también
   llega al período correcto. Un sobrante no genera movimiento: su costo fluirá al venderse.
-- Bloqueo del lote bajo `FOR UPDATE`; si hay turno abierto, se bloquea antes que el lote (orden global de locks).
+- Bloqueo del lote bajo `FOR UPDATE`; si hay turno abierto, se bloquea antes que el lote (orden global de locks). El
+  sobrante por producto bloquea el lote más reciente y luego los pendientes (turno → lotes → pendientes).
 
 ## Pendiente (no construido todavía)
 
-Buscador y cambio rápido de precio, alta de producto atómica, mermas registradas por la cajera, aviso al cambiar el
-factor de una presentación con ventas (L11), reversos de compras/gastos/ajustes (L12): ver
-[backlog](../roadmap/backlog-ciclo-2026-11.md).
+Reversos de compras/gastos/ajustes (L12): ver [backlog](../roadmap/backlog-ciclo-2026-11.md).
