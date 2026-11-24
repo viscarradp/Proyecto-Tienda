@@ -1,0 +1,13 @@
+# Contexto de build del backend (docker build ./erp-tienda-backend).
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile*
+.dockerignore
+test
+scripts
+*.md

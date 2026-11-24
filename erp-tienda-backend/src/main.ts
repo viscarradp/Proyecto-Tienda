@@ -1,20 +1,32 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { zonaHorariaNegocio } from './common/zona-horaria';
+import {
+  aplicarTrustProxy,
+  validarConfigProduccion,
+} from './common/config-produccion';
 
 async function bootstrap() {
   // Falla rápido si ZONA_HORARIA_NEGOCIO es inválida (los reportes dependen de ella).
   zonaHorariaNegocio();
+  // En producción exige CORS_ORIGINS y un JWT_SECRET fuerte (ADR 0010).
+  validarConfigProduccion();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Swagger solo en entornos no productivos, salvo que se habilite a propósito
-  // (ver docs/decisions/0004-hardening-http.md).
+  // Detrás de un balanceador (Cloud Run, etc.) req.ip sería la del proxy y el
+  // rate-limit contaría a toda la tienda como un solo cliente. Desactivado por
+  // defecto; ver TRUST_PROXY en docs/operations/configuration.md.
+  aplicarTrustProxy(app, process.env.TRUST_PROXY);
+
+  // Swagger es opt-in: solo en desarrollo o con ENABLE_SWAGGER=true. Si falta
+  // NODE_ENV queda apagado (default seguro; ver docs/decisions/0010).
   const swaggerEnabled =
-    process.env.NODE_ENV !== 'production' ||
+    process.env.NODE_ENV === 'development' ||
     process.env.ENABLE_SWAGGER === 'true';
 
   // Helmet: cuando Swagger UI está activo relajamos la CSP por defecto (sus

@@ -1,0 +1,20 @@
+# SOLO DESARROLLO (next dev con hot-reload; lo usa docker-compose.yml).
+# Para producción usa el Dockerfile (ver docs/operations/deployment.md).
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY package*.json ./
+
+# Instalar dependencias
+RUN npm ci
+
+# Copiar el resto del código
+COPY . .
+
+# Exposer puerto
+EXPOSE 3001
+
+# Arrancar Next.js en modo desarrollo
+CMD ["npm", "run", "dev"]

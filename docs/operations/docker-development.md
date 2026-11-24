@@ -14,12 +14,13 @@ Este documento describe cómo usar Docker y Docker Compose para el desarrollo de
 Proyecto-Tienda/
 ├── docker-compose.yml          # Configuración principal (los 3 servicios)
 ├── .env.example                # Plantilla de variables SOLO para docker-compose
-├── .dockerignore                # Archivos ignorados en las builds
 ├── erp-tienda-backend/
-│   ├── Dockerfile               # Imagen del backend (NestJS)
+│   ├── Dockerfile.dev           # Imagen de DESARROLLO del backend (NestJS); la de producción es Dockerfile
+│   ├── .dockerignore            # Contexto de build del backend
 │   └── .env.example              # Plantilla para correr el backend SIN Docker
 ├── erp-tienda-frontend/
-│   ├── Dockerfile               # Imagen del frontend (Next.js)
+│   ├── Dockerfile.dev           # Imagen de DESARROLLO del frontend (Next.js); la de producción es Dockerfile
+│   ├── .dockerignore            # Contexto de build del frontend
 │   └── .env.example              # Plantilla para correr el frontend SIN Docker
 └── scripts/
     └── docker-dev.sh           # Script helper para desarrollo

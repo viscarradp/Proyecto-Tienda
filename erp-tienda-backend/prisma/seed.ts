@@ -1,38 +1,24 @@
 import { PrismaClient } from '@prisma/client'
-import * as bcrypt from 'bcrypt'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 
-const prisma = new PrismaClient()
+// Seed de catálogos base, idempotente. NO crea usuarios: el admin inicial se
+// crea al arrancar el backend con INITIAL_ADMIN_PASSWORD
+// (ver docs/decisions/0003-admin-seed-por-env.md).
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool as any) })
 
 async function main() {
-  console.log('🌱 Sembrando base de datos...')
+  console.log('Sembrando catálogos base...')
 
-  // 1. Crear Usuario Admin por defecto
-  const adminExists = await prisma.usuarios.findFirst({
-    where: { nombre: 'admin' }
-  })
-
-  if (!adminExists) {
-    const hashedPassword = await bcrypt.hash('admin123', 10)
-    await prisma.usuarios.create({
-      data: {
-        nombre: 'admin',
-        password_hash: hashedPassword,
-        rol: 'ADMIN',
-      },
-    })
-    console.log('✅ Usuario ADMIN creado: admin / admin123')
-  } else {
-    console.log('ℹ️ Usuario ADMIN ya existe.')
-  }
-
-  // 2. Crear algunas categorías básicas de ejemplo
   const catGeneral = await prisma.categorias.findUnique({ where: { nombre: 'General' } })
   if (!catGeneral) {
     await prisma.categorias.create({
       data: { nombre: 'General' }
     })
   }
-  
+
   const catExGasto = await prisma.categorias_gastos.findUnique({ where: { nombre: 'Operativos' } })
   if (!catExGasto) {
     await prisma.categorias_gastos.create({
@@ -40,7 +26,7 @@ async function main() {
     })
   }
 
-  console.log('🚀 Siembra completada con éxito.')
+  console.log('Siembra completada.')
 }
 
 main()
