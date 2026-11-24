@@ -4,9 +4,9 @@
 >
 > **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
 >
-> **Última actualización:** 2026-07-08 (Bloques 1–3 de la auditoría de negocio completos y mergeados a `master`, incluido el SRS v3.0).
+> **Última actualización:** 2026-11-24 (arranca el **Ciclo 2026-11** — ver la sección homónima abajo).
 >
-> **¿Qué sigue?** Las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E, diferido por decisión de nube/secrets) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
+> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) es el trabajo activo; su estado vive en la sección "Ciclo 2026-11" de este documento. Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — el tracker de esos bloques es [`../modelo-contable/02-bitacora.md`](../modelo-contable/02-bitacora.md). Pendientes antes de la primera venta real: **backup automatizado** (Bloque 2.E, diferido por decisión de nube/secrets) y correr `db push` contra la Supabase real (paso manual). Deuda técnica diferida en [`hardening-backlog.md`](hardening-backlog.md).
 
 ---
 
@@ -324,6 +324,39 @@ e2e completos contra Postgres real, todos en verde.
 
 Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
 "no" como decisión explícita de producto, no como código).
+
+---
+
+## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — 🔄 EN PROGRESO
+
+**Principio rector (fijado por el usuario el 2026-11-24):** el sistema debe **apoyar, no
+imponer**. La prioridad es la flexibilidad y la rapidez de uso para que la tienda no lo
+abandone por frustración. Toda regla nueva pasa por el filtro: *¿bloquea a la cajera? ¿hay
+pérdida real de dinero si no se bloquea?* — si no hay pérdida, se registra y se avisa, no se
+bloquea.
+
+**Forma de trabajo:** un líder planea, delega en subagentes (modelo económico, Sonnet) y
+revisa; cada cambio va en su rama `feature/*`, con test que reproduce primero, docs del área
+actualizados en el mismo cambio, revisión del diff + lint/build/unit/e2e (+ navegador si toca
+UI) y merge `--no-ff` a `master`. Las auditorías son de solo lectura y dejan su informe
+congelado en `../auditorias/`.
+
+| Fase | Contenido | Estado |
+|---|---|---|
+| 0 | Banco de pruebas: dependencias, Postgres local, línea base verde | 🔄 |
+| 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente) | ⏳ |
+| 2 | Auditorías en paralelo (solo lectura): arquitectura, código, reglas de negocio (incl. reglas faltantes), interfaz/UX | ⏳ |
+| 3 | Consolidación: verificar hallazgos, deduplicar, backlog único 🔴/🟡/⚪ y decisiones de negocio con el usuario | ⏳ |
+| 4 | Implementación por lotes (máx. 2 subagentes a la vez, áreas sin archivos en común) | ⏳ |
+| 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema, proyectos cerrados a historial), SRS v3.1, README | ⏳ |
+
+**Decisión tomada para 1A:** una venta que ya tiene devoluciones **no se puede anular**; la
+UI ofrece "Devolver el resto". El botón *Anular* solo aparece en ventas del turno abierto.
+
+**Pendientes de decisión ya identificados (se resuelven en la Fase 3):** vender sin stock
+registrado (hoy bloquea la venta completa), diferencia entre el remanente del último cierre y
+el fondo de apertura (hoy no deja rastro), CAJERO puede pagar gastos desde bóveda vía API,
+no se registra quién anula una venta.
 
 ---
 
