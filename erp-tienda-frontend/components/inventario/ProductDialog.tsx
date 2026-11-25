@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -333,7 +334,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 border-t border-border pt-4">
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={handleClose}>
               Cancelar
             </Button>
@@ -345,7 +346,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                 </>
               ) : "Crear producto"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
       <ConfirmDialog
@@ -466,14 +467,14 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
             <MensajeCampo error={intentado ? errorPrecio(precioVenta) : null} aviso={avisoPrecio(precioVenta)} />
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-border pt-4">
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={handleClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
               {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</> : "Agregar presentación"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

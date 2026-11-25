@@ -4,7 +4,6 @@ import * as React from "react"
 import { Loader2, HandCoins, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -242,13 +242,13 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
               <Input id="deudasproveedores-nota-opcional" value={nota} maxLength={255} onChange={e => setNota(e.target.value)}
                 placeholder="Ej. Factura 123" className="h-12 md:h-12" />
             </div>
-            <div className={cn("flex justify-end gap-3 pt-2")}>
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setObjetivo(null)}>Cancelar</Button>
               <Button type="submit" disabled={enviando} className="gap-2">
                 {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
                 Registrar pago
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

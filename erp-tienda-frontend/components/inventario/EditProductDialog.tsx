@@ -9,6 +9,7 @@ import { es } from "date-fns/locale"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -379,14 +380,14 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-border pt-4">
+          <DialogFooter className="-mx-6 -mb-6 px-6 py-4">
             <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : avisoFactor ? "Guardar de todos modos" : "Guardar cambios"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

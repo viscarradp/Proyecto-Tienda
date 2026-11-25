@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -273,7 +274,7 @@ export function SacarDineroDialog({
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setModo(null)}>
                 Atrás
               </Button>
@@ -281,7 +282,7 @@ export function SacarDineroDialog({
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                 {hayMonto ? `Confirmar ${montoTxt}` : "Confirmar"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>

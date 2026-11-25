@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -967,7 +968,7 @@ export default function InventarioPage() {
             Si ya tiene ventas o compras, se desactiva: deja de salir en Vender y su historial se conserva (lo puedes
             reactivar en «Ver desactivados»). Si nunca se usó, se elimina del catálogo.
           </p>
-          <div className="flex justify-end gap-3 pt-2">
+          <DialogFooter>
             <Button type="button" variant="secondary" disabled={quitando} onClick={() => setProductoAQuitar(null)}>
               Cancelar
             </Button>
@@ -975,7 +976,7 @@ export default function InventarioPage() {
               {quitando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
               Desactivar
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <ConfirmDialog

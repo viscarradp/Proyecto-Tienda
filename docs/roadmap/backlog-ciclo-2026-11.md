@@ -182,7 +182,7 @@ en [`../auditorias/2026-11-25-ux-ui/`](../auditorias/2026-11-25-ux-ui/).
 
 | Ola | Contenido | Estado |
 |---|---|---|
-| 1 · Cobro y diálogos seguros | CAJ-20, CAJ-07, CAJ-19, CAJ-16, CAJ-23, CAJ-33, VIS-28, VIS-01, DUE-02, DUE-03 | ⏳ propuesta |
+| 1 · Cobro y diálogos seguros | CAJ-20, CAJ-07, CAJ-19, CAJ-16, CAJ-23, CAJ-33, VIS-28, VIS-01, DUE-02, DUE-03 | ✅ 2026-11-25 — tres subagentes (cobro; diálogos y compra; pies de diálogo). Verificado en navegador: cobro con respuesta perdida + recarga → **una sola venta** (misma clave); escaneo con el foco en Cantidad agrega el producto sin tocar el campo; "Paga con" se limpia al vaciar; modo apagón sobrevive a recargar; salir con ticket pregunta; precio cambiado se corrige con aviso; a 375×500 "Confirmar cierre" y "Registrar compra" quedan visibles (pie fijo en todos los diálogos); compra con datos no se cierra con clic afuera y Esc pide confirmar. `feature/ola1-cobro-dialogos` |
 | 2 · Mostrador en el celular | CAJ-18/VIS-18, CAJ-21, CAJ-13/VIS-17, CAJ-14, CAJ-15, VIV-19, CAJ-04, VIV-02, CAJ-27, CAJ-28, CAJ-17, VIS-27 | ⏳ propuesta |
 | 3 · Números confiables | DUE-27, VIV-01, DUE-30/VIV-15, DUE-31, VIS-19, VIV-13, VIV-14/DUE-35, DUE-34/VIS-06, DUE-23/VIV-16, DUE-21, VIV-03/DUE-07 | ⏳ propuesta |
 | 4 · Sistema visual y lenguaje | VIV-06/VIS-02, VIS-03–05, VIS-08–11, VIS-13, VIS-15, VIS-24, VIS-25, tema T11 | ⏳ propuesta |

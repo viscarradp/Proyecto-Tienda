@@ -32,7 +32,11 @@ suma exacta de lo guardado). En compras se aplica el mismo criterio por lote.
 400). Con la misma clave, un reintento (típico tras un corte de red) **devuelve la venta ya creada** sin tocar stock
 ni efectivo, incluso si su turno ya se cerró. Está respaldado por la columna única `ventas.clave_idempotencia`; la
 verificación real contra carreras ocurre dentro de la transacción, bajo el lock del turno. Sin el header todo
-funciona igual que antes. El POS genera una clave por cobro.
+funciona igual que antes. El POS genera una clave por ticket y la guarda en `sessionStorage` junto con la "firma" del
+ticket (productos y cantidades): si la respuesta del cobro se pierde y la cajera **recarga la página**, el ticket guardado
+se cobra con la **misma** clave y el servidor devuelve la venta ya creada en vez de registrar otra. La clave se descarta
+al cobrar con éxito o cuando cambia el ticket. Si el cobro falla por red o por el servidor, el mensaje pide revisar en
+Movimientos antes de cobrar otra vez.
 
 ### Venta sin stock registrado ("deuda de stock", D-01)
 

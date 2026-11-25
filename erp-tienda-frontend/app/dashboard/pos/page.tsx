@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -931,13 +932,13 @@ export default function POSPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
               <Button type="submit" disabled={cajaActionLoading || faltaExplicacion} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
                 {faltaExplicacion ? "Explica la diferencia para cerrar" : "Confirmar cierre"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -949,10 +950,10 @@ export default function POSPage() {
             <DialogTitle>¿Vaciar el ticket?</DialogTitle>
             <DialogDescription>Se quitan los {items.length} productos. La venta no se registra.</DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="secondary" className="h-11 md:h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
             <Button type="button" variant="destructive" className="h-11 md:h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -424,7 +424,7 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
       </div>
 
       {/* Footer con total y botón */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-5 md:flex-row">
+      <div className="sticky bottom-0 z-10 -mb-6 flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-4 shadow-[0_-6px_10px_-6px_rgb(0_0_0/0.15)] md:flex-row md:p-5">
         <div>
           <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Monto total calculado</p>
           <MoneyValue value={montoTotal} className="text-3xl font-bold tracking-tight" />
