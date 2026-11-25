@@ -173,3 +173,19 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | UX-01 · Celular en la red local | ✅ 2026-11-25 — cookie `Secure` solo con HTTPS (y aviso si el navegador no guarda la sesión); la API toma la dirección de la página cuando está configurada en localhost; `allowedDevOrigins` con las IP de la laptop. Verificado en navegador: por IP la página carga sin bloqueo de Next y el login en localhost sigue igual. Falta la prueba con un celular real (el navegador integrado bloquea las llamadas cruzadas desde la IP) | `feature/ux01-celular-red-local` |
 | Pulido de entrega (UX-02, UX-30) | ✅ 2026-11-25 — dos subagentes en paralelo (entrada y avisos; pantallas). Verificado en navegador: `/` con sesión va al POS, esqueleto en el HTML del servidor, Estadísticas atenuada solo mientras carga, aviso "Venta registrada" a ~126 px del borde inferior en 375 px (no tapa la barra del cobro), Inventario sin errores; `generarId` probado sin `randomUUID` | `feature/pulido-entrega` |
 | Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | `feature/fase5-documentacion` |
+
+## 5. Auditoría integral de UX/UI (2026-11-25)
+
+Informe consolidado: [`../auditorias/2026-11-25-auditoria-ux-ui.md`](../auditorias/2026-11-25-auditoria-ux-ui.md)
+(143 hallazgos de cuatro miradas: cajera, dueña, diseño visual y recorrido en vivo; 6 🔴 verificados). Detalle por rol
+en [`../auditorias/2026-11-25-ux-ui/`](../auditorias/2026-11-25-ux-ui/).
+
+| Ola | Contenido | Estado |
+|---|---|---|
+| 1 · Cobro y diálogos seguros | CAJ-20, CAJ-07, CAJ-19, CAJ-16, CAJ-23, CAJ-33, VIS-28, VIS-01, DUE-02, DUE-03 | ⏳ propuesta |
+| 2 · Mostrador en el celular | CAJ-18/VIS-18, CAJ-21, CAJ-13/VIS-17, CAJ-14, CAJ-15, VIV-19, CAJ-04, VIV-02, CAJ-27, CAJ-28, CAJ-17, VIS-27 | ⏳ propuesta |
+| 3 · Números confiables | DUE-27, VIV-01, DUE-30/VIV-15, DUE-31, VIS-19, VIV-13, VIV-14/DUE-35, DUE-34/VIS-06, DUE-23/VIV-16, DUE-21, VIV-03/DUE-07 | ⏳ propuesta |
+| 4 · Sistema visual y lenguaje | VIV-06/VIS-02, VIS-03–05, VIS-08–11, VIS-13, VIS-15, VIS-24, VIS-25, tema T11 | ⏳ propuesta |
+| 5 · Responsive, accesibilidad e inventario cómodo | VIS-29–37, VIV-04, VIV-05, VIS-23, VIS-16, DUE-01, VIV-07–10, DUE-13/VIV-20, DUE-06/VIS-12/VIV-11, VIS-14, CAJ-32 | ⏳ propuesta |
+| 6 · La casa de la dueña | DUE-36, DUE-37, DUE-32, DUE-24, DUE-17/VIS-20, VIS-33/DUE-38, DUE-29 | ⏳ requiere decisiones (§5 del informe) |
+| Después del uso real | DUE-05, DUE-08, DUE-28, DUE-16, DUE-33 | ⏳ con D-07…D-14 |
