@@ -23,8 +23,10 @@ export const ETIQUETAS_REPORTE = {
   gananciaPor100: "Te quedan por cada $100 vendidos (antes de gastos)",
   patrimonio: "Lo que vale el negocio",
   flujo: "Entradas y salidas de dinero",
-  faltoGaveta: "Faltó en la gaveta",
-  soboGaveta: "Sobró en la gaveta",
+  faltoGaveta: "Faltó al contar el dinero",
+  soboGaveta: "Sobró al contar el dinero",
+  cobradoVentas: "Cobrado en ventas",
+  merma: "Mercadería perdida (rota, vencida o que no se encontró)",
   retirosDuena: "Lo que sacaste para ti",
   retirosDuenaNota: "No es gasto del negocio: no baja la ganancia.",
 } as const

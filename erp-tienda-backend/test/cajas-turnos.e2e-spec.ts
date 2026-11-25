@@ -76,6 +76,27 @@ describe('Cajas de turno — invariantes de apertura/cierre (e2e)', () => {
     expect(Number(turnoCerrado.diferencia)).toBe(15);
   });
 
+  it('el historial trae lo esperado, lo contado y lo que escribió quien cerró', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/cajas-turnos?limit=1')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const [turno] = (
+      res.body as {
+        items: {
+          estado: string;
+          efectivo_esperado: string;
+          efectivo_declarado: string;
+          observaciones: string | null;
+        }[];
+      }
+    ).items;
+    expect(turno.estado).toBe('CERRADA');
+    expect(Number(turno.efectivo_esperado)).toBe(100);
+    expect(Number(turno.efectivo_declarado)).toBe(115);
+    expect(turno.observaciones).toBe('Sobrante deliberado (prueba)');
+  });
+
   it('bajo concurrencia, solo permite cerrar el turno una vez (sin duplicar el ajuste)', async () => {
     // Turno fresco para este caso (el anterior ya quedó CERRADA).
     const abrir = await request(app.getHttpServer())

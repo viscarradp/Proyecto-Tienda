@@ -147,7 +147,7 @@ export class CuentasPorPagarService {
           caja_turno_id: cajaTurnoId,
           tipo_movimiento: 'PAGO_PROVEEDOR',
           monto,
-          descripcion: `Abono a deuda con ${cuenta.acreedor} (deuda ID ${cuenta.id})`,
+          descripcion: `Abono a ${cuenta.acreedor}`,
           usuario_id: userId,
           cuenta_origen: dto.origen,
           cuenta_destino: 'PROVEEDOR',

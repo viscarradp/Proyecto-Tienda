@@ -251,6 +251,8 @@ describe('Deudas con proveedores (e2e, L8)', () => {
       expect(mov?.cuenta_origen).toBe('BOVEDA');
       expect(mov?.cuenta_destino).toBe('PROVEEDOR');
       expect(mov?.caja_turno_id).toBeNull();
+      // La descripción es legible: nombra al proveedor y no lleva ids internos.
+      expect(mov?.descripcion).toBe('Abono a Distribuidora L8');
 
       const lista = await api()
         .get('/cuentas-por-pagar?estado=todas')

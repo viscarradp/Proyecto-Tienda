@@ -42,6 +42,7 @@ import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
 import { GAVETA, BOVEDA } from "@/lib/glosario"
 import { aNumero, formatCantidad, normalizarBusqueda } from "@/lib/format"
+import { desgloseStock, formatStock } from "@/lib/unidades"
 import { useShallow } from "zustand/react/shallow"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ProductDialog, AddPresentacionDialog } from "@/components/inventario/ProductDialog"
@@ -522,7 +523,7 @@ export default function InventarioPage() {
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {prod.por_revisar && <StatePill tone="warning">Por revisar</StatePill>}
                                   {pendiente > 0 && (
-                                    <StatePill tone="warning">Vendido sin registrar: {formatCantidad(pendiente)}</StatePill>
+                                    <StatePill tone="warning">Vendido sin registrar: {formatStock(pendiente, prod.presentaciones)}</StatePill>
                                   )}
                                 </div>
                               )}
@@ -532,7 +533,7 @@ export default function InventarioPage() {
                             </div>
                             <div className="w-auto shrink-0 text-right sm:w-24">
                               <StatePill tone={stock > 0 ? "success" : "destructive"} className="font-mono tabular-nums">
-                                {stock > 0 ? `${formatCantidad(stock)} uds` : "Agotado"}
+                                {stock > 0 ? formatStock(stock, prod.presentaciones) : "Agotado"}
                               </StatePill>
                             </div>
                             <div className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
@@ -544,6 +545,12 @@ export default function InventarioPage() {
                           {isOpen && (
                             <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
                               <div className="flex flex-col gap-4">
+                                {desgloseStock(stock, prod.presentaciones) && (
+                                  <p className="text-xs text-muted-foreground">
+                                    <span className="font-medium uppercase tracking-wide">Stock</span>{" "}
+                                    {desgloseStock(stock, prod.presentaciones)}
+                                  </p>
+                                )}
                                 {prod.por_revisar && (
                                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3">
                                     <p className="text-xs text-warning-text">
@@ -569,7 +576,7 @@ export default function InventarioPage() {
                                   <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning/10 p-3 text-xs text-warning-text">
                                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p>
-                                      <strong>Vendido sin registrar: {formatCantidad(pendiente)} uds.</strong>{" "}
+                                      <strong>Vendido sin registrar: {formatStock(pendiente, prod.presentaciones)}.</strong>{" "}
                                       Se vendió sin stock en el sistema. Registra la compra o un conteo y se cuadra solo.
                                     </p>
                                   </div>
@@ -656,7 +663,7 @@ export default function InventarioPage() {
                                         {activeLotes.map((lote, idx) => (
                                           <div key={`lote-${lote.id}-${idx}`} className="group flex items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
                                             <span className="w-12 font-mono text-xs text-muted-foreground">#{lote.id}</span>
-                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{formatCantidad(lote.cantidad_disponible)} uds</span>
+                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{formatStock(lote.cantidad_disponible, prod.presentaciones)}</span>
                                             <span className="flex-1 font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                             {lote.fecha_vencimiento && (
                                               <span className="text-xs text-warning-text">
@@ -819,7 +826,7 @@ export default function InventarioPage() {
                                   return (
                                     <div key={`compra-lote-${lote.id}-${idx}`} className="flex flex-wrap items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
                                       <span className="flex-1 truncate font-medium">{prod?.nombre || `Producto #${lote.producto_id}`}</span>
-                                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatCantidad(lote.cantidad_disponible)}/{formatCantidad(lote.cantidad_inicial)} uds</span>
+                                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatStock(lote.cantidad_disponible, prod?.presentaciones)} de {formatStock(lote.cantidad_inicial, prod?.presentaciones)}</span>
                                       <span className="font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                       {lote.fecha_vencimiento && (
                                         <span className="text-xs text-warning-text">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
