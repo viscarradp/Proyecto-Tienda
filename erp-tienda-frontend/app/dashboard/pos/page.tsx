@@ -56,6 +56,7 @@ import {
   normalizarBusqueda,
   stockEnPresentacion,
 } from "@/lib/format"
+import { formatStock } from "@/lib/unidades"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import {
   borrarSesion,
@@ -82,6 +83,8 @@ interface PresentacionRow {
   stock: number
   /** Unidades base vendidas sin stock registrado. */
   pendiente: number
+  /** Stock en la unidad base con su etiqueta ("4.43 lb"). */
+  stock_texto: string
 }
 
 interface CajaTurno {
@@ -106,11 +109,17 @@ function StockCelda({ row }: { row: PresentacionRow }) {
   const empaque = row.factor_conversion > 1
   return (
     <div className="w-24 shrink-0 text-right leading-tight">
-      <span className="font-mono text-sm font-medium tabular-nums text-success">{formatCantidad(enteras)}</span>
-      <p className="truncate text-[10px] text-muted-foreground">
-        {empaque ? row.presentacion_desc : "stock"}
-        {empaque && haySueltas ? ` + ${formatCantidad(sueltas)}` : ""}
-      </p>
+      {empaque ? (
+        <>
+          <span className="font-mono text-sm font-medium tabular-nums text-success">{formatCantidad(enteras)}</span>
+          <p className="truncate text-[10px] text-muted-foreground">
+            {row.presentacion_desc}
+            {haySueltas ? ` + ${formatCantidad(sueltas)}` : ""}
+          </p>
+        </>
+      ) : (
+        <span className="font-mono text-sm font-medium tabular-nums text-success">{row.stock_texto}</span>
+      )}
       {row.pendiente > 0 && <p className="text-[10px] text-warning-text">vendido sin registrar</p>}
     </div>
   )
@@ -421,6 +430,7 @@ export default function POSPage() {
       categoria: prod.categorias.nombre,
       stock,
       pendiente,
+      stock_texto: formatStock(stock, prod.presentaciones),
     }))
   })
 

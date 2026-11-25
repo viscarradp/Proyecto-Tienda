@@ -31,7 +31,8 @@ import { StatCard } from "@/components/stat-card"
 import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch, tipoDeError } from "@/lib/api"
-import { GAVETA, BOVEDA, etiquetaMovimiento } from "@/lib/glosario"
+import { GAVETA, BOVEDA } from "@/lib/glosario"
+import { rotuloMovimiento } from "@/lib/rotulo-movimiento"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { toast } from "sonner"
 import { format } from "date-fns"
@@ -97,6 +98,8 @@ interface CajaTurno {
   efectivo_esperado: string | null
   efectivo_declarado: string | null
   diferencia: string | null
+  /** Lo que escribió quien cerró (justificación del descuadre o del cierre forzado). */
+  observaciones?: string | null
   usuarios?: { nombre: string } | null
   cerrado_por?: { nombre: string } | null
   movimientos_financieros?: MovimientoTurno[]
@@ -133,6 +136,9 @@ function esTurnoViejo(fechaApertura: string | Date, ahora: Date = new Date()): b
   return ahora.getTime() - apertura.getTime() > HORAS_TURNO_VIEJO * 3600 * 1000
 }
 
+/** Las descripciones viejas de abonos terminan en "(deuda ID 1)": no le dice nada a la dueña. */
+const sinIdInterno = (texto: string) => texto.replace(/\s*\(deuda ID \d+\)\s*$/i, "")
+
 const numeroVenta = (id: number) => `#${String(id).padStart(5, '0')}`
 
 const MOTIVO_TURNO_CERRADO = "Ese turno ya cerró: el dinero ya se contó al cerrar."
@@ -148,17 +154,19 @@ function MovimientoFila({ mov, onAnular, motivoNoAnular }: { mov: MovimientoTurn
   const entra = mov.cuenta_destino === 'GAVETA'
   const soloBoveda = !sale && !entra
   const nombre = mov.usuarios?.nombre
+  const rotulo = rotuloMovimiento(mov)
+  const descripcion = sinIdInterno(mov.descripcion ?? "")
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 last:border-0">
       <div className="min-w-0">
         <p className={cn("truncate text-sm", mov.anulado && "line-through opacity-60")}>
-          <span className="font-medium">{etiquetaMovimiento(mov.tipo_movimiento)}</span>
-          {mov.descripcion && <span className="text-muted-foreground">: {mov.descripcion}</span>}
+          <span className="font-medium">{rotulo}</span>
+          {descripcion && <span className="text-muted-foreground">: {descripcion}</span>}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {mov.fecha && format(new Date(mov.fecha), "HH:mm")}
           {mov.categorias_gastos?.nombre && <> · {mov.categorias_gastos.nombre}</>}
-          {soloBoveda && <> · {mov.cuenta_origen === 'BOVEDA' ? `salió de la ${BOVEDA.toLowerCase()}` : `no tocó la ${GAVETA.toLowerCase()}`}</>}
+          {soloBoveda && !rotulo.toLowerCase().includes(BOVEDA.toLowerCase()) && <> · {mov.cuenta_origen === 'BOVEDA' ? `salió de la ${BOVEDA.toLowerCase()}` : `no tocó la ${GAVETA.toLowerCase()}`}</>}
           {nombre && <> · {nombre}</>}
         </p>
         {mov.anulado && <AnuladoNota motivo={mov.motivo_anulacion} quien={mov.anulado_por?.nombre} />}
@@ -257,7 +265,7 @@ export default function MovimientosPage() {
         : `Se devolverán ${monto} a la ${GAVETA.toLowerCase()} y el retiro «${mov.descripcion}» dejará de contar.`
     setAAnular({
       endpoint: `/movimientos-financieros/${mov.id}/anular`,
-      titulo: `Anular ${etiquetaMovimiento(mov.tipo_movimiento).toLowerCase()}`,
+      titulo: `Anular ${rotuloMovimiento(mov).toLowerCase()}`,
       efecto: `${efecto} Queda marcado como anulado, no se borra.`,
     })
   }
@@ -380,6 +388,14 @@ export default function MovimientosPage() {
 
   const turnosCerradosPeriodo = filteredTurnos.filter(t => estaCerrado(t.estado))
   const descuadreTotal = turnosCerradosPeriodo.reduce((acc, t) => acc + parseFloat(t.diferencia || "0"), 0)
+  const textoDia = (t: CajaTurno) => format(new Date(t.fecha_apertura), "d MMM", { locale: es })
+  const primerTurno = filteredTurnos[filteredTurnos.length - 1] // el más viejo cargado
+  const ultimoTurno = filteredTurnos[0] // el más reciente
+  const rangoFechas = primerTurno && ultimoTurno
+    ? textoDia(primerTurno) === textoDia(ultimoTurno)
+      ? textoDia(primerTurno)
+      : `del ${textoDia(primerTurno)} al ${textoDia(ultimoTurno)}`
+    : ""
   const cajaActiva = turnos.find(t => t.estado === 'ABIERTA')
 
   // Helper para obtener las ventas de un turno
@@ -595,12 +611,12 @@ export default function MovimientosPage() {
         <div className="mx-auto flex max-w-6xl flex-col gap-6">
 
           {/* Stat cards */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <StatCard
               label={`${GAVETA} (hoy)`}
               icon={cajaActiva ? DoorOpen : DoorClosed}
               footer={cajaActiva ? <>Empezó con: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
-              className={cajaActiva ? "border-success/30" : undefined}
+              className={cn("order-2 p-3 md:order-1 md:p-4", cajaActiva && "border-success/30")}
             >
               <div className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 rounded-full", cajaActiva ? "bg-success" : "bg-destructive")} />
@@ -610,18 +626,24 @@ export default function MovimientosPage() {
               </div>
             </StatCard>
 
-            <StatCard label="Ingresos de los turnos mostrados"className="md:col-span-2" footer={`en ${ventasCompletadas.length} ventas${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}>
-              <MoneyValue value={ingresosPeriodo} className="text-3xl font-bold tracking-tight" />
+            <StatCard
+              label={filteredTurnos.length === 1 ? "Vendido (último turno)" : `Vendido (últimos ${filteredTurnos.length} turnos)`}
+              className="order-1 col-span-2 p-3 md:order-2 md:p-4"
+              footer={`${rangoFechas ? `${rangoFechas} · ` : ""}${ventasCompletadas.length} ${ventasCompletadas.length === 1 ? "venta" : "ventas"}${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}
+            >
+              <MoneyValue value={ingresosPeriodo} className="text-2xl font-bold tracking-tight md:text-3xl" />
             </StatCard>
 
-            <StatCard label="Turnos visibles">
-              <div className="flex items-baseline gap-2">
-                <p className="font-mono text-2xl font-bold tabular-nums">{filteredTurnos.length}</p>
-                <p className="text-xs text-muted-foreground">turnos</p>
-              </div>
-              <p className={cn("mt-1 text-xs font-medium", descuadreTotal >= 0 ? "text-success" : "text-destructive")}>
-                Desc.: {descuadreTotal >= 0 ? '+' : ''}{descuadreTotal.toFixed(2)}{descuadreTotal > 0 ? " (sobró)" : descuadreTotal < 0 ? " (faltó)" : ""}
-              </p>
+            <StatCard label="Faltó/Sobró en los cierres" className="order-3 p-3 md:p-4">
+              {turnosCerradosPeriodo.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aún sin cierres</p>
+              ) : Math.abs(descuadreTotal) < 0.005 ? (
+                <p className="text-lg font-semibold text-muted-foreground">Cuadraron</p>
+              ) : (
+                <p className={cn("font-mono text-lg font-semibold tabular-nums", descuadreTotal > 0 ? "text-success" : "text-destructive")}>
+                  {descuadreTotal > 0 ? "+" : "−"}{formatMoney(Math.abs(descuadreTotal))}
+                </p>
+              )}
             </StatCard>
           </div>
 
@@ -690,6 +712,9 @@ export default function MovimientosPage() {
               {filteredTurnos.map(turno => {
                 const isExpanded = expandedTurno === turno.id
                 const ventasDelTurno = getVentasDelTurno(turno.id)
+                const ventasCompletadasTurno = ventasDelTurno.filter(v => v.estado === 'COMPLETADA')
+                const vendidoTurno = ventasCompletadasTurno.reduce((acc, v) => acc + montoACentavos(v.total), 0)
+                const diferenciaTurno = parseFloat(turno.diferencia || "0")
                 const isAbierta = turno.estado === 'ABIERTA'
 
                 return (
@@ -728,33 +753,40 @@ export default function MovimientosPage() {
                       </div>
 
                       {/* Resumen de totales */}
-                      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
+                      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
                         <div>
                           <p className="text-xs text-muted-foreground">Empezó con</p>
                           <MoneyValue value={turno.fondo_inicial} className="text-sm" />
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Ventas</p>
-                          <p className="font-mono text-sm font-medium text-success tabular-nums">{ventasDelTurno.length} op.</p>
+                          <p className="text-xs text-muted-foreground">
+                            Vendido · {ventasCompletadasTurno.length} {ventasCompletadasTurno.length === 1 ? "venta" : "ventas"}
+                          </p>
+                          <MoneyValue value={centavosAMonto(vendidoTurno)} tone="success" className="text-sm font-medium" />
                         </div>
                         {estaCerrado(turno.estado) ? (
                           <>
                             <div>
-                              <p className="text-xs text-muted-foreground">Cierre declarado</p>
-                              <MoneyValue value={turno.efectivo_declarado || "0"} tone="warning" className="text-sm" />
+                              <p className="text-xs text-muted-foreground">Debía haber</p>
+                              <MoneyValue value={turno.efectivo_esperado || "0"} className="text-sm" />
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground">Descuadre</p>
+                              <p className="text-xs text-muted-foreground">Contó</p>
+                              <MoneyValue value={turno.efectivo_declarado || "0"} className="text-sm" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                {diferenciaTurno > 0 ? "Sobró" : diferenciaTurno < 0 ? "Faltó" : "Resultado"}
+                              </p>
                               <div className={cn("flex items-center gap-1 font-mono text-sm font-semibold tabular-nums",
                                 getDiferenciaTone(turno.diferencia) === "success" ? "text-success" : getDiferenciaTone(turno.diferencia) === "destructive" ? "text-destructive" : "text-muted-foreground")}>
-                                {parseFloat(turno.diferencia || "0") > 0 ? <TrendingUp className="h-3.5 w-3.5" /> : parseFloat(turno.diferencia || "0") < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : null}
-                                {formatMoney(Math.abs(parseFloat(turno.diferencia || "0")))}
-                                {parseFloat(turno.diferencia || "0") > 0 ? <span className="font-sans text-xs font-medium">sobró</span> : parseFloat(turno.diferencia || "0") < 0 ? <span className="font-sans text-xs font-medium">faltó</span> : <span className="font-sans text-xs font-medium">cuadró</span>}
+                                {diferenciaTurno > 0 ? <TrendingUp className="h-3.5 w-3.5" /> : diferenciaTurno < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : null}
+                                {diferenciaTurno === 0 ? <span className="font-sans">Cuadró</span> : formatMoney(Math.abs(diferenciaTurno))}
                               </div>
                             </div>
                           </>
                         ) : (
-                          <div className="col-span-2 flex items-center text-sm text-muted-foreground md:justify-end">
+                          <div className="col-span-2 flex items-center text-sm text-muted-foreground md:col-span-3 md:justify-end">
                             Turno en curso
                           </div>
                         )}
@@ -788,6 +820,18 @@ export default function MovimientosPage() {
                     {/* Ventas Expanded */}
                     {isExpanded && (
                       <div className="border-t border-border bg-muted/20">
+                        {estaCerrado(turno.estado) && turno.observaciones?.trim() && (
+                          <div className="border-b border-border px-4 py-3">
+                            <div className="rounded-sm border border-border bg-card p-3 text-sm">
+                              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                {turno.estado === 'CERRADA_FORZADA'
+                                  ? `Por qué se cerró a la fuerza${turno.cerrado_por?.nombre ? ` (${turno.cerrado_por.nombre})` : ""}:`
+                                  : `Lo que escribió ${turno.cerrado_por?.nombre ?? turno.usuarios?.nombre ?? "quien cerró"} al cerrar:`}
+                              </p>
+                              <p>«{turno.observaciones.trim()}»</p>
+                            </div>
+                          </div>
+                        )}
                         {/* Dinero que se movió en el turno (UX-12) */}
                         <div className="border-b border-border">
                           <p className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">

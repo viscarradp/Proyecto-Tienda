@@ -42,6 +42,14 @@ Detalles que importan al interpretarlo:
 - **No restan de la utilidad:** `RETIRO_PERSONAL` (es una distribución de patrimonio; se informa aparte como
   `retiros_duenos`), `PAGO_PROVEEDOR` y abonos de deuda (el costo ya entró por el FIFO), los traslados entre gaveta y
   bóveda y los aportes de capital.
+- **`ventas_sin_costo`** `{ monto_vendido, lineas, productos[], producto_ids[] }` (DUE-27): lo vendido en el período cuyo
+  costo sigue en $0 (deuda de stock con `costo_unitario_estimado = 0`, es decir, producto sin compras que aún no se
+  cubrió). Solo ventas `COMPLETADA`; el monto prorratea el subtotal de la línea y descuenta lo devuelto. Cuando una compra
+  lo cubre, el estimado pasa al costo real y vuelve a 0. Estadísticas avisa en ámbar ("la ganancia puede estar de más") y
+  marca esos productos con "sin costo". Registra y avisa; no bloquea.
+- Nombres en pantalla: la fila bruta se llama "Cobrado en ventas", "Vendido" es solo el neto; `faltantes` se muestra como
+  "Faltó al contar el dinero" (gaveta y bóveda) y las mermas como "Mercadería perdida (rota, vencida o que no se encontró)".
+  Los umbrales de margen son únicos en la pantalla: `MARGEN_BUENO = 25` y `MARGEN_BAJO = 10`.
 - Otros campos: `margen_bruto_porcentaje = utilidad_bruta / ingreso_neto × 100` (0 si no hay ingreso) y
   `ticket_promedio = ingreso bruto ÷ ventas completadas`.
 

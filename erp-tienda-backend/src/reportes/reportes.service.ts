@@ -205,6 +205,8 @@ export class ReportesService {
             .toDecimalPlaces(2)
         : new Prisma.Decimal(0);
 
+    const ventas_sin_costo = await this.getVentasSinCosto(desde, hasta);
+
     return {
       periodo: { desde, hasta },
       ingreso_bruto_ventas: ingreso_bruto,
@@ -221,6 +223,79 @@ export class ReportesService {
       total_ventas_completadas,
       total_ventas_anuladas,
       ticket_promedio,
+      ventas_sin_costo,
+    };
+  }
+
+  /**
+   * Lo vendido en el período cuyo costo todavía es $0 (DUE-27): deuda de stock
+   * (`pendientes_stock`) con costo estimado 0, es decir, producto sin compras
+   * previas que no se ha cubierto con una compra. Cuando una compra lo cubre el
+   * estimado pasa al costo real del lote y la fila deja de contar aquí.
+   * Solo ventas COMPLETADAS; el monto se prorratea sobre el subtotal de la
+   * línea (la parte sin costo) y descuenta la proporción ya devuelta.
+   */
+  private async getVentasSinCosto(desde: Date, hasta: Date) {
+    const filas = await this.prisma.pendientes_stock.findMany({
+      where: {
+        costo_unitario_estimado: 0,
+        cantidad_base: { gt: 0 },
+        detalle_ventas: {
+          ventas: { estado: 'COMPLETADA', fecha: { gte: desde, lte: hasta } },
+        },
+      },
+      include: {
+        detalle_ventas: {
+          include: {
+            presentaciones: { include: { productos: true } },
+            detalle_devoluciones: { select: { cantidad: true } },
+          },
+        },
+      },
+    });
+
+    let monto = new Prisma.Decimal(0);
+    const lineas = new Set<number>();
+    const productos = new Map<number, string>();
+    for (const f of filas) {
+      const det = f.detalle_ventas;
+      const pres = det.presentaciones;
+      const baseLinea = new Prisma.Decimal(det.cantidad).mul(
+        pres.factor_conversion,
+      );
+      if (baseLinea.lte(0)) continue;
+      const devuelto = det.detalle_devoluciones.reduce(
+        (acc, d) => acc.add(d.cantidad),
+        new Prisma.Decimal(0),
+      );
+      const noDevuelto = Prisma.Decimal.max(
+        new Prisma.Decimal(1).sub(
+          devuelto.div(new Prisma.Decimal(det.cantidad)),
+        ),
+        0,
+      );
+      const parte = new Prisma.Decimal(det.subtotal)
+        .mul(
+          Prisma.Decimal.min(
+            new Prisma.Decimal(f.cantidad_base).div(baseLinea),
+            1,
+          ),
+        )
+        .mul(noDevuelto);
+      if (parte.lte(0)) continue;
+      monto = monto.add(parte);
+      lineas.add(det.id);
+      productos.set(pres.producto_id, pres.productos.nombre);
+    }
+
+    const ordenados = Array.from(productos.entries()).sort((a, b) =>
+      a[1].localeCompare(b[1], 'es'),
+    );
+    return {
+      monto_vendido: monto.toDecimalPlaces(2),
+      lineas: lineas.size,
+      productos: ordenados.map(([, nombre]) => nombre),
+      producto_ids: ordenados.map(([id]) => id),
     };
   }
 

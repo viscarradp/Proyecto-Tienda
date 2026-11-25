@@ -11,6 +11,9 @@
   3 decimales) para vender por peso: si el producto se cuenta en kilos, una presentación de medio kilo tiene factor 0.5.
 - Vender una presentación descuenta `cantidad × factor` unidades base. La UI muestra el stock **en la unidad de la
   presentación** (p. ej. "7 six-pack + 2 sueltas"), no en unidades base.
+- **Cómo se muestra el stock:** Inventario y Vender lo muestran en la unidad base con su etiqueta, tomada de la
+  presentación de factor 1 ("Libra" → "45.5 lb", "Unidad" → "20 uds"), a 2 decimales; en la fila expandida de Inventario
+  se agrega el desglose en la presentación mayor ("44 uds = 7 six-packs + 2 sueltas"). Helper: `lib/unidades.ts`.
 - Catálogo (crear/editar/borrar productos, presentaciones y categorías) y **precios**: solo la dueña. La cajera lee el
   catálogo y puede hacer **alta rápida**.
 

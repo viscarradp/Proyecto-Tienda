@@ -77,6 +77,16 @@ En pantalla (desde el 2026-11-25), Movimientos ofrece "Cerrar forzado" **solo en
 de hoy en la zona del negocio, o con más de 14 h abiertos. Así la dueña no cierra por error el turno que la cajera tiene
 en curso. El endpoint no cambia: la regla es de pantalla.
 
+### Cómo se ve un turno cerrado en Movimientos (ola 3, DUE-21 y DUE-23)
+
+- Encabezado: "Empezó con", "Vendido · N ventas" (solo completadas, sin anuladas), "Debía haber", "Contó" y "Faltó $X" /
+  "Sobró $X" / "Cuadró" (neutro). `GET /cajas-turnos` ya devuelve `efectivo_esperado`, `efectivo_declarado` y
+  `observaciones`; no hizo falta agregar campos.
+- Detalle: recuadro "Lo que escribió {quien cerró} al cerrar: «…»" con las `observaciones` (en el cierre forzado, "Por qué se
+  cerró a la fuerza").
+- Tarjetas de arriba: "Vendido (últimos N turnos)" con fechas del primero y del último, y "Faltó/Sobró en los cierres"
+  (con 0, "Cuadraron", en neutro). Se quitó "Turnos visibles". En celular son 2 columnas compactas.
+
 Al cerrar caja (normal), la pantalla muestra el resultado hasta que la cajera lo toca: "Caja cerrada · Cuadró · Fondo
 para mañana: $X" (o "Faltaron $X" / "Sobraron $X"). "Reabrir automáticamente" sigue marcado por defecto; desmarcarlo
 para que la mañana empiece con "Abrir caja" y el conteo está pendiente de decidir con la dueña.

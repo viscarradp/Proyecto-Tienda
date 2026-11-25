@@ -39,6 +39,11 @@ el libro: mueven `efectivo_esperado` directamente (ver [`ventas-y-devoluciones.m
 | `AJUSTE_BOVEDA_SOBRANTE` | GASTO → BOVEDA | Arqueo con sobrante | Ninguno |
 | `MERMA_INVENTARIO` | (sin cuentas) | Ajuste de inventario negativo | Ninguno: no es efectivo |
 
+**Rótulo en pantalla** (`lib/rotulo-movimiento.ts`): el tipo solo no dice dónde quedó el dinero, así que el rótulo depende
+también de la cuenta. `INGRESO_CAPITAL` a GAVETA = "Aporte de la dueña a la gaveta"; a BÓVEDA = "Dinero puesto en la
+bóveda". `EGRESO_OPERATIVO` desde BÓVEDA = "Gasto pagado de la bóveda" (desde gaveta, "Gasto"). `PAGO_PROVEEDOR` desde
+BÓVEDA = "Pago a proveedor (de la bóveda)". El resto usa `lib/glosario.ts`.
+
 `POST /movimientos-financieros` solo acepta cinco tipos: `INGRESO_CAPITAL`, `RETIRO_BOVEDA`, `EGRESO_OPERATIVO`,
 `RETIRO_PERSONAL` y `TRASLADO_DESDE_BOVEDA`; el resto los generan el cierre, la apertura, el arqueo, las compras, los
 abonos y las mermas. Todo movimiento guarda su autor (`usuario_id`) y un movimiento de gaveta exige turno abierto.
@@ -101,7 +106,8 @@ Consecuencias:
   (lo más viejo primero; con `todas`, las pendientes antes que las saldadas).
 - `POST /cuentas-por-pagar/:id/abonos` con `{ monto, origen: GAVETA | BOVEDA, nota? }` registra un `PAGO_PROVEEDOR`
   (`GAVETA→PROVEEDOR` con turno abierto, que baja `efectivo_esperado`; o `BOVEDA→PROVEEDOR`), baja `saldo_pendiente` y guarda
-  el abono (`abonos_cuentas_por_pagar`) enlazado a su movimiento, con autor.
+  el abono (`abonos_cuentas_por_pagar`) enlazado a su movimiento, con autor. La descripción del movimiento es
+  "Abono a {proveedor}" (las filas viejas decían "… (deuda ID n)"; la pantalla oculta ese sufijo).
 - **El abono no puede superar el saldo** (regla real, 400; "Esta deuda ya está pagada" si el saldo es 0). Por fondos
   insuficientes no se bloquea: se registra y se avisa.
 - Pagar una deuda de mercadería **no es un gasto**: el estado de resultados no cambia (el costo ya entró por el FIFO). En

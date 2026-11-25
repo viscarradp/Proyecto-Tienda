@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import {
   DollarSign,
-  TrendingUp,
   TrendingDown,
   ShoppingCart,
   AlertTriangle,
@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/dialog"
 import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
-import { formatMoney, formatCantidad, montoACentavos, centavosAMonto } from "@/lib/format"
+import { formatMoney, montoACentavos, centavosAMonto } from "@/lib/format"
 import { apiFetch } from "@/lib/api"
 import { BOVEDA, GAVETA, GAVETA_AYUDA, BOVEDA_AYUDA, ETIQUETAS_REPORTE as ET } from "@/lib/glosario"
 
@@ -70,6 +70,7 @@ interface EstadoResultados {
   total_ventas_completadas: number
   total_ventas_anuladas: number
   ticket_promedio: string
+  ventas_sin_costo: { monto_vendido: string; lineas: number; productos: string[]; producto_ids: number[] }
 }
 
 interface ProductoTop {
@@ -102,6 +103,7 @@ interface FlujoCuenta {
 }
 interface FlujoEfectivo {
   ventas_efectivo: string
+  devoluciones_efectivo: string
   gaveta: FlujoCuenta
   boveda: FlujoCuenta
 }
@@ -110,8 +112,16 @@ interface FlujoEfectivo {
 type Tone = "success" | "destructive" | "warning" | "primary" | "muted"
 type MarginTone = "success" | "warning" | "destructive"
 
+/** Umbrales únicos de margen ("te quedan por cada $100"): tarjeta, tabla, gráfico y leyenda. */
+const MARGEN_BUENO = 25
+const MARGEN_BAJO = 10
+
 const marginTone = (margenPct: number): MarginTone =>
-  margenPct >= 25 ? "success" : margenPct >= 10 ? "warning" : "destructive"
+  margenPct >= MARGEN_BUENO ? "success" : margenPct >= MARGEN_BAJO ? "warning" : "destructive"
+
+/** Unidades con máximo 2 decimales ("0.57", no "0.572"). */
+const formatUnidades = (n: number) =>
+  n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
 const toneText: Record<Tone, string> = {
   success: "text-success",
@@ -240,10 +250,12 @@ export default function StatsPage() {
     ? centavosAMonto(montoACentavos(estado.ingreso_bruto_ventas) - montoACentavos(estado.devoluciones))
     : 0
 
+  const sinCosto = new Set(estado?.ventas_sin_costo?.producto_ids ?? [])
+
   const chartData = productos.slice(0, 8).map(p => ({
     nombre: p.nombre.length > 16 ? p.nombre.slice(0, 15) + "…" : p.nombre,
     ingreso: parseFloat(p.ingreso),
-    tone: marginTone(parseFloat(p.margen_porcentaje)),
+    tone: sinCosto.has(p.producto_id) ? ("muted" as const) : marginTone(parseFloat(p.margen_porcentaje)),
   }))
 
   // Asistente de bóveda inicial (NEG-12): crea el INGRESO_CAPITAL de arranque con el
@@ -327,7 +339,10 @@ export default function StatsPage() {
       if (dif === 0) toast.success(`La ${BOVEDA.toLowerCase()} cuadra: tienes ${formatMoney(contadoNum)}`)
       else
         toast.success(
-          `Anotado: ${dif < 0 ? "faltaban" : "sobraban"} ${formatMoney(Math.abs(dif))}. La ${BOVEDA.toLowerCase()} quedó en ${formatMoney(contadoNum)}`,
+          dif < 0
+            ? `Anotado: faltaban ${formatMoney(Math.abs(dif))}. Esto baja la ganancia del mes; si fue un gasto o un retiro que no anotaste, anótalo y vuelve a contar. La ${BOVEDA.toLowerCase()} quedó en ${formatMoney(contadoNum)}.`
+            : `Anotado: sobraban ${formatMoney(dif)}. La ${BOVEDA.toLowerCase()} quedó en ${formatMoney(contadoNum)}`,
+          dif < 0 ? { duration: 10000 } : undefined,
         )
       setDialogo(null)
       fetchData()
@@ -423,22 +438,8 @@ export default function StatsPage() {
             {/* Cabecera: ¿estoy ganando? en una frase */}
             <Cabecera estado={estado} periodo={periodo} vendido={ingresoNeto} />
 
-            {/* KPI Cards */}
+            {/* KPI Cards (la ganancia y lo vendido ya están en la frase principal) */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <KPICard
-                label={ET.ganancia}
-                ayuda="Lo que te queda después de pagar todo."
-                value={formatMoney(estado.utilidad_neta)}
-                icon={parseFloat(estado.utilidad_neta) >= 0 ? TrendingUp : TrendingDown}
-                tone={parseFloat(estado.utilidad_neta) >= 0 ? "success" : "destructive"}
-              />
-              <KPICard
-                label={ET.vendido}
-                ayuda="Lo que cobraste, sin contar lo devuelto."
-                value={formatMoney(ingresoNeto)}
-                icon={DollarSign}
-                tone="primary"
-              />
               <KPICard
                 label={ET.costoVendido}
                 ayuda="Lo que pagaste por la mercadería que vendiste."
@@ -451,13 +452,20 @@ export default function StatsPage() {
                 ayuda="Antes de pagar gastos."
                 value={formatMoney(estado.margen_bruto_porcentaje)}
                 icon={parseFloat(estado.margen_bruto_porcentaje) >= 0 ? ArrowUpRight : ArrowDownRight}
-                tone={parseFloat(estado.margen_bruto_porcentaje) >= 15 ? "success" : "destructive"}
+                tone={marginTone(parseFloat(estado.margen_bruto_porcentaje))}
               />
               <KPICard
                 label="Compra promedio"
                 ayuda="Lo que gasta en promedio cada cliente."
                 value={formatMoney(estado.ticket_promedio)}
                 icon={ShoppingCart}
+                tone="primary"
+              />
+              <KPICard
+                label="Ventas cobradas"
+                ayuda="Cuántas ventas hiciste."
+                value={String(estado.total_ventas_completadas)}
+                icon={DollarSign}
                 tone="primary"
               />
             </div>
@@ -511,7 +519,13 @@ export default function StatsPage() {
                     icon={Wallet}
                     hint={`${GAVETA} ${formatMoney(patrimonio.efectivo.gaveta)} · ${BOVEDA} ${formatMoney(patrimonio.efectivo.boveda)}`}
                   />
-                  <BalanceItem label="Equipo y muebles" value={patrimonio.activos_fijos} icon={Landmark} />
+                  <BalanceItem
+                    label="Equipo y muebles"
+                    value={patrimonio.activos_fijos}
+                    icon={Landmark}
+                    tone={parseFloat(patrimonio.activos_fijos) > 0 ? "success" : "muted"}
+                    vacio="no registrado"
+                  />
                   <BalanceItem label="Lo que debes" value={patrimonio.deudas} icon={TrendingDown} tone="destructive" prefix="− " />
                   <div className="col-span-2 flex flex-col justify-center rounded-sm border border-primary/30 bg-primary/5 p-4 sm:col-span-3 lg:col-span-1">
                     <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{ET.patrimonio}</span>
@@ -539,7 +553,16 @@ export default function StatsPage() {
                   <FlujoCard titulo={BOVEDA} ayuda={BOVEDA_AYUDA} icon={Vault} cuenta={flujo.boveda} />
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Lo cobrado en ventas (<span className="font-medium text-foreground">{formatMoney(flujo.ventas_efectivo)}</span>) entra a la {GAVETA.toLowerCase()}.
+                  {parseFloat(flujo.devoluciones_efectivo) > 0 ? (
+                    <>
+                      Cobraste <span className="font-medium text-foreground">{formatMoney(flujo.ventas_efectivo)}</span> y devolviste{" "}
+                      <span className="font-medium text-foreground">{formatMoney(flujo.devoluciones_efectivo)}</span>: la diferencia entra a la {GAVETA.toLowerCase()}.
+                    </>
+                  ) : (
+                    <>
+                      Lo cobrado en ventas (<span className="font-medium text-foreground">{formatMoney(flujo.ventas_efectivo)}</span>) entra a la {GAVETA.toLowerCase()}.
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -554,9 +577,9 @@ export default function StatsPage() {
                   El largo de la barra es lo vendido; el color dice cuánta ganancia deja cada producto.
                 </p>
                 <ul className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <LeyendaColor tone="success" texto="Deja buena ganancia ($25 o más por cada $100)" />
-                  <LeyendaColor tone="warning" texto="Deja poca ($10 a $25 por cada $100)" />
-                  <LeyendaColor tone="destructive" texto="Casi no deja (menos de $10 por cada $100)" />
+                  <LeyendaColor tone="success" texto={`Deja buena ganancia ($${MARGEN_BUENO} o más por cada $100)`} />
+                  <LeyendaColor tone="warning" texto={`Deja poca ($${MARGEN_BAJO} a $${MARGEN_BUENO} por cada $100)`} />
+                  <LeyendaColor tone="destructive" texto={`Casi no deja (menos de $${MARGEN_BAJO} por cada $100)`} />
                 </ul>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -592,22 +615,16 @@ export default function StatsPage() {
                 <p className="mb-4 text-xs text-muted-foreground">De lo vendido, restando lo que costó y lo que gastaste.</p>
 
                 <div className="flex flex-col gap-3">
-                  <PLRow label={ET.vendido} value={estado.ingreso_bruto_ventas} type="income" />
+                  <PLRow label={ET.cobradoVentas} value={estado.ingreso_bruto_ventas} type="income" />
                   <PLRow label={ET.devuelto} value={estado.devoluciones} type="expense" />
                   <PLDivider />
-                  <PLRow label="Vendido sin lo devuelto" value={String(ingresoNeto)} type="subtotal" />
+                  <PLRow label={ET.vendido} value={String(ingresoNeto)} type="subtotal" />
                   <PLRow label={ET.costoVendido} value={estado.costo_de_ventas_fifo} type="expense" />
                   <PLDivider />
                   <PLRow label={ET.gananciaAntesGastos} value={estado.utilidad_bruta} type="subtotal" />
-                  <PLRow
-                    label={ET.gananciaPor100}
-                    value={estado.margen_bruto_porcentaje}
-                    display={formatMoney(estado.margen_bruto_porcentaje)}
-                    type="pct"
-                  />
                   <PLDivider />
                   <PLRow label="Gastos del negocio" value={estado.gastos_operativos} type="expense" />
-                  <PLRow label="Mercadería echada a perder" value={estado.mermas_inventario} type="expense" />
+                  <PLRow label={ET.merma} value={estado.mermas_inventario} type="expense" />
                   <PLRow label={ET.faltoGaveta} value={estado.faltantes} type="expense" />
                   <PLRow label={ET.soboGaveta} value={estado.sobrantes} type="plus" />
                   <PLDivider />
@@ -623,12 +640,8 @@ export default function StatsPage() {
 
                 <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Ventas cobradas</span>
-                    <span className="font-mono tabular-nums">{estado.total_ventas_completadas}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Ventas anuladas</span>
-                    <span className="font-mono tabular-nums text-destructive">{estado.total_ventas_anuladas}</span>
+                    <span className={cn("font-mono tabular-nums", estado.total_ventas_anuladas > 0 ? "text-destructive" : "text-foreground")}>{estado.total_ventas_anuladas}</span>
                   </div>
                 </div>
               </div>
@@ -664,18 +677,23 @@ export default function StatsPage() {
                         {productos.map((p, i) => {
                           const margenN = parseFloat(p.margen_porcentaje)
                           const tone = marginTone(margenN)
+                          const sinCostoProd = sinCosto.has(p.producto_id)
                           return (
                             <tr key={p.producto_id} className="border-b border-border/60 transition-colors hover:bg-muted/40">
                               <td className="py-3 font-medium">
                                 <span className="mr-2 text-xs text-muted-foreground">{i + 1}.</span>
                                 {p.nombre}
                               </td>
-                              <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{formatCantidad(p.unidades_vendidas)}</td>
+                              <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{formatUnidades(p.unidades_vendidas)}</td>
                               <td className="py-3 text-right"><MoneyValue value={p.ingreso} className="text-sm" /></td>
                               <td className="py-3 text-right"><MoneyValue value={p.costo_fifo} tone="warning" className="text-sm" /></td>
-                              <td className="py-3 text-right"><MoneyValue value={p.margen} tone={tone} className="text-sm font-semibold" /></td>
+                              <td className="py-3 text-right"><MoneyValue value={p.margen} tone={sinCostoProd ? "muted" : tone} className="text-sm font-semibold" /></td>
                               <td className="py-3 text-right">
-                                <StatePill tone={tone}>{formatMoney(p.margen_porcentaje)}</StatePill>
+                                {sinCostoProd ? (
+                                  <StatePill tone="muted">sin costo</StatePill>
+                                ) : (
+                                  <StatePill tone={tone}>{formatMoney(p.margen_porcentaje)}</StatePill>
+                                )}
                               </td>
                             </tr>
                           )
@@ -825,8 +843,8 @@ function Cabecera({
   // Qué mirar cuando se pierde: lo que más pesó, de mayor a menor.
   const sospechas = [
     { texto: "gastos del negocio", cent: montoACentavos(estado.gastos_operativos) },
-    { texto: "faltantes en la gaveta", cent: montoACentavos(estado.faltantes) },
-    { texto: "mercadería echada a perder", cent: montoACentavos(estado.mermas_inventario) },
+    { texto: "faltante al contar el dinero", cent: montoACentavos(estado.faltantes) },
+    { texto: "mercadería perdida", cent: montoACentavos(estado.mermas_inventario) },
     { texto: "lo que costó lo vendido", cent: montoACentavos(estado.costo_de_ventas_fifo) },
   ]
     .filter((s) => s.cent > 0)
@@ -860,6 +878,15 @@ function Cabecera({
           <>{inicio} todavía no hay ventas.</>
         )}
       </p>
+      {parseFloat(estado.ventas_sin_costo?.monto_vendido ?? "0") > 0 && (
+        <p className="mt-2 text-sm text-warning-text">
+          ⚠ {formatMoney(estado.ventas_sin_costo.monto_vendido)} de lo vendido no tiene costo registrado, por eso la ganancia puede
+          estar de más. Registra la compra de: {estado.ventas_sin_costo.productos.join(", ")}.{" "}
+          <Link href="/dashboard/inventario" className="font-medium underline underline-offset-2">
+            Ir a Inventario
+          </Link>
+        </p>
+      )}
       {pierde && sospechas.length > 0 && (
         <p className="mt-2 text-sm text-muted-foreground">
           Qué mirar primero:{" "}
@@ -921,6 +948,7 @@ function BalanceItem({
   tone = "muted",
   hint,
   prefix = "",
+  vacio,
 }: {
   label: string
   value: string
@@ -928,17 +956,24 @@ function BalanceItem({
   tone?: Tone
   hint?: string
   prefix?: string
+  /** Texto gris en lugar de "$0.00" cuando no hay nada registrado. */
+  vacio?: string
 }) {
+  const esVacio = vacio !== undefined && parseFloat(value) === 0
   return (
     <div className="flex flex-col rounded-sm border border-border bg-background/40 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
         <Icon className={cn("h-3.5 w-3.5 shrink-0", toneText[tone])} />
       </div>
-      <span className={cn("mt-1 font-mono text-base font-semibold tabular-nums", toneText[tone])}>
-        {prefix}
-        {formatMoney(value)}
-      </span>
+      {esVacio ? (
+        <span className="mt-1 text-base text-muted-foreground">{vacio}</span>
+      ) : (
+        <span className={cn("mt-1 font-mono text-base font-semibold tabular-nums", toneText[tone])}>
+          {prefix}
+          {formatMoney(value)}
+        </span>
+      )}
       {hint && <span className="mt-0.5 text-[10px] text-muted-foreground">{hint}</span>}
     </div>
   )
@@ -989,41 +1024,28 @@ function FlujoCard({
 function PLRow({
   label,
   value,
-  display,
   type,
 }: {
   label: string
   value: string
-  /** Texto a mostrar en lugar del monto (p. ej. "ganancia por cada $100"). */
-  display?: string
-  type: "income" | "expense" | "plus" | "subtotal" | "total" | "pct"
+  type: "income" | "expense" | "plus" | "subtotal" | "total"
 }) {
   const numVal = parseFloat(value)
+  // Mismo peso y tamaño en toda la cascada; solo cambia el color del resultado final.
   const valueClass = {
     income: "text-foreground",
     plus: "text-foreground",
     expense: "text-muted-foreground",
-    subtotal: "font-semibold text-foreground",
-    total: numVal >= 0 ? "text-lg font-bold text-success" : "text-lg font-bold text-destructive",
-    pct: numVal >= 15 ? "text-success" : numVal >= 0 ? "text-warning-text" : "text-destructive",
-  }[type]
-
-  const labelClass = {
-    income: "text-muted-foreground",
-    plus: "text-muted-foreground",
-    expense: "text-muted-foreground",
-    subtotal: "font-medium text-foreground",
-    total: "font-semibold text-foreground",
-    pct: "text-xs text-muted-foreground",
+    subtotal: "text-foreground",
+    total: numVal >= 0 ? "text-success" : "text-destructive",
   }[type]
 
   const prefix = type === "expense" ? "− " : type === "plus" ? "+ " : ""
-  const displayValue = display ?? formatMoney(value)
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className={cn("text-sm", labelClass)}>{prefix}{label}</span>
-      <span className={cn("shrink-0 font-mono tabular-nums", valueClass)}>{displayValue}</span>
+      <span className="text-sm font-medium text-muted-foreground">{prefix}{label}</span>
+      <span className={cn("shrink-0 font-mono text-sm font-medium tabular-nums", valueClass)}>{formatMoney(value)}</span>
     </div>
   )
 }
