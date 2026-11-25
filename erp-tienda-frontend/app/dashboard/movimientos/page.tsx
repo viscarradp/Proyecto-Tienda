@@ -33,6 +33,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch, tipoDeError } from "@/lib/api"
 import { GAVETA, BOVEDA, etiquetaMovimiento } from "@/lib/glosario"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
+import { toast } from "sonner"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { EsqueletoPagina } from "@/components/esqueleto-pagina"
@@ -118,12 +119,30 @@ const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERR
 const etiquetaEstado = (estado: string) =>
   estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
 
+const ZONA_NEGOCIO = "America/El_Salvador"
+const HORAS_TURNO_VIEJO = 14
+
+/** Día calendario (AAAA-MM-DD) de una fecha en la zona del negocio. */
+const diaEnZonaNegocio = (fecha: Date) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_NEGOCIO, year: "numeric", month: "2-digit", day: "2-digit" }).format(fecha)
+
+/** Un turno abierto es "viejo" si se abrió antes de hoy (hora de la tienda) o lleva más de 14 h abierto. */
+function esTurnoViejo(fechaApertura: string | Date, ahora: Date = new Date()): boolean {
+  const apertura = new Date(fechaApertura)
+  if (diaEnZonaNegocio(apertura) < diaEnZonaNegocio(ahora)) return true
+  return ahora.getTime() - apertura.getTime() > HORAS_TURNO_VIEJO * 3600 * 1000
+}
+
+const numeroVenta = (id: number) => `#${String(id).padStart(5, '0')}`
+
+const MOTIVO_TURNO_CERRADO = "Ese turno ya cerró: el dinero ya se contó al cerrar."
+
 /** Movimientos de dinero que se muestran en el turno (la merma no es dinero). */
 const movimientosDeDinero = (turno: CajaTurno) =>
   (turno.movimientos_financieros ?? []).filter(m => m.tipo_movimiento !== 'MERMA_INVENTARIO')
 
 /** Fila "Gasto: Pago de agua — $5.00 — karla": qué pasó, cuánto, cuándo y quién. */
-function MovimientoFila({ mov, onAnular }: { mov: MovimientoTurno; onAnular?: (mov: MovimientoTurno) => void }) {
+function MovimientoFila({ mov, onAnular, motivoNoAnular }: { mov: MovimientoTurno; onAnular?: (mov: MovimientoTurno) => void; motivoNoAnular?: string }) {
   // Respecto a la gaveta: sale, entra o ni la toca (se movió solo en la bóveda).
   const sale = mov.cuenta_origen === 'GAVETA'
   const entra = mov.cuenta_destino === 'GAVETA'
@@ -143,9 +162,17 @@ function MovimientoFila({ mov, onAnular }: { mov: MovimientoTurno; onAnular?: (m
           {nombre && <> · {nombre}</>}
         </p>
         {mov.anulado && <AnuladoNota motivo={mov.motivo_anulacion} quien={mov.anulado_por?.nombre} />}
+        {!onAnular && motivoNoAnular && (
+          <p id={`no-anular-mov-${mov.id}`} className="mt-0.5 text-xs text-muted-foreground">{motivoNoAnular}</p>
+        )}
       </div>
       {onAnular && (
         <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => onAnular(mov)}>
+          <Undo2 className="h-3.5 w-3.5" /> Anular
+        </Button>
+      )}
+      {!onAnular && motivoNoAnular && (
+        <Button variant="outline" size="sm" className="shrink-0 gap-1" disabled title={motivoNoAnular} aria-describedby={`no-anular-mov-${mov.id}`}>
           <Undo2 className="h-3.5 w-3.5" /> Anular
         </Button>
       )}
@@ -203,6 +230,13 @@ export default function MovimientosPage() {
   const [ventaAAnular, setVentaAAnular] = React.useState<number | null>(null)
   const [motivoAnulacion, setMotivoAnulacion] = React.useState("")
   const [anularLoading, setAnularLoading] = React.useState(false)
+  const [anularError, setAnularError] = React.useState("")
+  // Fila que se resalta 2 s tras anular o devolver
+  const [resaltada, setResaltada] = React.useState<number | null>(null)
+  const resaltarFila = (id: number) => {
+    setResaltada(id)
+    setTimeout(() => setResaltada(actual => (actual === id ? null : actual)), 2000)
+  }
 
   // Devolución de cliente (Bloque 3.B)
   const [ventaADevolver, setVentaADevolver] = React.useState<Venta | null>(null)
@@ -232,6 +266,7 @@ export default function MovimientosPage() {
   const [forzarEfectivo, setForzarEfectivo] = React.useState("")
   const [forzarJustif, setForzarJustif] = React.useState("")
   const [forzarLoading, setForzarLoading] = React.useState(false)
+  const [forzarError, setForzarError] = React.useState("")
 
   React.useEffect(() => { setMounted(true) }, [])
 
@@ -252,7 +287,10 @@ export default function MovimientosPage() {
       const activo = pagina.items.find(t => t.estado === 'ABIERTA')
       if (activo) setExpandedTurno(activo.id)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al cargar movimientos")
+      const mensaje = err instanceof Error ? err.message : "Error al cargar movimientos"
+      // Si ya hay lista en pantalla, no se borra: solo se avisa.
+      if (turnosCargados.current > 0) toast.error(mensaje)
+      else setError(mensaje)
     } finally {
       setLoading(false)
     }
@@ -267,7 +305,6 @@ export default function MovimientosPage() {
     const ultimo = turnos[turnos.length - 1]
     if (!ultimo) return
     setCargandoMas(true)
-    setError("")
     try {
       const { pagina, ventas: ventasNuevas } = await cargarPagina(TURNOS_POR_PAGINA, ultimo.id)
       setTurnos(prev => [...prev, ...pagina.items])
@@ -275,7 +312,7 @@ export default function MovimientosPage() {
       setHayMas(pagina.hay_mas)
       turnosCargados.current += pagina.items.length
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al cargar turnos anteriores")
+      toast.error(err instanceof Error ? err.message : "Error al cargar turnos anteriores")
     } finally {
       setCargandoMas(false)
     }
@@ -355,19 +392,22 @@ export default function MovimientosPage() {
     if (!ventaAAnular || !motivoAnulacion.trim()) return
 
     setAnularLoading(true)
-    setError("")
+    setAnularError("")
     try {
       await apiFetch(`/ventas/${ventaAAnular}/anular`, {
         method: "PATCH",
         body: JSON.stringify({ justificacion_nula: motivoAnulacion.trim() })
       })
-      await loadData() // recarga todo (ventas y saldos de caja)
+      const id = ventaAAnular
       setIsAnulando(false)
       setMotivoAnulacion("")
       setVentaAAnular(null)
+      toast.success(`Venta ${numeroVenta(id)} anulada`)
+      resaltarFila(id)
+      await loadData() // recarga todo (ventas y saldos de caja)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al anular la venta")
-      setIsAnulando(false)
+      // El diálogo sigue abierto con el motivo escrito, para reintentar.
+      setAnularError(err instanceof Error ? err.message : "No se pudo anular la venta")
     } finally {
       setAnularLoading(false)
     }
@@ -378,11 +418,11 @@ export default function MovimientosPage() {
     if (!forzarTurnoId || !forzarJustif.trim()) return
     const efectivoParsed = parseFloat(forzarEfectivo)
     if (isNaN(efectivoParsed) || efectivoParsed < 0) {
-      setError("Ingresa el efectivo contado (mayor o igual a 0)")
+      setForzarError("Escribe el efectivo que contaste (0 o más).")
       return
     }
     setForzarLoading(true)
-    setError("")
+    setForzarError("")
     try {
       await apiFetch(`/cajas-turnos/${forzarTurnoId}/cerrar-forzado`, {
         method: "PATCH",
@@ -391,14 +431,14 @@ export default function MovimientosPage() {
           observaciones: forzarJustif.trim(),
         }),
       })
-      await loadData()
       setForzarOpen(false)
       setForzarTurnoId(null)
       setForzarEfectivo("")
       setForzarJustif("")
+      toast.success("Turno cerrado")
+      await loadData()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al forzar el cierre")
-      setForzarOpen(false)
+      setForzarError(err instanceof Error ? err.message : "No se pudo cerrar el turno")
     } finally {
       setForzarLoading(false)
     }
@@ -420,7 +460,7 @@ export default function MovimientosPage() {
     const anulada = venta.estado === 'ANULADA'
 
     return (
-      <div key={venta.id} className="border-b border-border last:border-0">
+      <div key={venta.id} className={cn("border-b border-border transition-colors duration-500 last:border-0", resaltada === venta.id && "bg-primary/10")}>
         <button
           type="button"
           className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/40"
@@ -430,7 +470,7 @@ export default function MovimientosPage() {
           <div className="w-6 shrink-0">
             {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
           </div>
-          <div className="w-24 font-mono text-sm text-muted-foreground">#{String(venta.id).padStart(5, '0')}</div>
+          <div className="w-24 font-mono text-sm text-muted-foreground">{numeroVenta(venta.id)}</div>
           <div className="hidden w-28 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
             <Clock className="h-3.5 w-3.5 opacity-60" />
             {format(new Date(venta.fecha), "HH:mm:ss")}
@@ -483,9 +523,14 @@ export default function MovimientosPage() {
                 >
                   <Undo2 className="h-4 w-4" /> Devolver
                 </Button>
-                {turnoAbierto && (venta._count?.devoluciones ?? 0) > 0 && (
+                {(venta._count?.devoluciones ?? 0) > 0 && (
                   <p className="self-center text-xs text-muted-foreground">
                     Ya tiene devoluciones — puedes devolver el resto
+                  </p>
+                )}
+                {!turnoAbierto && (venta._count?.devoluciones ?? 0) === 0 && (
+                  <p className="self-center text-xs text-muted-foreground">
+                    Es de un turno ya cerrado: no se puede anular, solo devolver
                   </p>
                 )}
                 {turnoAbierto && (venta._count?.devoluciones ?? 0) === 0 && (
@@ -493,7 +538,7 @@ export default function MovimientosPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => { setVentaAAnular(venta.id); setIsAnulando(true) }}
+                    onClick={() => { setVentaAAnular(venta.id); setAnularError(""); setIsAnulando(true) }}
                   >
                     <XCircle className="h-4 w-4" /> Anular venta
                   </Button>
@@ -598,7 +643,7 @@ export default function MovimientosPage() {
             <div className="overflow-hidden rounded-sm border border-primary/40 bg-card">
               <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 text-sm">
                 <Search className="h-4 w-4 text-primary" />
-                <span className="font-semibold">Venta #{String(busqueda.venta.id).padStart(5, '0')}</span>
+                <span className="font-semibold">Venta {numeroVenta(busqueda.venta.id)}</span>
                 <span className="text-muted-foreground">· Turno #{busqueda.turno.id}</span>
                 <StatePill tone={busqueda.turno.estado === 'ABIERTA' ? "success" : busqueda.turno.estado === 'CERRADA_FORZADA' ? "warning" : "muted"}>
                   {etiquetaEstado(busqueda.turno.estado)}
@@ -616,6 +661,9 @@ export default function MovimientosPage() {
             <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-6 text-center text-destructive">
               <XCircle className="h-9 w-9 text-destructive/70" />
               <p className="font-medium">{error}</p>
+              <Button variant="outline" onClick={loadData} disabled={loading} className="gap-2">
+                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Reintentar
+              </Button>
             </div>
           ) : loading && turnos.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-20 text-muted-foreground">
@@ -717,7 +765,7 @@ export default function MovimientosPage() {
                       </div>
                     </button>
 
-                    {isAbierta && esAdmin && (
+                    {isAbierta && esAdmin && esTurnoViejo(turno.fecha_apertura) && (
                       <div className="flex items-center justify-between gap-2 border-t border-border bg-warning/5 px-4 py-2">
                         <span className="text-xs text-muted-foreground">¿Turno abandonado sin cerrar?</span>
                         <Button
@@ -728,6 +776,7 @@ export default function MovimientosPage() {
                             setForzarTurnoId(turno.id)
                             setForzarEfectivo("")
                             setForzarJustif("")
+                            setForzarError("")
                             setForzarOpen(true)
                           }}
                         >
@@ -758,6 +807,12 @@ export default function MovimientosPage() {
                                     esAdmin && isAbierta && !mov.anulado &&
                                     TIPOS_ANULABLES.includes(mov.tipo_movimiento) && !mov.es_apertura
                                       ? pedirAnular
+                                      : undefined
+                                  }
+                                  motivoNoAnular={
+                                    esAdmin && !isAbierta && !mov.anulado &&
+                                    TIPOS_ANULABLES.includes(mov.tipo_movimiento) && !mov.es_apertura
+                                      ? MOTIVO_TURNO_CERRADO
                                       : undefined
                                   }
                                 />
@@ -808,10 +863,10 @@ export default function MovimientosPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-5 w-5" /> Anular venta #{ventaAAnular}
+              <XCircle className="h-5 w-5" /> Anular venta {ventaAAnular !== null && numeroVenta(ventaAAnular)}
             </DialogTitle>
             <DialogDescription>
-              Esta acción devolverá el stock al inventario y restará el dinero del balance de la caja. Es <strong className="text-foreground">irreversible</strong>.
+              Se devuelve el producto al inventario y se quita el dinero de la gaveta.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAnularVenta} className="flex flex-col gap-4">
@@ -823,12 +878,12 @@ export default function MovimientosPage() {
                 className="h-12 md:h-12"
                 autoFocus />
             </div>
-            {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+            {anularError && <p role="alert" className="text-xs font-medium text-destructive">{anularError}</p>}
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setIsAnulando(false)} disabled={anularLoading}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <Button type="submit" variant="destructive" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2">
                 {anularLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                 Confirmar anulación
               </Button>
@@ -845,23 +900,23 @@ export default function MovimientosPage() {
               <DoorClosed className="h-5 w-5" /> Cierre forzado del turno #{forzarTurnoId}
             </DialogTitle>
             <DialogDescription>
-              Solo ADMIN. Declara el efectivo realmente contado en la gaveta y una
-              justificación. El turno quedará marcado como <strong className="text-foreground">cerrado forzado</strong>.
+              Solo la dueña. Cuenta el efectivo que hay de verdad en la gaveta y explica por qué cierras tú el turno.
+              Quedará marcado como <strong className="text-foreground">cerrado a la fuerza</strong>.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleForzarCierre} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="movimientos-efectivo-contado" className="text-xs font-medium text-muted-foreground">Efectivo contado ($)</Label>
+              <Label htmlFor="movimientos-efectivo-contado" className="text-xs font-medium text-muted-foreground">Efectivo que contaste ($)</Label>
               <Input id="movimientos-efectivo-contado" type="number" min={0} step="0.01" inputMode="decimal" required
                 value={forzarEfectivo} onChange={(e) => setForzarEfectivo(e.target.value)}
                 placeholder="0.00" className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums" autoFocus />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="movimientos-justificacion" className="text-xs font-medium text-muted-foreground">Justificación</Label>
+              <Label htmlFor="movimientos-justificacion" className="text-xs font-medium text-muted-foreground">¿Por qué lo cierras tú?</Label>
               <Input id="movimientos-justificacion" required value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
                 placeholder="Ej. La cajera se retiró sin cerrar" className="h-11 md:h-11" />
             </div>
-            {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+            {forzarError && <p role="alert" className="text-xs font-medium text-destructive">{forzarError}</p>}
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setForzarOpen(false)} disabled={forzarLoading}>
                 Cancelar
@@ -881,7 +936,7 @@ export default function MovimientosPage() {
         venta={ventaADevolver}
         open={devolverOpen}
         onOpenChange={setDevolverOpen}
-        onDone={loadData}
+        onDone={() => { if (ventaADevolver) resaltarFila(ventaADevolver.id); loadData() }}
       />
     </div>
   )
