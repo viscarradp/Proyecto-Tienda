@@ -22,6 +22,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -319,7 +320,7 @@ export default function UsuariosPage() {
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={cerrar} disabled={guardando}>
                 Cancelar
               </Button>
@@ -332,7 +333,7 @@ export default function UsuariosPage() {
                 {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
                 {accion?.tipo === "desactivar" ? "Desactivar" : accion?.tipo === "reactivar" ? "Reactivar" : "Guardar"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

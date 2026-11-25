@@ -35,6 +35,39 @@ interface CartStore {
   quitarMonto: (id: string) => void
   clearCart: () => void
   getTotal: () => number
+  /**
+   * Alinea el precio de cada línea con el actual del catálogo (id de línea → precio).
+   * Devuelve las líneas que cambiaron. Las que no están en el mapa se dejan igual.
+   */
+  reconciliarPrecios: (precios: ReadonlyMap<string, number>) => CambioPrecio[]
+}
+
+export interface CambioPrecio {
+  id: string
+  nombre: string
+  precio: number
+}
+
+/**
+ * Pura: líneas con el precio actualizado y la lista de cambios. En líneas por monto
+ * se conserva el monto exacto y se recalcula la cantidad estimada.
+ */
+export function reconciliarLineas(
+  items: CartItem[],
+  precios: ReadonlyMap<string, number>,
+): { items: CartItem[]; cambios: CambioPrecio[] } {
+  const cambios: CambioPrecio[] = []
+  const nuevos = items.map((i) => {
+    const actual = precios.get(i.id)
+    if (actual === undefined || !Number.isFinite(actual)) return i
+    if (montoACentavos(actual) === montoACentavos(i.precio)) return i
+    cambios.push({ id: i.id, nombre: i.nombre, precio: actual })
+    if (i.modo === 'monto' && i.monto !== undefined) {
+      return { ...i, precio: actual, cantidad: cantidadDesdeMonto(i.monto, actual) }
+    }
+    return { ...i, precio: actual }
+  })
+  return { items: cambios.length > 0 ? nuevos : items, cambios }
 }
 
 /** Total de una línea en centavos: el monto exacto en líneas por monto; precio × cantidad en las demás. */
@@ -112,6 +145,11 @@ export const useCartStore = create<CartStore>()(persist((set, get) => ({
     })
   },
   clearCart: () => set({ items: [] }),
+  reconciliarPrecios: (precios) => {
+    const { items, cambios } = reconciliarLineas(get().items, precios)
+    if (cambios.length > 0) set({ items })
+    return cambios
+  },
   getTotal: () => {
     // Cada línea se redondea a centavos antes de sumar, igual que el servidor.
     const centavos = get().items.reduce((acc, item) => acc + totalItemCentavos(item), 0)

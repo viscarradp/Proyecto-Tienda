@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -196,14 +197,14 @@ export function AltaRapidaDialog({
             />
           </div>
 
-          <div className="flex justify-end gap-3">
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="min-w-40 gap-2">
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Agregar al ticket"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

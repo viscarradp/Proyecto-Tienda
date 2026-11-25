@@ -16,6 +16,9 @@ const ATAJOS: { valor: number; etiqueta: string }[] = [
 ]
 
 const MONTO_MAX = 999999.99
+/** Límite de cantidad del servidor. */
+const CANTIDAD_MAX = 99999
+const CANTIDAD_MAX_CARACTERES = 7
 
 /**
  * Campo de texto numérico con borrador local: deja escribir "0." o "1,5" sin
@@ -28,12 +31,17 @@ function CampoNumero({
   onCommit,
   ariaLabel,
   className,
+  max,
+  maxCaracteres,
 }: {
   valor: string
   decimales: number
   onCommit: (n: number) => void
   ariaLabel: string
   className?: string
+  /** Valores mayores no se aceptan al escribir (red de seguridad ante escaneos). */
+  max?: number
+  maxCaracteres?: number
 }) {
   const [borrador, setBorrador] = React.useState<string | null>(null)
   const patron = React.useMemo(() => new RegExp(`^\\d*[.,]?\\d{0,${decimales}}$`), [decimales])
@@ -43,17 +51,23 @@ function CampoNumero({
       type="text"
       inputMode="decimal"
       aria-label={ariaLabel}
+      data-escaner="desviar"
       value={borrador ?? valor}
       onFocus={(e) => {
         setBorrador(valor)
         e.currentTarget.select()
       }}
       onBlur={() => setBorrador(null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur()
+      }}
       onChange={(e) => {
         const texto = e.target.value
         if (!patron.test(texto)) return
-        setBorrador(texto)
+        if (maxCaracteres !== undefined && texto.length > maxCaracteres) return
         const n = parseDecimal(texto)
+        if (max !== undefined && n !== null && n > max) return
+        setBorrador(texto)
         if (n !== null && n > 0) onCommit(n)
       }}
       className={cn(
@@ -121,6 +135,8 @@ export function CartLines({
                     decimales={2}
                     onCommit={(n) => setMonto(item.id, Math.min(n, MONTO_MAX))}
                     className="w-20 text-left"
+                    max={MONTO_MAX}
+                    maxCaracteres={10}
                   />
                 </div>
               ) : (
@@ -140,6 +156,8 @@ export function CartLines({
                     decimales={3}
                     onCommit={(n) => updateQuantity(item.id, n)}
                     className="w-16"
+                    max={CANTIDAD_MAX}
+                    maxCaracteres={CANTIDAD_MAX_CARACTERES}
                   />
                   <Button
                     variant="ghost"

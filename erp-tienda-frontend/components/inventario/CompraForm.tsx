@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
+import { formatMoney } from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import { generarId } from "@/lib/id"
 
@@ -149,19 +150,27 @@ interface LoteLineForm {
 interface CompraFormProps {
   productos: Producto[]
   onSuccess: () => void
+  /** Avisa si hay datos escritos (líneas o proveedor) y cuántas líneas hay. */
+  onCambioSucio?: (sucio: boolean, lineas: number) => void
   /** Modo "carga inicial de inventario" (Bloque 1.F): aporte del dueño en
    * especie. Fuerza origen CAPITAL_DUEÑOS + PAGADO y oculta esos selectores. */
   inicial?: boolean
 }
 
-export function CompraForm({ productos, onSuccess, inicial = false }: CompraFormProps) {
+export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = false }: CompraFormProps) {
   const [proveedor, setProveedor] = React.useState("")
   const [estadoPago, setEstadoPago] = React.useState("PAGADO")
   const [origenFondos, setOrigenFondos] = React.useState("")
   const [lineas, setLineas] = React.useState<LoteLineForm[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
-  const [avisos, setAvisos] = React.useState<string[]>([])
+  const cambioSucioRef = React.useRef(onCambioSucio)
+  React.useEffect(() => {
+    cambioSucioRef.current = onCambioSucio
+  })
+  React.useEffect(() => {
+    cambioSucioRef.current?.(lineas.length > 0 || proveedor.trim() !== "", lineas.length)
+  }, [lineas.length, proveedor])
 
   const addLinea = () => {
     setLineas([...lineas, {
@@ -212,7 +221,6 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
     e.preventDefault()
     setLoading(true)
     setError("")
-    setAvisos([])
 
     const alCredito = !inicial && estadoPago === "AL_CREDITO"
     // La carga inicial siempre es aporte en especie; una compra pagada exige
@@ -256,11 +264,11 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
       toast.success(
         alCredito
-          ? "Compra registrada. Quedó como deuda con el proveedor; la pagas desde Gastos → Deudas."
-          : "Compra registrada exitosamente. Los lotes de inventario fueron creados.",
+          ? `Compra registrada · ${formatMoney(montoTotal)}. Quedó como deuda con el proveedor; la pagas desde Gastos → Deudas.`
+          : `Compra registrada · ${formatMoney(montoTotal)}. Los lotes de inventario fueron creados.`,
         { duration: 8000 },
       )
-      setAvisos(res?.avisos ?? [])
+      for (const aviso of res?.avisos ?? []) toast.warning(aviso, { duration: 12000 })
       setProveedor("")
       setEstadoPago("PAGADO")
       setOrigenFondos("")
@@ -278,14 +286,6 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
       {error && (
         <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
           {error}
-        </div>
-      )}
-
-      {avisos.length > 0 && (
-        <div className="flex flex-col gap-1 rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning-foreground">
-          {avisos.map((a, i) => (
-            <p key={i}>{a}</p>
-          ))}
         </div>
       )}
 
@@ -424,7 +424,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
       </div>
 
       {/* Footer con total y botón */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-5 md:flex-row">
+      <div className="sticky bottom-0 z-10 -mb-6 flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-4 shadow-[0_-6px_10px_-6px_rgb(0_0_0/0.15)] md:flex-row md:p-5">
         <div>
           <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Monto total calculado</p>
           <MoneyValue value={montoTotal} className="text-3xl font-bold tracking-tight" />

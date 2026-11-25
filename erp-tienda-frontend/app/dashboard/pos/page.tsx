@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -55,8 +56,16 @@ import {
   stockEnPresentacion,
 } from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
-import { generarId } from "@/lib/id"
+import {
+  borrarSesion,
+  claveIdempotencia,
+  guardarSesion,
+  leerSesion,
+  olvidarClaveIdempotencia,
+} from "@/lib/almacen-sesion"
 import { EsqueletoPagina } from "@/components/esqueleto-pagina"
+
+const CLAVE_CONTINGENCIA = "tienda-contingencia"
 
 // ─── Types ───
 interface PresentacionRow {
@@ -162,9 +171,6 @@ export default function POSPage() {
   // Resumen de la última venta (cambio visible hasta que empiece la siguiente).
   const [ultimaVenta, setUltimaVenta] = React.useState<{ total: number; pago: number | null; cambio: number | null } | null>(null)
   const [vaciarOpen, setVaciarOpen] = React.useState(false)
-  // Clave de idempotencia del intento de cobro en curso: se reutiliza si la
-  // cajera reintenta el mismo carrito y se descarta al cobrar o al cambiar el carrito.
-  const idemRef = React.useRef<{ key: string; firma: string } | null>(null)
 
   // ─── Filtros ───
   const [categoriaActiva, setCategoriaActiva] = React.useState("Todos")
@@ -175,7 +181,33 @@ export default function POSPage() {
   // Valores con los que se abre el diálogo (lo buscado o el código escaneado).
   const [altaRapidaInicial, setAltaRapidaInicial] = React.useState({ nombre: "", codigo: "" })
 
-  React.useEffect(() => { setMounted(true) }, [])
+  // Modo apagón (CAJ-23): se restaura tras recargar y se guarda en cada cambio.
+  React.useEffect(() => {
+    const guardado = leerSesion<{ fecha?: string }>(CLAVE_CONTINGENCIA)
+    if (guardado) {
+      setContingencia(true)
+      setFechaContingencia(typeof guardado.fecha === "string" ? guardado.fecha : "")
+    }
+    setMounted(true)
+  }, [])
+  React.useEffect(() => {
+    if (!mounted) return
+    if (contingencia) guardarSesion(CLAVE_CONTINGENCIA, { fecha: fechaContingencia })
+    else borrarSesion(CLAVE_CONTINGENCIA)
+  }, [mounted, contingencia, fechaContingencia])
+
+  // Precios al día (CAJ-16): al cargar o refrescar el catálogo, el ticket guardado
+  // toma el precio actual de cada línea (el servidor cobra con ese).
+  React.useEffect(() => {
+    if (!mounted || productos.length === 0) return
+    const precios = new Map<string, number>()
+    for (const prod of productos) {
+      for (const pres of prod.presentaciones) precios.set(`pres-${pres.id}`, aNumero(pres.precio_venta))
+    }
+    for (const c of useCartStore.getState().reconciliarPrecios(precios)) {
+      toast.info(`El precio de «${c.nombre}» cambió: ahora ${formatMoney(c.precio)}.`, { id: `precio-${c.id}`, duration: 8000 })
+    }
+  }, [mounted, productos])
 
   const loadData = React.useCallback(async (forzar = false) => {
     await fetchInventory(forzar)
@@ -185,6 +217,8 @@ export default function POSPage() {
   React.useEffect(() => {
     setCheckoutError("")
     if (items.length > 0) setUltimaVenta(null)
+    // Ticket vacío (vaciar, quitar la última línea o cobrar): "Paga con" no pasa al siguiente cliente.
+    else setPagoCliente("")
   }, [items])
 
   const loadCaja = React.useCallback(async () => {
@@ -308,11 +342,10 @@ export default function POSPage() {
 
     // Misma clave mientras el carrito (y la fecha) no cambien: un reintento tras
     // un error de red no duplica la venta.
+    // La clave vive en sessionStorage: si se pierde la respuesta y la cajera recarga,
+    // el reintento sigue usando la misma y el servidor devuelve la misma venta.
     const firma = JSON.stringify({ detalles, fechaReal })
-    if (!idemRef.current || idemRef.current.firma !== firma) {
-      idemRef.current = { key: generarId(), firma }
-    }
-    const idemKey = idemRef.current.key
+    const idemKey = claveIdempotencia(firma)
 
     try {
       const venta = await apiFetch<{ total?: number | string; avisos?: string[] }>("/ventas", {
@@ -342,7 +375,7 @@ export default function POSPage() {
         pago: pagoCentavos !== null ? centavosAMonto(pagoCentavos) : null,
         cambio: cambioCentavos !== null && cambioCentavos >= 0 ? centavosAMonto(cambioCentavos) : null,
       })
-      idemRef.current = null
+      olvidarClaveIdempotencia()
       clearCart()
       setPagoCliente("")
       // Modo apagón: sigue activo con su fecha hasta que la cajera lo apague; solo se pide ajustar la hora.
@@ -356,7 +389,10 @@ export default function POSPage() {
       setTimeout(() => setCheckoutSuccess(false), 3000)
     } catch (err: unknown) {
       // Se queda visible hasta la siguiente acción (no se oculta solo).
-      setCheckoutError(err instanceof Error ? err.message : "No se pudo registrar la venta. Intenta de nuevo.")
+      const base = err instanceof Error ? err.message : "No se pudo registrar la venta. Intenta de nuevo."
+      // Con fallo de red o del servidor la venta pudo haber quedado registrada aunque no llegara la respuesta.
+      const dudosa = ["red", "servidor"].includes(tipoDeError(err) ?? "")
+      setCheckoutError(dudosa ? `${base} Antes de cobrar otra vez, revisa en Movimientos si la venta ya quedó.` : base)
     } finally {
       setCheckoutLoading(false)
     }
@@ -896,13 +932,13 @@ export default function POSPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
               <Button type="submit" disabled={cajaActionLoading || faltaExplicacion} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
                 {faltaExplicacion ? "Explica la diferencia para cerrar" : "Confirmar cierre"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -914,10 +950,10 @@ export default function POSPage() {
             <DialogTitle>¿Vaciar el ticket?</DialogTitle>
             <DialogDescription>Se quitan los {items.length} productos. La venta no se registra.</DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="secondary" className="h-11 md:h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
             <Button type="button" variant="destructive" className="h-11 md:h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -9,6 +9,7 @@ import { es } from "date-fns/locale"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -228,7 +229,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-3xl" showCloseButton>
+      <DialogContent className="flex w-[95vw] flex-col overflow-hidden p-0 sm:max-w-3xl" showCloseButton>
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="text-lg font-semibold">Edición de producto</DialogTitle>
           <DialogDescription>
@@ -236,7 +237,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex max-h-[75vh] flex-col gap-6 overflow-y-auto p-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
           {error && (
             <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
               {error}
@@ -379,14 +380,14 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-border pt-4">
+          <DialogFooter className="-mx-6 -mb-6 px-6 py-4">
             <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : avisoFactor ? "Guardar de todos modos" : "Guardar cambios"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

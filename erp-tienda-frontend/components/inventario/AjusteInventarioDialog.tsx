@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -255,7 +256,7 @@ export function AjusteInventarioDialog({
             </>
           )}
 
-          <div className="flex justify-end gap-3">
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
@@ -265,7 +266,7 @@ export function AjusteInventarioDialog({
                 : "bg-warning text-warning-foreground hover:bg-warning/90")}>
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : esAgregar ? "Sumar al inventario" : "Registrar merma"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

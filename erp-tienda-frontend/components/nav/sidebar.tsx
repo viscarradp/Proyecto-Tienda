@@ -20,7 +20,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname()
   const navItems = getNavItems(user?.rol)
 
-  const handleLogout = useLogout()
+  const { pedirSalida, dialogoSalida } = useLogout()
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -75,13 +75,15 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
           <ThemeToggle />
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={pedirSalida}
             aria-label="Cerrar sesión"
             title="Cerrar sesión"
-            className="flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="flex h-9 items-center justify-center gap-1.5 rounded-sm px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-5 w-5" />
+            Salir
           </button>
+          {dialogoSalida}
         </div>
       </div>
     </div>

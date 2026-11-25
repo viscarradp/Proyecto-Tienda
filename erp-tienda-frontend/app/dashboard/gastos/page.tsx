@@ -24,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -439,13 +440,13 @@ export default function GastosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex justify-end gap-3 pt-2">
+            <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setShowNewCatDialog(false)}>Cancelar</Button>
               <Button type="submit" disabled={newCatLoading} className="gap-2">
                 {newCatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                 Crear categoría
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ERP Tienda Karlita",
   description: "Sistema integral de gestión para tiendas, inventarios y puntos de venta.",
+};
+
+export const viewport: Viewport = {
+  // Chrome Android: el teclado achica el contenido y los diálogos se reacomodan.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

@@ -41,8 +41,10 @@ la tienda vuelve al cuaderno — y cada regreso al cuaderno erosiona la adopció
   conflictos. Requeriría semanas de trabajo y meter complejidad de sincronización en el
   corazón del sistema (FIFO, turnos, efectivo). La auditoría lo descarta explícitamente.
 - Si en el uso real los apagones resultan frecuentes y largos, se puede reconsiderar una
-  captura offline más rica — pero solo cuando el dolor lo justifique, no antes. Pendiente
-  de pulido (L9): que el modo apagón persista entre recargas de página.
+  captura offline más rica — pero solo cuando el dolor lo justifique, no antes. El modo
+  apagón y su fecha **persisten entre recargas de la página** (`sessionStorage`, desde el
+  2026-11-25): una recarga a mitad de la captura del cuaderno ya no registra la venta con la
+  hora de ahora.
 
 ## Referencias
 

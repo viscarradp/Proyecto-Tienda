@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -215,7 +216,7 @@ export function AbrirCajaDialog<T>({
             </div>
           )}
 
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => handleOpenChange(false)}>
               Cancelar
             </Button>
@@ -223,7 +224,7 @@ export function AbrirCajaDialog<T>({
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorOpen className="h-4 w-4" />}
               Abrir caja
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

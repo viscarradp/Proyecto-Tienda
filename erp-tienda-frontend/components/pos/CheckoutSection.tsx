@@ -118,8 +118,14 @@ export function CheckoutSection({
               min={0}
               step="0.01"
               inputMode="decimal"
+              data-escaner="desviar"
               value={pagoCliente}
-              onChange={(e) => setPagoCliente(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                // Red de seguridad: como mucho 6 dígitos enteros.
+                if (v.split(".")[0].length > 6) return
+                setPagoCliente(v)
+              }}
               placeholder="0.00"
               className="h-11 md:h-11 w-28 text-right font-mono tabular-nums"
             />
