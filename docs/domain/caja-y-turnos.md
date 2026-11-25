@@ -73,6 +73,14 @@ Para un turno que la cajera dejó abierto. La dueña declara el efectivo contado
 (siempre, sin importar el monto). El turno queda `CERRADA_FORZADA`; se registra el ajuste y el traslado igual
 que en un cierre normal, y el turno se ve como tal en Movimientos.
 
+En pantalla (desde el 2026-11-25), Movimientos ofrece "Cerrar forzado" **solo en turnos viejos**: abiertos antes del día
+de hoy en la zona del negocio, o con más de 14 h abiertos. Así la dueña no cierra por error el turno que la cajera tiene
+en curso. El endpoint no cambia: la regla es de pantalla.
+
+Al cerrar caja (normal), la pantalla muestra el resultado hasta que la cajera lo toca: "Caja cerrada · Cuadró · Fondo
+para mañana: $X" (o "Faltaron $X" / "Sobraron $X"). "Reabrir automáticamente" sigue marcado por defecto; desmarcarlo
+para que la mañana empiece con "Abrir caja" y el conteo está pendiente de decidir con la dueña.
+
 ## Lectura
 
 - `GET /cajas-turnos/activa` (404 si no hay turno abierto), `GET /cajas-turnos/ultimo-cierre` (trae `fondo_siguiente`).

@@ -216,6 +216,8 @@ export default function GastosPage() {
   // Un gasto de la gaveta solo se anula mientras su turno siga abierto.
   const sePuedeAnular = (g: MovimientoFinanciero) =>
     !g.anulado && (g.cuenta_origen === "BOVEDA" || (g.caja_turno_id !== null && g.caja_turno_id === cajaActiva?.id))
+  // Si no se puede, se muestra el botón apagado con el motivo (en vez de esconderlo).
+  const MOTIVO_TURNO_CERRADO = "Ese turno ya cerró: el dinero ya se contó al cerrar."
 
   if (!mounted) return <EsqueletoPagina />
 
@@ -386,11 +388,19 @@ export default function GastosPage() {
                           <span>{gasto.categorias_gastos?.nombre || 'Sin categoría'}</span>
                         </div>
                         {gasto.anulado && <AnuladoNota motivo={gasto.motivo_anulacion} quien={gasto.anulado_por?.nombre} />}
+                        {!gasto.anulado && !sePuedeAnular(gasto) && (
+                          <p id={`no-anular-gasto-${gasto.id}`} className="mt-0.5 text-xs text-muted-foreground">{MOTIVO_TURNO_CERRADO}</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 self-start md:self-auto">
                       {sePuedeAnular(gasto) && (
                         <Button variant="outline" size="sm" className="gap-1" onClick={() => pedirAnular(gasto)}>
+                          <Undo2 className="h-3.5 w-3.5" /> Anular
+                        </Button>
+                      )}
+                      {!gasto.anulado && !sePuedeAnular(gasto) && (
+                        <Button variant="outline" size="sm" className="gap-1" disabled title={MOTIVO_TURNO_CERRADO} aria-describedby={`no-anular-gasto-${gasto.id}`}>
                           <Undo2 className="h-3.5 w-3.5" /> Anular
                         </Button>
                       )}

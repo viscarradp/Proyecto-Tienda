@@ -27,6 +27,8 @@ interface CartStore {
   items: CartItem[]
   addItem: (item: Omit<CartItem, 'cantidad' | 'modo' | 'monto'>) => void
   removeItem: (id: string) => void
+  /** Deshacer al quitar: reinserta la línea tal como estaba, en su posición. */
+  reinsertarItem: (item: CartItem, indice: number) => void
   /** Fija la cantidad (hasta 3 decimales). Si es ≤ 0 quita la línea. Vuelve la línea a modo cantidad. */
   updateQuantity: (id: string, cantidad: number) => void
   /** Pasa la línea a "por monto" con ese monto en dólares (> 0). */
@@ -40,6 +42,13 @@ interface CartStore {
    * Devuelve las líneas que cambiaron. Las que no están en el mapa se dejan igual.
    */
   reconciliarPrecios: (precios: ReadonlyMap<string, number>) => CambioPrecio[]
+}
+
+/** Pura: inserta la línea en el índice dado (acotado). Si ya existe una con ese id, no cambia nada. */
+export function insertarLinea(items: CartItem[], item: CartItem, indice: number): CartItem[] {
+  if (items.some((i) => i.id === item.id)) return items
+  const pos = Math.min(Math.max(indice, 0), items.length)
+  return [...items.slice(0, pos), item, ...items.slice(pos)]
 }
 
 export interface CambioPrecio {
@@ -113,6 +122,9 @@ export const useCartStore = create<CartStore>()(persist((set, get) => ({
   },
   removeItem: (id) => {
     set({ items: get().items.filter((i) => i.id !== id) })
+  },
+  reinsertarItem: (item, indice) => {
+    set({ items: insertarLinea(get().items, item, indice) })
   },
   updateQuantity: (id, cantidad) => {
     const q = redondear3(cantidad)

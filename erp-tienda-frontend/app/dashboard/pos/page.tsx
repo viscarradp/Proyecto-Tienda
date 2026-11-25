@@ -38,7 +38,8 @@ import {
 } from "@/components/ui/bottom-sheet"
 import { MoneyValue } from "@/components/money-value"
 import { CartLines } from "@/components/pos/CartLines"
-import { CheckoutSection } from "@/components/pos/CheckoutSection"
+import { CheckoutSection, ModoApagon } from "@/components/pos/CheckoutSection"
+import { textoAvisosSinStock, textoResultadoCierre } from "@/components/pos/pos-utils"
 import { SacarDineroDialog } from "@/components/pos/SacarDineroDialog"
 import { AbrirCajaDialog } from "@/components/pos/AbrirCajaDialog"
 import { AltaRapidaDialog, type ProductoRapido } from "@/components/pos/AltaRapidaDialog"
@@ -116,7 +117,7 @@ function StockCelda({ row }: { row: PresentacionRow }) {
 }
 
 export default function POSPage() {
-  const { addItem, items, updateQuantity, setMonto, quitarMonto, removeItem, clearCart, getTotal } = useCartStore(
+  const { addItem, items, updateQuantity, setMonto, quitarMonto, removeItem, reinsertarItem, clearCart, getTotal } = useCartStore(
     useShallow((state) => ({
       addItem: state.addItem,
       items: state.items,
@@ -124,6 +125,7 @@ export default function POSPage() {
       setMonto: state.setMonto,
       quitarMonto: state.quitarMonto,
       removeItem: state.removeItem,
+      reinsertarItem: state.reinsertarItem,
       clearCart: state.clearCart,
       getTotal: state.getTotal,
     }))
@@ -160,7 +162,6 @@ export default function POSPage() {
 
   // ─── Checkout ───
   const [checkoutLoading, setCheckoutLoading] = React.useState(false)
-  const [checkoutSuccess, setCheckoutSuccess] = React.useState(false)
   const [checkoutError, setCheckoutError] = React.useState("")
   const [pagoCliente, setPagoCliente] = React.useState<string>("")
   // Modo contingencia (Bloque 3.D): registrar una venta de apagón con su hora real.
@@ -274,12 +275,13 @@ export default function POSPage() {
     const fondoSiguiente = efectivoParsed - bovedaParsed
 
     setCajaActionLoading(true)
+    let cerrada: { diferencia?: string | number | null } | undefined
     try {
       // Cerrar: se declara el efectivo FÍSICO contado (para el descuadre real) y
       // cuánto se traslada a la bóveda. El backend registra el TRASLADO_A_BOVEDA
       // (no un "faltante") — ver docs/domain/caja-y-turnos.md y
       // docs/historial/modelo-contable/00-especificaciones.md §5.5.
-      await apiFetch(`/cajas-turnos/${cajaActiva.id}/cerrar`, {
+      cerrada = await apiFetch<{ diferencia?: string | number | null }>(`/cajas-turnos/${cajaActiva.id}/cerrar`, {
         method: "PATCH",
         body: JSON.stringify({
           efectivo_declarado: efectivoParsed,
@@ -294,7 +296,16 @@ export default function POSPage() {
       return
     }
 
-    // El cierre salió bien: a partir de aquí la caja ya está cerrada.
+    // El cierre salió bien: a partir de aquí la caja ya está cerrada. Resultado
+    // visible hasta que la cajera lo toque (la reapertura automática lo haría invisible).
+    const diferenciaCentavos = cerrada?.diferencia != null
+      ? montoACentavos(cerrada.diferencia)
+      : Math.round((efectivoParsed - esperado) * 100)
+    toast.success(textoResultadoCierre(diferenciaCentavos, fondoSiguiente), {
+      id: "cierre-caja",
+      duration: Infinity,
+      action: { label: "Entendido", onClick: () => {} },
+    })
     try {
       // Reabrir automáticamente con lo que quedó en la gaveta
       if (autoOpenNext && fondoSiguiente > 0) {
@@ -358,16 +369,13 @@ export default function POSPage() {
       const totalCobrado = venta?.total != null ? montoACentavos(venta.total) : montoACentavos(getTotal())
       const pagoCentavos = pagoCliente.trim() === "" ? null : montoACentavos(pagoCliente)
       const cambioCentavos = pagoCentavos !== null ? pagoCentavos - totalCobrado : null
-      const textoCambio =
-        cambioCentavos !== null && cambioCentavos >= 0
-          ? ` · Cambio: ${formatMoney(centavosAMonto(cambioCentavos))}`
-          : ""
-      toast.success(`Venta registrada · Total: ${formatMoney(centavosAMonto(totalCobrado))}${textoCambio}`, {
-        duration: 8000,
-      })
-      // Vendido sin stock registrado: la venta vale igual, solo se avisa (D-01).
-      if (Array.isArray(venta?.avisos)) {
-        venta.avisos.forEach((aviso) => toast.warning(aviso, { duration: 15000 }))
+      // Vendido sin stock registrado: la venta vale igual, solo se avisa (D-01), en un solo aviso corto.
+      if (Array.isArray(venta?.avisos) && venta.avisos.length > 0) {
+        toast.warning(textoAvisosSinStock(venta.avisos.length), {
+          id: "avisos-sin-stock",
+          duration: 6000,
+          description: "El detalle está en Inventario.",
+        })
       }
 
       setUltimaVenta({
@@ -381,18 +389,18 @@ export default function POSPage() {
       // Modo apagón: sigue activo con su fecha hasta que la cajera lo apague; solo se pide ajustar la hora.
       if (contingencia) setFechaPorAjustar(true)
       setCartOpen(false)
-      setCheckoutSuccess(true)
       // Recargar inventario (forzado: el caché de 3 min mostraría stock viejo)
       loadData(true)
       // Recargar caja para actualizar el efectivo esperado
       loadCaja()
-      setTimeout(() => setCheckoutSuccess(false), 3000)
     } catch (err: unknown) {
       // Se queda visible hasta la siguiente acción (no se oculta solo).
       const base = err instanceof Error ? err.message : "No se pudo registrar la venta. Intenta de nuevo."
       // Con fallo de red o del servidor la venta pudo haber quedado registrada aunque no llegara la respuesta.
       const dudosa = ["red", "servidor"].includes(tipoDeError(err) ?? "")
-      setCheckoutError(dudosa ? `${base} Antes de cobrar otra vez, revisa en Movimientos si la venta ya quedó.` : base)
+      const mensaje = dudosa ? `${base} Antes de cobrar otra vez, revisa en Movimientos si la venta ya quedó.` : base
+      setCheckoutError(mensaje)
+      toast.error(mensaje, { id: "error-cobro", duration: 8000 })
     } finally {
       setCheckoutLoading(false)
     }
@@ -429,6 +437,8 @@ export default function POSPage() {
   })
 
   const handleAddToCart = React.useCallback((row: PresentacionRow) => {
+    // Vibración corta como confirmación al tocar (si el aparato la tiene).
+    try { navigator.vibrate?.(15) } catch { /* sin vibración */ }
     addItem({
       id: `pres-${row.presentacion_id}`,
       producto_nombre: row.producto_nombre,
@@ -475,6 +485,25 @@ export default function POSPage() {
   const avisarAgregado = (row: PresentacionRow) => {
     const nombre = row.factor_conversion === 1 ? row.producto_nombre : `${row.producto_nombre} (${row.presentacion_desc})`
     toast.success(`Agregado: ${nombre}`, { id: "agregado-rapido", duration: 1500, position: "top-center" })
+  }
+
+  // Tocar una fila: agrega y avisa con el mismo id que el escáner (no se apilan).
+  const agregarDesdeFila = (row: PresentacionRow) => {
+    handleAddToCart(row)
+    avisarAgregado(row)
+  }
+
+  // Quitar una línea con "Deshacer": la reinserta tal como estaba (cantidad, modo, monto y posición).
+  const quitarConDeshacer = (id: string) => {
+    const indice = items.findIndex((i) => i.id === id)
+    if (indice < 0) return
+    const linea = items[indice]
+    removeItem(id)
+    toast(`Quitaste «${linea.producto_nombre || linea.nombre}»`, {
+      id: `quitar-${id}`,
+      duration: 6000,
+      action: { label: "Deshacer", onClick: () => reinsertarItem(linea, indice) },
+    })
   }
 
   // Enter en el buscador: agrega si hay un solo resultado (o si lo escrito es justo un código de barras).
@@ -527,6 +556,33 @@ export default function POSPage() {
   const faltaExplicacion = exigeExplicacion && !observacionesCierre.trim()
   // Número de productos distintos (líneas), no la suma de cantidades (que puede ser fraccionada).
   const itemCount = items.length
+  // Líneas del ticket por id: la fila del catálogo muestra "× N" si ya está.
+  const enTicket = new Map(items.map((i) => [i.id, i]))
+  const faltaFecha = contingencia && !fechaContingencia
+  const modoApagon = (
+    <ModoApagon
+      contingencia={contingencia}
+      setContingencia={setContingencia}
+      fechaContingencia={fechaContingencia}
+      setFechaContingencia={setFechaContingencia}
+      fechaPorAjustar={fechaPorAjustar}
+      setFechaPorAjustar={setFechaPorAjustar}
+    />
+  )
+  const checkout = (
+    <CheckoutSection
+      total={total}
+      itemCount={itemCount}
+      pagoCliente={pagoCliente}
+      setPagoCliente={setPagoCliente}
+      onCheckout={handleCheckout}
+      checkoutLoading={checkoutLoading}
+      hasCaja={!!cajaActiva}
+      checkoutError={checkoutError}
+      faltaFecha={faltaFecha}
+      ultimaVenta={ultimaVenta}
+    />
+  )
 
   const emptyTicket = (
     <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
@@ -540,11 +596,11 @@ export default function POSPage() {
     <div className="flex min-h-full flex-col bg-background text-foreground lg:h-full lg:min-h-0 lg:flex-row">
       {/* ════════ CATÁLOGO ════════ */}
       <section className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
-        {/* Encabezado (pegajoso) */}
-        <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 lg:px-6">
+        {/* Encabezado: en escritorio todo pegajoso; en celular solo el buscador (el resto se desplaza con la lista) */}
+        <div className="contents lg:sticky lg:top-0 lg:z-10 lg:block lg:border-b lg:border-border lg:bg-background/95 lg:backdrop-blur">
+          <div className="flex items-center justify-between gap-x-3 gap-y-2 px-4 py-2 lg:flex-wrap lg:py-3 lg:px-6">
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Nueva venta</h1>
+              <h1 className="text-base font-semibold tracking-tight lg:text-xl">Nueva venta</h1>
               {mostrandoCarga ? (
                 <p className="text-xs text-muted-foreground">Revisando caja…</p>
               ) : cajaActiva ? (
@@ -612,7 +668,7 @@ export default function POSPage() {
           )}
 
           {/* Búsqueda + escaneo */}
-          <div className="px-4 pb-3 lg:px-6">
+          <div className="sticky top-0 z-10 bg-background/95 px-4 pb-2 pt-1 backdrop-blur lg:static lg:bg-transparent lg:px-6 lg:pb-3 lg:pt-0 lg:backdrop-blur-none">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -697,22 +753,34 @@ export default function POSPage() {
                   <li key={row.presentacion_id}>
                     <button
                       type="button"
-                      onClick={() => handleAddToCart(row)}
-                      className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 lg:px-6"
+                      onClick={() => agregarDesdeFila(row)}
+                      className={cn(
+                        "group flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 sm:gap-3 sm:py-3 lg:px-6",
+                        enTicket.has(`pres-${row.presentacion_id}`) && "bg-primary/5",
+                      )}
                     >
                       <div className="hidden w-24 shrink-0 truncate font-mono text-xs text-muted-foreground sm:block">
                         {row.codigo_barras || `P${String(row.presentacion_id).padStart(4, '0')}`}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{row.producto_nombre}</p>
+                        <p className="line-clamp-2 text-sm font-medium leading-tight text-foreground sm:truncate">{row.producto_nombre}</p>
                         <p className="truncate text-xs text-muted-foreground">{row.presentacion_desc}</p>
                       </div>
                       <StockCelda row={row} />
-                      <div className="w-20 shrink-0 text-right">
+                      <div className="w-16 shrink-0 text-right sm:w-20">
                         <MoneyValue value={row.precio_venta} className="text-base font-semibold" />
                       </div>
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                         <Plus className="h-4 w-4" />
+                        {enTicket.has(`pres-${row.presentacion_id}`) && (
+                          // Posición absoluta: la insignia no cambia la altura ni el ancho de la fila.
+                          <span
+                            className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-primary-foreground ring-2 ring-background"
+                            aria-label={`${formatCantidad(enTicket.get(`pres-${row.presentacion_id}`)!.cantidad)} en el ticket`}
+                          >
+                            ×{formatCantidad(enTicket.get(`pres-${row.presentacion_id}`)!.cantidad)}
+                          </span>
+                        )}
                       </span>
                     </button>
                   </li>
@@ -737,65 +805,65 @@ export default function POSPage() {
         </div>
         <div className="flex-1 overflow-y-auto px-4">
           {items.length === 0 ? emptyTicket : (
-            <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={removeItem} />
+            <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={quitarConDeshacer} />
           )}
+          <div className="flex flex-col pb-3">{modoApagon}</div>
         </div>
-        <div className="border-t border-border p-4">
-          <CheckoutSection
-            total={total}
-            itemCount={itemCount}
-            pagoCliente={pagoCliente}
-            setPagoCliente={setPagoCliente}
-            onCheckout={handleCheckout}
-            checkoutLoading={checkoutLoading}
-            hasCaja={!!cajaActiva}
-            checkoutSuccess={checkoutSuccess}
-            checkoutError={checkoutError}
-            contingencia={contingencia}
-            setContingencia={setContingencia}
-            fechaContingencia={fechaContingencia}
-            setFechaContingencia={setFechaContingencia}
-            fechaPorAjustar={fechaPorAjustar}
-            setFechaPorAjustar={setFechaPorAjustar}
-            ultimaVenta={ultimaVenta}
-          />
-        </div>
+        <div className="border-t border-border p-4">{checkout}</div>
       </aside>
 
       {/* ════════ BARRA DE CARRITO (móvil) ════════ */}
       <button
         type="button"
         onClick={() => setCartOpen(true)}
-        aria-label="Ver ticket"
-        className="fixed inset-x-0 z-40 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 text-left lg:hidden"
+        aria-label={itemCount > 0 ? `Cobrar, ${itemCount} ${itemCount === 1 ? "producto" : "productos"}, ${formatMoney(total)}` : "Ver ticket"}
+        className={cn(
+          "fixed inset-x-0 z-40 flex items-center justify-between gap-3 border-t px-4 py-3 text-left lg:hidden",
+          // Fondo opaco (bg-card); el tinte de éxito va en una capa encima para que nada de atrás se vea.
+          "isolate overflow-hidden bg-card",
+          itemCount === 0 && ultimaVenta ? "border-success/40" : "border-border",
+        )}
         style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
       >
-        <span className="flex items-center gap-2.5">
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-sm bg-primary/10 text-primary">
-            <ShoppingCart className="h-5 w-5" />
-            {itemCount > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                {itemCount}
+        {itemCount === 0 && ultimaVenta && <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-success/10" />}
+        {itemCount > 0 ? (
+          <>
+            <span className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-sm bg-primary text-primary-foreground">
+                <ShoppingCart className="h-5 w-5" />
               </span>
-            )}
-          </span>
-          <span className="text-sm font-medium">
-            {itemCount > 0
-              ? `${itemCount} ${itemCount === 1 ? "producto" : "productos"}`
-              : ultimaVenta?.cambio != null
-                ? <span className="text-success">Cambio {formatMoney(ultimaVenta.cambio)}</span>
-                : "Ticket vacío"}
-          </span>
-        </span>
-        <span className="flex items-center gap-2">
-          <MoneyValue value={total} className="text-base font-semibold" />
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </span>
+              <span className="text-sm font-semibold">
+                Cobrar · {itemCount} {itemCount === 1 ? "producto" : "productos"} · {formatMoney(total)}
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </>
+        ) : ultimaVenta ? (
+          // Única confirmación de la venta en celular: el cambio, sin tocar nada, hasta el siguiente producto.
+          <>
+            <span role="status" className="flex flex-col leading-tight text-success">
+              <span className="text-xs font-medium">Venta registrada · {formatMoney(ultimaVenta.total)}</span>
+              {ultimaVenta.cambio !== null ? (
+                <span className="text-2xl font-bold tabular-nums">Cambio: {formatMoney(ultimaVenta.cambio)}</span>
+              ) : (
+                <span className="text-sm font-semibold">Cobrada sin dato de pago</span>
+              )}
+            </span>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
+              <ShoppingCart className="h-5 w-5" /> Ticket vacío
+            </span>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </>
+        )}
       </button>
 
       {/* ════════ BOTTOM SHEET: TICKET (móvil) ════════ */}
       <BottomSheet open={cartOpen} onOpenChange={setCartOpen}>
-        <BottomSheetContent className="lg:hidden">
+        <BottomSheetContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden px-4 lg:hidden">
           <BottomSheetHeader className="flex-row items-center justify-between p-0 pb-1">
             <BottomSheetTitle>Ticket de compra</BottomSheetTitle>
             {items.length > 0 && (
@@ -805,27 +873,14 @@ export default function POSPage() {
             )}
           </BottomSheetHeader>
           {items.length === 0 ? emptyTicket : (
-            <div className="flex flex-col gap-4">
-              <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={removeItem} />
-              <CheckoutSection
-                total={total}
-                itemCount={itemCount}
-                pagoCliente={pagoCliente}
-                setPagoCliente={setPagoCliente}
-                onCheckout={handleCheckout}
-                checkoutLoading={checkoutLoading}
-                hasCaja={!!cajaActiva}
-                checkoutSuccess={checkoutSuccess}
-                checkoutError={checkoutError}
-                contingencia={contingencia}
-                setContingencia={setContingencia}
-                fechaContingencia={fechaContingencia}
-                setFechaContingencia={setFechaContingencia}
-                fechaPorAjustar={fechaPorAjustar}
-                setFechaPorAjustar={setFechaPorAjustar}
-                ultimaVenta={ultimaVenta}
-              />
-            </div>
+            <>
+              {/* Líneas: se desplazan. El cobro queda fijo abajo y siempre se ve. */}
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <CartLines items={items} updateQuantity={updateQuantity} setMonto={setMonto} quitarMonto={quitarMonto} removeItem={quitarConDeshacer} />
+                <div className="flex flex-col pb-2">{modoApagon}</div>
+              </div>
+              <div className="shrink-0 border-t border-border pt-3">{checkout}</div>
+            </>
           )}
         </BottomSheetContent>
       </BottomSheet>

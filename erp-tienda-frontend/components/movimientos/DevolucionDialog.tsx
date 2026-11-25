@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { RefreshCw, Undo2, PackageCheck, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import {
@@ -100,13 +101,14 @@ export function DevolucionDialog({
     setLoading(true)
     setError("")
     try {
-      await apiFetch(`/ventas/${venta.id}/devolucion`, {
+      const resp = await apiFetch<{ total_reembolsado?: string | number }>(`/ventas/${venta.id}/devolucion`, {
         method: "POST",
         body: JSON.stringify({
           detalles,
           justificacion: justif.trim() || undefined,
         }),
       })
+      toast.success(`Devolución registrada: entrega ${formatMoney(resp?.total_reembolsado ?? totalReembolso)} al cliente`)
       onDone()
       onOpenChange(false)
     } catch (err: unknown) {
