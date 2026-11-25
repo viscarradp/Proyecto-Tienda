@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
 import { Store, Loader2 } from "lucide-react"
 
+import { getApiUrl } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 
 interface LoginResponse {
   access_token: string
@@ -34,7 +33,7 @@ export default function LoginPage() {
     setError("")
 
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(`${getApiUrl()}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre, password }),
@@ -48,14 +47,28 @@ export default function LoginPage() {
       const data: LoginResponse = await res.json()
 
       // Expiración de la cookie alineada al JWT real (expiresIn: '12h' en el
-      // backend, ver auth.module.ts) — antes decía 1 día y quedaba
-      // desincronizada. Secure + SameSite=Lax: localhost cuenta como
-      // contexto seguro en navegadores modernos, así que no rompe el
-      // desarrollo local (ver docs/decisions/0008-cookie-flags.md).
-      const cookieOptions = { expires: 0.5, path: "/", secure: true, sameSite: "lax" as const }
+      // backend, ver auth.module.ts). SameSite=Lax y Secure solo bajo HTTPS:
+      // en producción (https) la cookie es Secure; por HTTP desde la IP de la
+      // laptop (probar en el celular) el navegador descartaría una cookie
+      // Secure (ver docs/decisions/0008-cookie-flags.md, enmienda UX-01).
+      const cookieOptions = {
+        expires: 0.5,
+        path: "/",
+        secure: window.location.protocol === "https:",
+        sameSite: "lax" as const,
+      }
       Cookies.set("token", data.access_token, cookieOptions)
       // Guardar info del usuario para mostrar en el sidebar
       Cookies.set("user", JSON.stringify(data.usuario), cookieOptions)
+
+      // Si el navegador no guardó la sesión, redirigir solo causaría un bucle
+      // de vuelta al login sin explicación.
+      if (!Cookies.get("token")) {
+        setError(
+          "No se pudo guardar la sesión en este navegador. Abre el sistema desde su dirección segura (https) o desde la computadora."
+        )
+        return
+      }
 
       router.push("/dashboard/pos")
       router.refresh()

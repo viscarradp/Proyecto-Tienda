@@ -109,7 +109,7 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 - **L12 · Corregir errores sin ensuciar el P&L** (reversos de compras, gastos y ajustes) — ARQ-08.
 - **L13 · Tests faltantes** (roles, compras, movimientos, reconciliación de efectivo) — ARQ-19; y una sola función para el efectivo de gaveta — ARQ-12.
 - **L14 · Accesibilidad y celular:** labels, íconos sin nombre, teclado, objetivos táctiles, contraste, cerrar sesión en celular — UX-26, UX-27, UX-28, VIVO-12; confirmaciones destructivas y un solo patrón de feedback — UX-29.
-- Login por HTTP con cookie `secure` (pruebas desde el celular en la red local) — UX-01.
+- ✅ Login por HTTP con cookie `secure` (pruebas desde el celular en la red local) — UX-01, hecho el 2026-11-25.
 
 ### ⚪ Nivel 3 — Pulido e higiene
 
@@ -140,7 +140,7 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | 5 | **L7** permisos y trazabilidad + **L8** compras a crédito y deudas + **L3b** respaldo nocturno (aislado: solo scripts, CI y docs) | D-05, D-06, ARQ-03 y backup ✅ |
 | 6–9 | **L9** + Fase 5 · **L10** + **L11** · **L12** + **L13** · **L14** (Nivel 2) | ✅ hechas |
 | ⏸ pausa | Prueba con la tienda real ([plan-fases](plan-fases.md#pausa-para-la-prueba-real)) | Pasos manuales de Supabase, respaldo y despliegue |
-| después | Lo que reporte la prueba; decisiones D-07…D-14; Nivel 3; UX-01 si se prueba por HTTP | Fin de la prueba real |
+| después | Lo que reporte la prueba; decisiones D-07…D-14; Nivel 3 | Fin de la prueba real |
 
 ## 4. Estado
 
@@ -164,4 +164,5 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | L13 | ✅ 2026-11-24 — gaveta en una sola función; e2e de cuadre de un día, matriz de roles D-06 y compras. En revisión se detectó y corrigió un test dependiente del orden. Total: 284 e2e y 41 unitarios | `feature/l13-tests-gaveta-unica` |
 | L14 | ✅ 2026-11-24 — verificado en navegador: menú de usuario con «Cerrar sesión» en celular; 0 controles < 44 px a 375 px; escritorio sin cambios visuales; consola sin errores de hidratación. Etiquetas sin asociar 56 → 0 y botones de ícono sin nombre 7 → 0 | `feature/l14-accesibilidad-celular` |
 | NEG-09 · Resumen del turno | ✅ 2026-11-24 — solo ventas completadas, devoluciones del turno y ventas netas; e2e nuevo (falla sin el fix). Total: 285 e2e | `feature/neg09-resumen-turno` |
+| UX-01 · Celular en la red local | ✅ 2026-11-25 — cookie `Secure` solo con HTTPS (y aviso si el navegador no guarda la sesión); la API toma la dirección de la página cuando está configurada en localhost; `allowedDevOrigins` con las IP de la laptop. Verificado en navegador: por IP la página carga sin bloqueo de Next y el login en localhost sigue igual. Falta la prueba con un celular real (el navegador integrado bloquea las llamadas cruzadas desde la IP) | `feature/ux01-celular-red-local` |
 | Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | `feature/fase5-documentacion` |
