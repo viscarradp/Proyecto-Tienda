@@ -22,10 +22,11 @@ import { etiquetaRol } from "@/lib/roles"
  */
 export function UserMenu({ user }: { user: CurrentUser | null }) {
   const [open, setOpen] = React.useState(false)
-  const logout = useLogout()
+  const { pedirSalida, dialogoSalida } = useLogout()
   const inicial = user?.nombre?.trim().charAt(0).toUpperCase() || "?"
 
   return (
+    <>
     <BottomSheet open={open} onOpenChange={setOpen}>
       <BottomSheetTrigger asChild>
         <Button
@@ -54,7 +55,7 @@ export function UserMenu({ user }: { user: CurrentUser | null }) {
             className="w-full gap-2"
             onClick={() => {
               setOpen(false)
-              logout()
+              pedirSalida()
             }}
           >
             <LogOut aria-hidden="true" />
@@ -63,5 +64,7 @@ export function UserMenu({ user }: { user: CurrentUser | null }) {
         </div>
       </BottomSheetContent>
     </BottomSheet>
+    {dialogoSalida}
+    </>
   )
 }

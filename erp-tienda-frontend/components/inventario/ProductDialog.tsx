@@ -199,7 +199,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" showCloseButton={false}>
+      <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Nuevo producto</DialogTitle>
           <DialogDescription>Agrega un producto al catálogo con sus presentaciones de venta.</DialogDescription>

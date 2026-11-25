@@ -116,6 +116,16 @@ export default function InventarioPage() {
   const [globalError, setGlobalError] = React.useState("")
   const [productDialogOpen, setProductDialogOpen] = React.useState(false)
   const [compraDialogOpen, setCompraDialogOpen] = React.useState(false)
+  // Compra con datos escritos: cerrar pide confirmar para no perder las líneas.
+  const [compraSucia, setCompraSucia] = React.useState({ sucio: false, lineas: 0 })
+  const [confirmarDescarte, setConfirmarDescarte] = React.useState(false)
+  const cambiarCompraAbierta = (abierto: boolean) => {
+    if (!abierto && compraSucia.sucio) {
+      setConfirmarDescarte(true)
+      return
+    }
+    setCompraDialogOpen(abierto)
+  }
   const [compraInicial, setCompraInicial] = React.useState(false)
   const [ajusteDialogOpen, setAjusteDialogOpen] = React.useState(false)
   const [ajusteTarget, setAjusteTarget] = React.useState<{
@@ -868,8 +878,12 @@ export default function InventarioPage() {
       {/* Dialogs */}
       <AnularDialog objetivo={aAnular} onClose={() => setAAnular(null)} onHecho={() => loadData(true)} />
 
-      <Dialog open={compraDialogOpen} onOpenChange={setCompraDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-[95vw] overflow-hidden p-0 lg:max-w-5xl" showCloseButton>
+      <Dialog open={compraDialogOpen} onOpenChange={cambiarCompraAbierta}>
+        <DialogContent
+          className="flex w-[95vw] max-w-[95vw] flex-col overflow-hidden p-0 lg:max-w-5xl"
+          showCloseButton
+          onInteractOutside={(e) => { if (compraSucia.sucio) e.preventDefault() }}
+        >
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="flex items-center gap-2">
               {compraInicial ? (
@@ -879,11 +893,15 @@ export default function InventarioPage() {
               )}
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[80vh] overflow-y-auto p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
             <CompraForm
               productos={productos}
               inicial={compraInicial}
+              onCambioSucio={(sucio, lineas) =>
+                setCompraSucia((prev) => (prev.sucio === sucio && prev.lineas === lineas ? prev : { sucio, lineas }))
+              }
               onSuccess={() => {
+                setCompraSucia({ sucio: false, lineas: 0 })
                 setCompraDialogOpen(false)
                 loadData(true)
               }}
@@ -891,6 +909,23 @@ export default function InventarioPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmarDescarte}
+        onOpenChange={setConfirmarDescarte}
+        title="¿Descartar la compra?"
+        description={
+          compraSucia.lineas > 0
+            ? `Se pierden ${compraSucia.lineas} ${compraSucia.lineas === 1 ? "producto" : "productos"} que escribiste.`
+            : "Se pierde lo que escribiste."
+        }
+        confirmLabel="Descartar"
+        cancelLabel="Seguir editando"
+        onConfirm={() => {
+          setCompraSucia({ sucio: false, lineas: 0 })
+          setCompraDialogOpen(false)
+        }}
+      />
 
       <ProductDialog
         open={productDialogOpen}
