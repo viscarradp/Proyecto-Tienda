@@ -55,6 +55,14 @@ cd erp-tienda-frontend && npm run dev         # web en http://localhost:3001
 Stack completo en contenedores, con hot-reload: `./scripts/docker-dev.sh start` — ver
 [`DOCKER-QUICKSTART.md`](DOCKER-QUICKSTART.md) y [`docs/operations/docker-development.md`](docs/operations/docker-development.md).
 
+### Probar desde el celular (misma red Wi-Fi)
+
+1. Levanta backend y frontend como siempre.
+2. En el celular, abre `http://<IP-de-la-laptop>:3001`. La IP se ve con `ipconfig` en Windows (la "Dirección IPv4" del Wi-Fi).
+3. Si Windows pregunta por el firewall, permite Node.js en redes **privadas**.
+
+Por HTTP la sesión no usa cookie `Secure` (si no, el navegador la descartaría); en producción, con HTTPS, sí la usa.
+
 ## Base de datos
 
 Todavía **no hay migraciones de Prisma** (decisión deliberada, [ADR 0002](docs/decisions/0002-sin-migraciones-hasta-produccion.md)):

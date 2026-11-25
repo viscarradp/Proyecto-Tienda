@@ -23,7 +23,8 @@ subas un `.env` real al repositorio (ya está en `.gitignore`).
 
 | Variable | Obligatoria | Descripción |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | No (default `http://localhost:3000`) | URL base del backend. Al llevar el prefijo `NEXT_PUBLIC_`, **se expone al navegador** — nunca poner un secreto en una variable con este prefijo. Se **incrusta en el bundle al construir**: en la imagen de producción es un `--build-arg`, no una variable de ejecución (ver [`deployment.md`](deployment.md)). |
+| `NEXT_PUBLIC_API_URL` | No (default `http://localhost:3000`) | URL base del backend. Al llevar el prefijo `NEXT_PUBLIC_`, **se expone al navegador** — nunca poner un secreto en una variable con este prefijo. Se **incrusta en el bundle al construir**: en la imagen de producción es un `--build-arg`, no una variable de ejecución (ver [`deployment.md`](deployment.md)). Si apunta a localhost y la página se abre por otra dirección (p. ej. la IP de la laptop desde el celular), el navegador usa esa dirección en lugar de localhost. |
+| `DEV_ORIGINS` | No | Solo desarrollo. Orígenes extra (separados por coma) que pueden abrir `next dev`, además de las IP de la laptop, que se detectan solas. Sirve dentro de Docker, donde la IP del contenedor no es la de la laptop. |
 
 ## Respaldo (secretos de GitHub Actions, no van en ningún `.env`)
 

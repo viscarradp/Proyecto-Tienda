@@ -421,8 +421,8 @@ auditorías para decidir qué viene después.
    - Por último, el **Nivel 3 (pulido)**: código muerto, activos fijos sin pantalla (NEG-05), imagen del backend de
      521 MB, hidratación de `ThemeToggle`, textos de marca del login (UX-02) y pulido general (UX-30). Los errores de
      números del Nivel 3 ya están corregidos (resumen del turno, NEG-09, durante la pausa; "Semana" en L1b y el ticket en L9).
-   - Si se prueba desde el celular por la red local (HTTP por IP), también el **login con cookie `secure`** (UX-01, único
-     pendiente del Nivel 2). En producción con HTTPS no afecta.
+   - El Nivel 2 está completo: el login desde el celular por la red local (UX-01) quedó resuelto el 2026-11-25. Cómo
+     probar desde el celular: sección "Probar desde el celular" del [README](../../README.md).
 4. **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
    cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia ([`hardening-backlog.md`](hardening-backlog.md)).
 

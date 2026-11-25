@@ -1,6 +1,34 @@
 import Cookies from "js-cookie"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+const CONFIGURED_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+
+const HOSTS_LOCALES = ["localhost", "127.0.0.1", "[::1]"]
+
+/**
+ * URL base de la API, sin "/" final.
+ *
+ * Para probar desde el celular en la red local: si la API está configurada en
+ * localhost pero la página se abrió por otra dirección (p. ej. la IP de la
+ * laptop), en el celular "localhost" sería el propio celular. Entonces se usa
+ * el mismo host de la página, con el puerto y protocolo configurados.
+ * En producción (dominio real) o con la página en localhost no cambia nada.
+ */
+export function getApiUrl(): string {
+  const base = CONFIGURED_API_URL.replace(/\/+$/, "")
+  if (typeof window === "undefined") return base
+  try {
+    const url = new URL(base)
+    const paginaEnLocal = HOSTS_LOCALES.includes(window.location.hostname) ||
+      window.location.hostname === "::1"
+    if (HOSTS_LOCALES.includes(url.hostname) && !paginaEnLocal) {
+      url.hostname = window.location.hostname
+      return url.toString().replace(/\/+$/, "")
+    }
+    return base
+  } catch {
+    return base
+  }
+}
 
 export type ApiErrorKind = "red" | "servidor" | "validacion" | "no_encontrado" | "sesion" | "permiso"
 
@@ -52,7 +80,7 @@ export async function apiFetch<T>(
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}${endpoint}`, {
+    res = await fetch(`${getApiUrl()}${endpoint}`, {
       ...options,
       headers,
     })

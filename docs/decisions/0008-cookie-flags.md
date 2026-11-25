@@ -66,3 +66,7 @@ funcionan correctamente con las cookies así configuradas.
 - Sigue sin ser `httpOnly` — un XSS exitoso en el frontend aún podría leer
   el token (limitación conocida y documentada, ver
   [`../architecture/security.md`](../architecture/security.md) y el backlog).
+
+## Enmienda 2026-11-25 (UX-01)
+
+`secure` ahora depende del protocolo de la página: con HTTPS (producción) la cookie es `Secure`; con HTTP por IP en la red local no lo es, para poder probar desde el celular. El supuesto "localhost cuenta como seguro" no cubría el celular: al abrir `http://<IP-de-la-laptop>:3001`, el host ya no es localhost, el navegador descartaba la cookie `Secure` y el login entraba en un bucle sin mensaje. Si aun así la cookie no se guarda, el login avisa en vez de redirigir.
