@@ -51,6 +51,7 @@ import { PrecioRapido } from "@/components/inventario/PrecioRapido"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useInventoryStore, stockTotalDe, pendienteTotalDe, type Producto, type LoteStock } from "../../../src/store/inventoryStore"
+import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
 interface Compra {
   id: number
@@ -333,7 +334,7 @@ export default function InventarioPage() {
     setPresDialogOpen(true)
   }
 
-  if (!mounted) return null
+  if (!mounted) return <EsqueletoPagina />
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">

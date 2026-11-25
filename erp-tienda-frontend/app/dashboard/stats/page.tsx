@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   DollarSign,
   TrendingUp,
@@ -197,7 +197,11 @@ export default function StatsPage() {
   const [contarMotivo, setContarMotivo] = useState("")
   const [contarLoading, setContarLoading] = useState(false)
 
+  // Cada carga lleva un número; solo la más reciente puede escribir resultados.
+  const cargaRef = useRef(0)
+
   const fetchData = useCallback(async () => {
+    const carga = ++cargaRef.current
     setLoading(true)
     setError(null)
     try {
@@ -212,6 +216,7 @@ export default function StatsPage() {
         apiFetch(`/reportes/flujo-efectivo?${qs}`) as Promise<FlujoEfectivo>,
       ])
 
+      if (carga !== cargaRef.current) return
       setEstado(estadoRes)
       // Un producto devuelto por completo queda en cero: no aporta nada a la lista
       setProductos(productosRes.filter(p => p.unidades_vendidas !== 0 || parseFloat(p.ingreso) !== 0))
@@ -219,9 +224,10 @@ export default function StatsPage() {
       setPatrimonio(patrimonioRes)
       setFlujo(flujoRes)
     } catch (err) {
+      if (carga !== cargaRef.current) return
       setError(err instanceof Error ? err.message : "No se pudieron cargar los números. Intenta de nuevo.")
     } finally {
-      setLoading(false)
+      if (carga === cargaRef.current) setLoading(false)
     }
   }, [periodo])
 
@@ -386,7 +392,10 @@ export default function StatsPage() {
         )}
 
         {estado && (
-          <>
+          <div
+            aria-busy={loading}
+            className={cn("flex flex-col gap-6 transition-opacity duration-200", loading && "opacity-50")}
+          >
             {/* Asistente de bóveda inicial */}
             {bovedaSinMovimientos && (
               <div className="rounded-sm border border-primary/30 bg-primary/5 p-4">
@@ -677,7 +686,7 @@ export default function StatsPage() {
                 )}
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 

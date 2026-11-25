@@ -113,10 +113,16 @@ Movimientos dejaría de cargar en pocos meses. Va **después de L1b** (comparte 
 
 ### ⚪ Nivel 3 — Pulido e higiene
 
-Código muerto y archivos sueltos (COD-24, ARQ-20); modelo de datos al adoptar migraciones (ARQ-17, backlog técnico
-1–2); imagen de producción del backend pesa 521 MB (prisma, typescript y effect entran como dependencias de producción);
-activos fijos sin pantalla (NEG-05); hidratación de `ThemeToggle`; textos de marca del login (UX-02); pulido general
-(UX-30).
+**Lo que la tienda ve — ✅ hecho antes de entregar (2026-11-25):** textos del login y `/` directo a la app con sesión
+(UX-02); esqueleto en vez de pantalla en blanco, Estadísticas atenuada mientras recarga (sin que una respuesta vieja pise
+a la nueva) y avisos abajo sin tapar la barra del cobro en el celular (UX-30); ids que funcionan por HTTP (Inventario se
+caía desde el celular por la IP). La hidratación de `ThemeToggle` ya estaba resuelta en L14. Del UX-30 original, el doble
+envío, el voseo, el mensaje técnico del POS y `h-dvh` se habían resuelto en L2, L9 y L14.
+
+**Lo que la tienda no ve — puede esperar:** código muerto y archivos sueltos (COD-24, ARQ-20); modelo de datos al
+adoptar migraciones (ARQ-17, backlog técnico 1–2); imagen de Docker del backend de 521 MB (solo importa si Render la usa).
+
+**Función nueva, decidir con el uso:** activos fijos sin pantalla (NEG-05), solo si la tienda lleva control de su equipo.
 
 **Números corregidos (2026-11-24):** `getResumen` del turno contaba las ventas anuladas y no restaba devoluciones
 (NEG-09) — ✅ ahora cuenta solo completadas y trae `total_devoluciones`, `ventas_netas` y `count_ventas_anuladas`. El
@@ -165,4 +171,5 @@ solo el comentario D7 de `navigation.ts`, que ya no existe en el código actual.
 | L14 | ✅ 2026-11-24 — verificado en navegador: menú de usuario con «Cerrar sesión» en celular; 0 controles < 44 px a 375 px; escritorio sin cambios visuales; consola sin errores de hidratación. Etiquetas sin asociar 56 → 0 y botones de ícono sin nombre 7 → 0 | `feature/l14-accesibilidad-celular` |
 | NEG-09 · Resumen del turno | ✅ 2026-11-24 — solo ventas completadas, devoluciones del turno y ventas netas; e2e nuevo (falla sin el fix). Total: 285 e2e | `feature/neg09-resumen-turno` |
 | UX-01 · Celular en la red local | ✅ 2026-11-25 — cookie `Secure` solo con HTTPS (y aviso si el navegador no guarda la sesión); la API toma la dirección de la página cuando está configurada en localhost; `allowedDevOrigins` con las IP de la laptop. Verificado en navegador: por IP la página carga sin bloqueo de Next y el login en localhost sigue igual. Falta la prueba con un celular real (el navegador integrado bloquea las llamadas cruzadas desde la IP) | `feature/ux01-celular-red-local` |
+| Pulido de entrega (UX-02, UX-30) | ✅ 2026-11-25 — dos subagentes en paralelo (entrada y avisos; pantallas). Verificado en navegador: `/` con sesión va al POS, esqueleto en el HTML del servidor, Estadísticas atenuada solo mientras carga, aviso "Venta registrada" a ~126 px del borde inferior en 375 px (no tapa la barra del cobro), Inventario sin errores; `generarId` probado sin `randomUUID` | `feature/pulido-entrega` |
 | Fase 5 · Documentación | ✅ 2026-11-24 — reglas vigentes por tema en `domain/`, `historial/`, arquitectura, SRS v3.1 y README al día. Los pasos manuales que quedan (db push, respaldo, ensayo de restauración) están en [`plan-fases.md`](plan-fases.md#antes-de-la-primera-venta-real) | `feature/fase5-documentacion` |

@@ -55,14 +55,8 @@ import {
   stockEnPresentacion,
 } from "@/lib/format"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
-
-/** UUID para Idempotency-Key. crypto.randomUUID solo existe en contextos seguros (https/localhost). */
-function nuevaClaveIdempotencia(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID()
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
-}
+import { generarId } from "@/lib/id"
+import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
 // ─── Types ───
 interface PresentacionRow {
@@ -316,7 +310,7 @@ export default function POSPage() {
     // un error de red no duplica la venta.
     const firma = JSON.stringify({ detalles, fechaReal })
     if (!idemRef.current || idemRef.current.firma !== firma) {
-      idemRef.current = { key: nuevaClaveIdempotencia(), firma }
+      idemRef.current = { key: generarId(), firma }
     }
     const idemKey = idemRef.current.key
 
@@ -480,7 +474,7 @@ export default function POSPage() {
 
   useBarcodeScanner({ onScan: onBarcodeScanned, enabled: mounted })
 
-  if (!mounted) return null
+  if (!mounted) return <EsqueletoPagina />
   const mostrandoCarga = cajaLoading && !cajaCargada
 
   const total = getTotal()

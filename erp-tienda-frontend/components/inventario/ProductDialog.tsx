@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
+import { generarId } from "@/lib/id"
 import { errorFactor, errorPrecio, avisoPrecio, MensajeCampo } from "./validacionPresentacion"
 
 // ─── Types ───
@@ -68,7 +69,7 @@ function guardarUltimaCategoria(id: string) {
 }
 
 const nuevaPresentacion = (descripcion = ""): PresentacionForm => ({
-  key: crypto.randomUUID(),
+  key: generarId(),
   codigo_barras: "",
   descripcion,
   factor_conversion: "1",

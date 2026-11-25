@@ -18,6 +18,7 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
+import { generarId } from "@/lib/id"
 
 // ─── Types ───
 interface Producto {
@@ -164,7 +165,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
   const addLinea = () => {
     setLineas([...lineas, {
-      key: crypto.randomUUID(),
+      key: generarId(),
       producto_id: "",
       cantidad_inicial: "1",
       costo_unitario_adquisicion: "",
@@ -188,7 +189,7 @@ export function CompraForm({ productos, onSuccess, inicial = false }: CompraForm
 
       if (targetProd) {
         setLineas(prev => [...prev, {
-          key: crypto.randomUUID(),
+          key: generarId(),
           producto_id: String(targetProd.id),
           cantidad_inicial: "1",
           costo_unitario_adquisicion: "",

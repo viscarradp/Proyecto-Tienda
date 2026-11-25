@@ -38,7 +38,12 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <Toaster position="top-right" richColors />
+          {/* Móvil: el aviso queda sobre la barra del carrito del POS (~3.8rem) y el menú inferior (3.5rem) */}
+          <Toaster
+            position="bottom-center"
+            richColors
+            mobileOffset={{ bottom: "calc(8rem + env(safe-area-inset-bottom))" }}
+          />
         </ThemeProvider>
       </body>
     </html>
