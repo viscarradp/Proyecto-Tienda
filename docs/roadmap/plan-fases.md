@@ -394,8 +394,8 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    `ventas`, `productos` y `usuarios`. Un respaldo que nunca se restauró no es un respaldo.
 4. **Desplegar** el API y el frontend con las variables de [`../operations/configuration.md`](../operations/configuration.md)
    (`CORS_ORIGINS`, `JWT_SECRET` ≥ 32 caracteres, `TRUST_PROXY=1` en Cloud Run, `NEXT_PUBLIC_API_URL` como `--build-arg`),
-   comprobar `GET /salud` y poner un monitor externo sobre él. La decisión de proveedor del API (GCP u otro) y del plan de
-   Supabase sigue abierta (decisión 1 abajo).
+   comprobar `GET /salud` y poner un monitor externo sobre él. Proveedores decididos: Render + Vercel + Supabase
+   (decisión 1 abajo; variables en [`../operations/render.env.example`](../operations/render.env.example)).
 5. **Primer ingreso:** entrar como `admin`, **cambiar la contraseña inicial** y retirar `INITIAL_ADMIN_PASSWORD`; crear el
    usuario de la cajera (rol `CAJERO`).
 6. **Carga inicial:** inventario inicial como compra con origen `CAPITAL_DUEÑOS`; en Estadísticas, declarar el efectivo
@@ -418,9 +418,10 @@ auditorías para decidir qué viene después.
    - Después, las **decisiones del primer mes** D-07…D-14, ya con datos de uso: resumen diario, nota obligatoria en
      descuadre, vencimientos, stock bajo, conteo físico, recargas, fiado a clientes, margen mínimo. También el conteo "a
      ciegas" al cerrar (VIVO-09). Ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
-   - Por último, el **Nivel 3 (pulido)**: código muerto, activos fijos sin pantalla (NEG-05), imagen del backend de
-     521 MB, hidratación de `ThemeToggle`, textos de marca del login (UX-02) y pulido general (UX-30). Los errores de
-     números del Nivel 3 ya están corregidos (resumen del turno, NEG-09, durante la pausa; "Semana" en L1b y el ticket en L9).
+   - Por último, lo que queda del **Nivel 3**, que la tienda no ve: código muerto, migraciones e imagen de Docker de
+     521 MB; y la pantalla de activos fijos (NEG-05) solo si hace falta. Lo visible del Nivel 3 se hizo **antes** de
+     entregar, el 2026-11-25 (login, esqueletos, Estadísticas, avisos en el celular), y sus errores de números también
+     (NEG-09 en la pausa; "Semana" en L1b y el ticket en L9).
    - El Nivel 2 está completo: el login desde el celular por la red local (UX-01) quedó resuelto el 2026-11-25. Cómo
      probar desde el celular: sección "Probar desde el celular" del [README](../../README.md).
 4. **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
@@ -435,7 +436,7 @@ cada ola se aprueba explícitamente.
 
 | # | Decisión | Contexto | Urgencia |
 |---|---|---|---|
-| 1 | GCP vs. AWS para el backend | El usuario está reconsiderando GCP; Supabase se mantiene para la BD en ambos casos | Baja — el código ya es agnóstico de proveedor |
+| 1 | Dónde corre cada parte | **✅ Decidido (2026-11-25): backend en Render (plan gratis, se duerme; keep-alive desde la laptop del POS), frontend en Vercel, BD en Supabase.** Variables de Render: [`../operations/render.env.example`](../operations/render.env.example). Pendiente: adaptar `deployment.md` (hoy habla de Cloud Run) y apuntar el keep-alive a `/salud` | — |
 | 2 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
 
 **Resueltas:**

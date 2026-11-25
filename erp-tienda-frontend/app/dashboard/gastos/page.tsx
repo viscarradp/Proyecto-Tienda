@@ -33,6 +33,7 @@ import { apiFetch } from "@/lib/api"
 import { DeudasProveedores } from "@/components/gastos/DeudasProveedores"
 import { GAVETA, BOVEDA } from "@/lib/glosario"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
+import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
 /** Valor del selector para "sin categoría" (el backend la guarda en "Otros"). */
 const SIN_CATEGORIA = "sin-categoria"
@@ -215,7 +216,7 @@ export default function GastosPage() {
   const sePuedeAnular = (g: MovimientoFinanciero) =>
     !g.anulado && (g.cuenta_origen === "BOVEDA" || (g.caja_turno_id !== null && g.caja_turno_id === cajaActiva?.id))
 
-  if (!mounted) return null
+  if (!mounted) return <EsqueletoPagina />
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">

@@ -35,6 +35,7 @@ import { GAVETA, BOVEDA, etiquetaMovimiento } from "@/lib/glosario"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
 // ─── Tipos ───
 interface Presentacion {
@@ -515,7 +516,7 @@ export default function MovimientosPage() {
     )
   }
 
-  if (!mounted) return null
+  if (!mounted) return <EsqueletoPagina />
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">

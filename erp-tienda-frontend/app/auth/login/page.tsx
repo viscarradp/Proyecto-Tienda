@@ -6,6 +6,7 @@ import Cookies from "js-cookie"
 import { Store, Loader2 } from "lucide-react"
 
 import { getApiUrl } from "@/lib/api"
+import { getHomeRoute, type Rol } from "@/lib/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -70,7 +71,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push("/dashboard/pos")
+      router.push(getHomeRoute(data.usuario.rol as Rol))
       router.refresh()
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -108,7 +109,7 @@ export default function LoginPage() {
             <Input
               id="nombre"
               type="text"
-              placeholder="admin"
+              placeholder="Tu nombre de usuario"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               required
@@ -146,7 +147,7 @@ export default function LoginPage() {
 
       <CardFooter className="justify-center border-t border-border py-4">
         <p className="text-center text-xs text-muted-foreground">
-          Sistema de control transaccional · v1.0
+          ¿Olvidaste tu contraseña? La dueña puede cambiarla en Usuarios.
         </p>
       </CardFooter>
     </Card>
