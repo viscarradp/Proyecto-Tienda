@@ -1,0 +1,12 @@
+[Unit]
+Description=Tienda: ping de salud al backend (mantenerlo despierto, solo en horario)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tienda-pos/tienda-ping.sh
+SyslogIdentifier=tienda-despierta
+# El ping tarda hasta ~90 s cuando Render está dormido.
+TimeoutStartSec=150
+Nice=10

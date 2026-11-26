@@ -98,3 +98,5 @@ primera venta real.
 3. Variables definidas; backend arriba, `GET /salud` responde 200.
 4. Entrar con `admin` y **cambiar la contraseña inicial**; retirar `INITIAL_ADMIN_PASSWORD`; crear el usuario de la cajera (rol `CAJERO`).
 5. Respaldo nocturno activado y un ensayo de restauración hecho ([`respaldos.md`](respaldos.md)).
+
+Laptop del punto de venta (Linux, kiosco y ping para mantener despierto el backend): [`laptop-pos.md`](laptop-pos.md).
