@@ -60,6 +60,10 @@ Textos de pantalla en español llano de tienda, con los nombres de `erp-tienda-f
 
 ## Límites
 
-- **No tocar Supabase ni ninguna base remota**: no hay credenciales en el repo, y los pasos de producción los hace
-  el usuario (lista en `plan-fases.md`).
+- **Producción (Supabase y Render) solo con permiso explícito del usuario** para cada paso, y solo con los plugins
+  oficiales (MCP de Supabase y de Render, con la sesión del usuario). No hay credenciales en el repo. Proyecto
+  Supabase "Tienda ERP DB" y servicio Render "Proyecto-Tienda" (se despliega solo con cada push a `master`; frontend
+  en Vercel, también automático). Un cambio de schema en Supabase se ensaya antes en una base local desechable y se
+  compara con `prisma migrate diff`; nunca se corren e2e ni `db push --force-reset` contra una base remota. Los
+  secretos (`DATABASE_URL`, `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD`, tokens del bot) los carga el usuario en Render.
 - **No subir secretos:** `.env` y `.env.local` están en `.gitignore`. No mostrar contraseñas en el chat.
