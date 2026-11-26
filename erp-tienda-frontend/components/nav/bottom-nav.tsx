@@ -19,6 +19,7 @@ export function BottomNav({ user }: { user: CurrentUser | null }) {
 
   return (
     <nav
+      aria-label="Menú principal"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-sm md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
@@ -31,7 +32,7 @@ export function BottomNav({ user }: { user: CurrentUser | null }) {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium transition-colors",
+                  "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                   isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >

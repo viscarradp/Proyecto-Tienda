@@ -25,7 +25,17 @@ import { apiFetch } from "@/lib/api"
 import { aNumero, formatCantidad } from "@/lib/format"
 import { CampoError } from "@/components/campo-error"
 import { TERMINOS, mensajeError } from "@/lib/glosario"
-import { LoteStock } from "@/src/store/inventoryStore"
+import { LoteStock, useInventoryStore } from "@/src/store/inventoryStore"
+import { unidadBase } from "@/lib/unidades"
+
+/** Texto del motivo que se precarga según lo que pasó (la usuaria puede cambiarlo). */
+const MOTIVO_POR_TIPO: Record<string, string> = {
+  QUEBRADO: "Quebrado / roto",
+  VENCIDO: "Vencido",
+  ROBO: "Robo / pérdida",
+  CONTEO: "Ajuste de conteo",
+}
+const esMotivoPrecargado = (texto: string) => Object.values(MOTIVO_POR_TIPO).includes(texto.trim())
 
 interface AjusteInventarioDialogProps {
   open: boolean
@@ -60,7 +70,10 @@ export function AjusteInventarioDialog({
   const [loteId, setLoteId] = React.useState("")
   const [cantidad, setCantidad] = React.useState("1")
   const [tipoAjuste, setTipoAjuste] = React.useState("QUEBRADO")
-  const [justificacion, setJustificacion] = React.useState("")
+  const [justificacion, setJustificacion] = React.useState(MOTIVO_POR_TIPO.QUEBRADO)
+  // Por defecto sale la tanda más vieja (FIFO); elegir otra es opcional.
+  const [eligiendoTanda, setEligiendoTanda] = React.useState(false)
+  const unidad = useInventoryStore((s) => unidadBase(s.productos.find((p) => p.id === productoId)?.presentaciones))
 
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
@@ -70,11 +83,14 @@ export function AjusteInventarioDialog({
   React.useEffect(() => {
     if (open) {
       setErrores({})
-      setDireccion(esCajero ? "quitar" : inicio)
+      const dir = esCajero ? "quitar" : inicio
+      setDireccion(dir)
       setLoteId(String(loteInicialId ?? lotes[0]?.id ?? ""))
+      // Si se abrió desde una tanda concreta, se muestra elegida; si no, sale la más vieja.
+      setEligiendoTanda(loteInicialId != null && lotes.length > 1)
       setCantidad("1")
       setTipoAjuste("QUEBRADO")
-      setJustificacion("")
+      setJustificacion(dir === "quitar" ? MOTIVO_POR_TIPO.QUEBRADO : "")
       setError("")
     }
     // Solo al abrir: no pisar lo que la usuaria ya escribió si se recarga el catálogo.
@@ -86,6 +102,24 @@ export function AjusteInventarioDialog({
   const disponible = aNumero(lote?.cantidad_disponible)
   const sinExistencias = !esAgregar && lotes.length === 0
 
+  const cambiarTipo = (tipo: string) => {
+    setTipoAjuste(tipo)
+    // Solo se reemplaza el motivo si está vacío o es uno de los precargados (no pisa lo que escribió).
+    if (!justificacion.trim() || esMotivoPrecargado(justificacion)) setJustificacion(MOTIVO_POR_TIPO[tipo] ?? "")
+  }
+
+  const cambiarDireccion = (dir: Direccion) => {
+    setDireccion(dir)
+    if (dir === "agregar" && esMotivoPrecargado(justificacion)) setJustificacion("")
+    if (dir === "quitar" && !justificacion.trim()) setJustificacion(MOTIVO_POR_TIPO[tipoAjuste] ?? "")
+  }
+
+  const alternarTanda = () => {
+    // Al plegar, vuelve a la más vieja.
+    if (eligiendoTanda) setLoteId(String(lotes[0]?.id ?? ""))
+    setEligiendoTanda(!eligiendoTanda)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cantNum = parseFloat(cantidad)
@@ -94,7 +128,7 @@ export function AjusteInventarioDialog({
     if (isNaN(cantNum) || cantNum <= 0) {
       nuevos.cantidad = "Escribe una cantidad mayor a 0."
     } else if (!esAgregar && cantNum > disponible) {
-      nuevos.cantidad = `Solo quedan ${formatCantidad(disponible)} en esa ${TERMINOS.tanda.toLowerCase()}.`
+      nuevos.cantidad = `Solo quedan ${formatCantidad(disponible)} ${unidad} en esa ${TERMINOS.tanda.toLowerCase()}.`
     }
     if (!esAgregar && !lote) {
       nuevos.lote = `Elige la ${TERMINOS.tanda.toLowerCase()} de la que se quita.`
@@ -155,12 +189,12 @@ export function AjusteInventarioDialog({
           {/* Dirección del ajuste (solo la dueña: los conteos son suyos) */}
           {!esCajero && (
             <div className="grid grid-cols-2 gap-1 rounded-sm border border-border p-1">
-              <button type="button" onClick={() => setDireccion("quitar")} aria-pressed={!esAgregar}
+              <button type="button" onClick={() => cambiarDireccion("quitar")} aria-pressed={!esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
                   !esAgregar ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-foreground")}>
                 <Minus className="h-4 w-4" /> Quitar (se perdió)
               </button>
-              <button type="button" onClick={() => setDireccion("agregar")} aria-pressed={esAgregar}
+              <button type="button" onClick={() => cambiarDireccion("agregar")} aria-pressed={esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
                   esAgregar ? "bg-success/10 text-success" : "text-muted-foreground hover:text-foreground")}>
                 <Plus className="h-4 w-4" /> Encontré (conteo)
@@ -180,8 +214,21 @@ export function AjusteInventarioDialog({
           ) : (
             <>
               {!esAgregar && lotes.length > 1 && (
+                <div className="flex flex-col items-start gap-2">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {eligiendoTanda
+                      ? "Eliges de qué tanda se descuenta."
+                      : `Se descuenta de la tanda más vieja (quedan ${formatCantidad(lotes[0]?.cantidad_disponible)} ${unidad}).`}
+                  </p>
+                  <Button type="button" variant="link" size="sm" className="h-auto min-h-11 px-0 md:min-h-0"
+                    aria-expanded={eligiendoTanda} onClick={alternarTanda}>
+                    {eligiendoTanda ? "Usar la más vieja" : "Elegir la tanda"}
+                  </Button>
+                </div>
+              )}
+              {!esAgregar && lotes.length > 1 && eligiendoTanda && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="text-xs font-medium text-muted-foreground">¿De qué tanda? (la más vieja sale primero)</Label>
+                  <Label htmlFor="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="text-xs font-medium text-muted-foreground">¿De qué tanda?</Label>
                   <Select value={loteId} onValueChange={setLoteId}>
                     <SelectTrigger
                       id="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal"
@@ -194,7 +241,7 @@ export function AjusteInventarioDialog({
                     <SelectContent>
                       {lotes.map((l) => (
                         <SelectItem key={l.id} value={String(l.id)}>
-                          Tanda #{l.id} · quedan {formatCantidad(l.cantidad_disponible)}
+                          Tanda #{l.id} · quedan {formatCantidad(l.cantidad_disponible)} {unidad}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -204,14 +251,14 @@ export function AjusteInventarioDialog({
               )}
               {!esAgregar && lotes.length === 1 && (
                 <p className="font-mono text-xs text-muted-foreground">
-                  Quedan {formatCantidad(disponible)} unidades en la tanda #{lote?.id}
+                  Quedan {formatCantidad(disponible)} {unidad} en la tanda #{lote?.id}
                 </p>
               )}
 
               <div className={esAgregar ? "" : "grid grid-cols-2 gap-4"}>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="ajuste-cantidad" className="text-xs font-medium text-muted-foreground">
-                    {esAgregar ? "Cantidad que encontré" : "Cantidad a descontar"}
+                    {esAgregar ? "Cantidad que encontré" : "Cantidad a descontar"} ({unidad})
                   </Label>
                   <Input
                     id="ajuste-cantidad"
@@ -232,7 +279,7 @@ export function AjusteInventarioDialog({
                 {!esAgregar && (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="ajusteinventariodialog-que-paso" className="text-xs font-medium text-muted-foreground">¿Qué pasó?</Label>
-                    <Select value={tipoAjuste} onValueChange={setTipoAjuste}>
+                    <Select value={tipoAjuste} onValueChange={cambiarTipo}>
                       <SelectTrigger id="ajusteinventariodialog-que-paso" className="w-full">
                         <SelectValue />
                       </SelectTrigger>

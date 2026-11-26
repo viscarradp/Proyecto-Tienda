@@ -158,7 +158,7 @@ export default function UsuariosPage() {
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8 lg:py-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Usuarios</h1>

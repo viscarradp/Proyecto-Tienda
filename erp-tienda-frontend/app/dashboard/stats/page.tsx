@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
 import {
   Dialog,
   DialogContent,
@@ -198,9 +199,12 @@ export default function StatsPage() {
   const [ponerMonto, setPonerMonto] = useState("")
   const [ponerDesc, setPonerDesc] = useState("")
   const [ponerLoading, setPonerLoading] = useState(false)
+  const [ponerError, setPonerError] = useState<string | null>(null)
   const [contarMonto, setContarMonto] = useState("")
   const [contarMotivo, setContarMotivo] = useState("")
   const [contarLoading, setContarLoading] = useState(false)
+  const [contarError, setContarError] = useState<string | null>(null)
+  const [bovedaInicialError, setBovedaInicialError] = useState<string | null>(null)
 
   // Cada carga lleva un número; solo la más reciente puede escribir resultados.
   const cargaRef = useRef(0)
@@ -230,7 +234,7 @@ export default function StatsPage() {
       setFlujo(flujoRes)
     } catch (err) {
       if (carga !== cargaRef.current) return
-      setError(mensajeError("cargar las estadísticas", err))
+      setError(mensajeError("cargar las estadísticas", err, "Intenta de nuevo en un momento."))
     } finally {
       if (carga === cargaRef.current) setLoading(false)
     }
@@ -258,9 +262,10 @@ export default function StatsPage() {
   const handleBovedaInicial = async () => {
     const monto = parseFloat(bovedaInicial)
     if (isNaN(monto) || monto <= 0) {
-      toast.error("Escribe un monto mayor a $0")
+      setBovedaInicialError("Escribe un monto mayor a $0")
       return
     }
+    setBovedaInicialError(null)
     setBovedaInicialLoading(true)
     try {
       await apiFetch("/caja-general/inyeccion", {
@@ -283,6 +288,8 @@ export default function StatsPage() {
   const abrirDialogo = (cual: "poner" | "contar") => {
     setPonerMonto("")
     setPonerDesc("")
+    setPonerError(null)
+    setContarError(null)
     setContarMonto("")
     setContarMotivo("")
     setDialogo(cual)
@@ -292,9 +299,10 @@ export default function StatsPage() {
     e.preventDefault()
     const monto = parseFloat(ponerMonto)
     if (isNaN(monto) || monto <= 0) {
-      toast.error("Escribe un monto mayor a $0")
+      setPonerError("Escribe un monto mayor a $0")
       return
     }
+    setPonerError(null)
     setPonerLoading(true)
     try {
       await apiFetch("/caja-general/inyeccion", {
@@ -316,11 +324,18 @@ export default function StatsPage() {
   const contadoNum = parseFloat(contarMonto)
   const contadoValido = contarMonto !== "" && !isNaN(contadoNum) && contadoNum >= 0
   const difCent = contadoValido ? montoACentavos(contadoNum) - saldoCent : 0
-  const requiereMotivo = contadoValido && Math.abs(difCent) >= UMBRAL_EXPLICACION_CENT
+  // Un monto escrito pero inválido (p. ej. negativo) se avisa en el campo mientras se escribe.
+  const contarErrorVisible =
+    contarError ?? (contarMonto !== "" && !contadoValido ? "Escribe cuánto efectivo contaste (0 o más)" : null)
+  const requiereMotivo =contadoValido && Math.abs(difCent) >= UMBRAL_EXPLICACION_CENT
 
   const handleContar = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!contadoValido) return
+    if (!contadoValido) {
+      setContarError("Escribe cuánto efectivo contaste (0 o más)")
+      return
+    }
+    setContarError(null)
     setContarLoading(true)
     try {
       const res = await apiFetch<{ diferencia: string | number }>("/caja-general/arqueo", {
@@ -351,7 +366,7 @@ export default function StatsPage() {
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8 lg:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Estadísticas</h1>
@@ -366,7 +381,7 @@ export default function StatsPage() {
                   onClick={() => setPeriodo(p)}
                   aria-pressed={periodo === p}
                   className={cn(
-                    "min-h-11 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors md:min-h-0",
+                    "min-h-11 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0",
                     periodo === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -388,7 +403,7 @@ export default function StatsPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-6 p-4 lg:px-8 lg:py-6">
+      <div className="flex flex-1 flex-col gap-6 p-4 md:px-8 lg:py-6">
         {error && (
           <div className="flex items-center gap-2 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
@@ -423,14 +438,20 @@ export default function StatsPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Input
                     type="number" min={0.01} step="0.01" inputMode="decimal"
-                    value={bovedaInicial} onChange={(e) => setBovedaInicial(e.target.value)}
+                    value={bovedaInicial}
+                    onChange={(e) => { setBovedaInicial(e.target.value); setBovedaInicialError(null) }}
                     placeholder="0.00" aria-label="Efectivo guardado" className="w-40 font-mono"
+                    aria-invalid={!!bovedaInicialError}
+                    aria-describedby={bovedaInicialError ? "boveda-inicial-error" : undefined}
                   />
                   <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="gap-2">
                     {bovedaInicialLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     {bovedaInicial ? "Guardar" : "Escribe cuánto"}
                   </Button>
                 </div>
+                {bovedaInicialError && (
+                  <CampoError id="boveda-inicial-error" className="mt-2">{bovedaInicialError}</CampoError>
+                )}
               </div>
             )}
 
@@ -438,7 +459,7 @@ export default function StatsPage() {
             <Cabecera estado={estado} periodo={periodo} vendido={ingresoNeto} />
 
             {/* KPI Cards (la ganancia y lo vendido ya están en la frase principal) */}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <StatCard
                 size="lg"
                 label={ET.costoVendido}
@@ -665,7 +686,33 @@ export default function StatsPage() {
                     <p className="text-sm">No hay ventas en este período</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                  {/* Celular: una tarjeta por producto, sin desplazarse de lado */}
+                  <ul className="flex flex-col sm:hidden">
+                    {productos.map((p, i) => {
+                      const tone = marginTone(parseFloat(p.margen_porcentaje))
+                      const sinCostoProd = sinCosto.has(p.producto_id)
+                      return (
+                        <li key={p.producto_id} className="flex items-start justify-between gap-3 border-b border-border/60 py-3 last:border-0">
+                          <div className="min-w-0">
+                            <p className="font-medium">
+                              <span className="mr-2 text-xs text-muted-foreground">{i + 1}.</span>
+                              {p.nombre}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Vendiste {formatMoney(p.ingreso)} · dejó {formatMoney(p.margen)}
+                            </p>
+                          </div>
+                          {sinCostoProd ? (
+                            <StatePill tone="muted">sin costo</StatePill>
+                          ) : (
+                            <StatePill tone={tone}>{formatMoney(p.margen_porcentaje)}</StatePill>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
@@ -705,6 +752,7 @@ export default function StatsPage() {
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
               </div>
             </div>
@@ -728,10 +776,13 @@ export default function StatsPage() {
               <Label htmlFor="poner-monto" className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
               <Input
                 id="poner-monto" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="500.00"
-                value={ponerMonto} onChange={(e) => setPonerMonto(e.target.value)} autoFocus
+                value={ponerMonto} onChange={(e) => { setPonerMonto(e.target.value); setPonerError(null) }} autoFocus
                 size="lg"
+                aria-invalid={!!ponerError}
+                aria-describedby={ponerError ? "poner-monto-error" : undefined}
                 className="text-center font-mono text-xl font-bold tabular-nums"
               />
+              {ponerError && <CampoError id="poner-monto-error">{ponerError}</CampoError>}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="poner-desc" className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
@@ -776,10 +827,13 @@ export default function StatsPage() {
               <Label htmlFor="contar-monto" className="text-xs font-medium text-muted-foreground">Efectivo que contaste ($)</Label>
               <Input
                 id="contar-monto" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00"
-                value={contarMonto} onChange={(e) => setContarMonto(e.target.value)} autoFocus
+                value={contarMonto} onChange={(e) => { setContarMonto(e.target.value); setContarError(null) }} autoFocus
                 size="lg"
+                aria-invalid={!!contarErrorVisible}
+                aria-describedby={contarErrorVisible ? "contar-monto-error" : undefined}
                 className="text-center font-mono text-xl font-bold tabular-nums"
               />
+              {contarErrorVisible && <CampoError id="contar-monto-error">{contarErrorVisible}</CampoError>}
             </div>
 
             {contadoValido && (
@@ -888,7 +942,7 @@ function Cabecera({
         <p className="mt-2 text-sm text-warning-text">
           ⚠ {formatMoney(estado.ventas_sin_costo.monto_vendido)} de lo vendido no tiene costo registrado, por eso la ganancia puede
           estar de más. Registra la compra de: {estado.ventas_sin_costo.productos.join(", ")}.{" "}
-          <Link href="/dashboard/inventario" className="inline-flex min-h-11 items-center font-medium underline underline-offset-2 md:min-h-0">
+          <Link href="/dashboard/inventario" className="inline-flex min-h-11 items-center font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0">
             Ir a Inventario
           </Link>
         </p>

@@ -15,7 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ERP Tienda Karlita",
+  title: {
+    default: "ERP Tienda Karlita",
+    template: "%s · Tienda Karlita",
+  },
   description: "Sistema integral de gestión para tiendas, inventarios y puntos de venta.",
 };
 
@@ -43,10 +46,12 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          {/* Móvil: el aviso queda sobre la barra del carrito del POS (~3.8rem) y el menú inferior (3.5rem) */}
+          {/* El aviso queda sobre la barra del carrito del POS (~3.8rem, existe hasta xl) y el menú inferior
+              (3.5rem, hasta md). `mobileOffset` rige bajo 600 px y `offset` desde 600 px: los dos igual. */}
           <Toaster
             position="bottom-center"
             richColors
+            offset={{ bottom: "calc(8rem + env(safe-area-inset-bottom))" }}
             mobileOffset={{ bottom: "calc(8rem + env(safe-area-inset-bottom))" }}
           />
         </ThemeProvider>

@@ -119,7 +119,7 @@ export function CartLines({
                 )}
               </div>
               {porMonto ? (
-                <div className="flex shrink-0 items-center rounded-sm border border-primary/40">
+                <div className="flex shrink-0 items-center rounded-sm border border-primary/40 focus-within:ring-3 focus-within:ring-ring/50">
                   <span className="pl-2 font-mono text-sm text-muted-foreground">$</span>
                   <CampoNumero
                     ariaLabel="Monto en dólares"
@@ -132,7 +132,7 @@ export function CartLines({
                   />
                 </div>
               ) : (
-                <div className="flex shrink-0 items-center rounded-sm border border-border">
+                <div className="flex shrink-0 items-center rounded-sm border border-border focus-within:ring-3 focus-within:ring-ring/50">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -175,7 +175,7 @@ export function CartLines({
                 type="button"
                 onClick={() => removeItem(item.id)}
                 aria-label={`Quitar ${item.producto_nombre || item.nombre} del ticket`}
-                className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:size-8"
+                className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:size-8"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -194,7 +194,7 @@ export function CartLines({
                         onClick={() => updateQuantity(item.id, a.valor)}
                         aria-pressed={item.cantidad === a.valor}
                         className={cn(
-                          "h-11 md:h-9 min-w-11 md:min-w-10 rounded-sm border px-2 text-sm font-medium transition-colors",
+                          "h-11 md:h-9 min-w-11 md:min-w-10 rounded-sm border px-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                           item.cantidad === a.valor
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -209,7 +209,7 @@ export function CartLines({
                   <button
                     type="button"
                     onClick={() => quitarMonto(item.id)}
-                    className="h-11 md:h-9 rounded-sm px-2 text-xs font-medium text-primary hover:bg-primary/10"
+                    className="h-11 md:h-9 rounded-sm px-2 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     Vender por cantidad
                   </button>
@@ -217,7 +217,7 @@ export function CartLines({
                   <button
                     type="button"
                     onClick={() => setMonto(item.id, Math.min(Math.max(totalLinea, 0.01), MONTO_MAX))}
-                    className="h-11 md:h-9 rounded-sm px-2 text-xs font-medium text-primary hover:bg-primary/10"
+                    className="h-11 md:h-9 rounded-sm px-2 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     Vender por monto
                   </button>
