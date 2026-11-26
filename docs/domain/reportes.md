@@ -1,7 +1,7 @@
 # Reportes
 
 > Reglas vigentes (ciclo 2026-11). Verificadas contra `reportes.service.ts` y `common/zona-horaria.ts`.
-> Todos los endpoints de `/reportes/*` son **solo de la dueña**. Pantalla: Estadísticas.
+> Todos los endpoints de `/reportes/*` son **solo de la dueña**. Pantalla: Mi negocio (antes Estadísticas).
 
 ## Zona horaria del negocio
 
@@ -86,6 +86,20 @@ Entradas y salidas por cuenta de efectivo real en el período, derivadas del mod
   (los peores márgenes primero).
 - Ambos son **netos de devoluciones del período**: restan unidades e ingreso y, solo si el destino es `REINGRESO`, el
   costo revertido. El costo incluye el estimado de lo vendido sin stock.
+
+## Cómo se organiza "Mi negocio" (pantalla)
+
+La pantalla de estadísticas se llama "Mi negocio" y va en tres bloques, en este orden: **La respuesta** (la frase
+"ganaste/perdiste $X (de $Y vendidos)", el aviso de ventas sin costo y el renglón **"Qué hacer"**), **Mi dinero**
+(Gaveta + Bóveda = Efectivo total, menos lo que se debe a proveedores, con "Poner dinero", "Contar la bóveda" y el libro
+de la bóveda) y **Cómo salió la ganancia** (plegado). Después van los productos (una sola lista: "Lo que más vendes" o
+"Lo que menos deja", de `margen-por-producto`) y **Más detalle** (plegado: "Lo que vale el negocio" y "Entradas y salidas
+de dinero"). "Qué hacer" solo muestra lo que existe y cada cosa lleva su enlace: productos "por revisar" y con ventas
+sin stock registrado (de `GET /productos`, a Inventario), deudas con proveedores pendientes (de
+`GET /cuentas-por-pagar?estado=pendientes`, a Gastos y deudas) y productos vendidos sin costo (de
+`estado-resultados`). El libro de la bóveda (`GET /caja-general`, solo la dueña) se pide al abrir "Ver movimientos de la
+bóveda" y muestra fecha, rótulo, monto con signo y autor. El aviso de bóveda inicial va debajo de la respuesta y "Ahora
+no" lo oculta (se recuerda en `localStorage`).
 
 ## Fuera de reportes
 

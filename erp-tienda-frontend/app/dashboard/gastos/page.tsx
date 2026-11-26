@@ -234,7 +234,7 @@ export default function GastosPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8 lg:py-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Gastos</h1>
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Gastos y deudas</h1>
             <p className="text-xs text-muted-foreground">Lo que pagas para que el negocio funcione</p>
           </div>
           <Button aria-label="Actualizar gastos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="shrink-0">
@@ -283,7 +283,7 @@ export default function GastosPage() {
                 hint={
                   parseFloat(cajaGeneral.saldo_actual) < 0 ? (
                     <span className="font-medium text-warning-text">
-                      Negativo según el sistema: falta registrar efectivo. Cuenta la bóveda o pon dinero en Estadísticas.
+                      Negativo según el sistema: falta registrar efectivo. Cuenta la bóveda o pon dinero en Mi negocio.
                     </span>
                   ) : (
                     "Dinero disponible"
@@ -303,6 +303,9 @@ export default function GastosPage() {
               />
             )}
           </div>
+
+          {/* Deudas con proveedores: si hay pendientes, van arriba del gasto (DUE-17) */}
+          <DeudasProveedores onPagado={loadData} />
 
           {/* Formulario de registro */}
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">
@@ -389,9 +392,6 @@ export default function GastosPage() {
               </div>
             </form>
           </div>
-
-          {/* Deudas con proveedores (compras al crédito) */}
-          <DeudasProveedores onPagado={loadData} />
 
           {/* Historial de gastos recientes */}
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">

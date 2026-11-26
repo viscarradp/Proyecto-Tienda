@@ -130,6 +130,15 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
     }
   }
 
+  // Sin deudas: una línea corta, para no empujar el formulario del gasto.
+  if (!cargando && (deudas ?? []).length === 0) {
+    return (
+      <p className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> No debes nada a tus proveedores.
+      </p>
+    )
+  }
+
   return (
     <div className="rounded-sm border border-border bg-card p-5 md:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -142,10 +151,6 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
 
       {cargando && deudas === null ? (
         <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      ) : (deudas ?? []).length === 0 ? (
-        <div className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          <CheckCircle2 className="h-4 w-4" /> No debes nada a tus proveedores.
-        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {(deudas ?? []).map(d => {

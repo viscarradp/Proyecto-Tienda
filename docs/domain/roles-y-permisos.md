@@ -39,8 +39,14 @@ Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administr
 `exigirPermisoMovimiento` por `tipo_movimiento` y `origen_fondos`. Una cajera solo puede un `EGRESO_OPERATIVO` con origen
 `GAVETA` (el default) o un `RETIRO_BOVEDA`.
 
-La interfaz refleja lo mismo (`lib/navigation.ts` es la fuente única): la cajera ve **Vender, Inventario y Movimientos**;
-**Gastos, Estadísticas y Usuarios** son de la dueña. Ocultar es solo cosmético: la autorización real la hace siempre el
+La interfaz refleja lo mismo (`lib/navigation.ts` es la fuente única): la cajera ve **Vender, Inventario y Ventas y turnos**;
+**Mi negocio, Gastos y deudas y Usuarios** son de la dueña.
+
+Nombres del menú desde el 2026-11-26 (las rutas no cambian): Estadísticas → **Mi negocio** (`/dashboard/stats`),
+Movimientos → **Ventas y turnos** (`/dashboard/movimientos`), Gastos → **Gastos y deudas** (`/dashboard/gastos`).
+Al iniciar sesión, la **dueña aterriza en Mi negocio** y la **cajera en Vender** (`getHomeRoute`). En el celular, la
+dueña ve 4 pestañas (Mi negocio, Vender, Inventario, Gastos y deudas) y **Más** (Ventas y turnos, Usuarios); la cajera
+ve sus 3 pestañas sin "Más". Ocultar es solo cosmético: la autorización real la hace siempre el
 backend, así que una cajera que llame la API directo sigue recibiendo 403.
 
 ## Trazabilidad de autor

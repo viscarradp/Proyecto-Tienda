@@ -18,6 +18,16 @@ export const BOVEDA = "Bóveda"
 export const GAVETA_AYUDA = "el efectivo del mostrador"
 export const BOVEDA_AYUDA = "el dinero que guardas aparte"
 
+/** Nombres del menú (2026-11-26). Las rutas no cambian. */
+export const MENU = {
+  miNegocio: "Mi negocio",
+  vender: "Vender",
+  inventario: "Inventario",
+  gastosYDeudas: "Gastos y deudas",
+  ventasYTurnos: "Ventas y turnos",
+  usuarios: "Usuarios",
+} as const
+
 /** Etiquetas de los reportes (Estadísticas) en lenguaje de tienda. */
 export const ETIQUETAS_REPORTE = {
   ganancia: "Ganancia",
