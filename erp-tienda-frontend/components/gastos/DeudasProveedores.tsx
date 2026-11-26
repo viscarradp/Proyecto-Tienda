@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/dialog"
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
-import { GAVETA, BOVEDA } from "@/lib/glosario"
+import { GAVETA, BOVEDA, mensajeError } from "@/lib/glosario"
+import { formatFecha, formatMoney } from "@/lib/format"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 
 interface Abono {
   id: number
@@ -40,8 +43,7 @@ interface AbonoRespuesta {
   avisos?: string[]
 }
 
-const fechaCorta = (iso: string) =>
-  new Date(iso).toLocaleDateString("es-SV", { day: "2-digit", month: "short", year: "numeric" })
+const fechaCorta = (iso: string) => formatFecha(iso)
 
 /**
  * Sección "Deudas con proveedores" (L8, D-05): compras al crédito pendientes de
@@ -60,6 +62,7 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
   const [nota, setNota] = React.useState("")
   const [enviando, setEnviando] = React.useState(false)
   const [errorPago, setErrorPago] = React.useState("")
+  const [errorMonto, setErrorMonto] = React.useState("")
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
@@ -89,6 +92,7 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
     setOrigen("GAVETA")
     setNota("")
     setErrorPago("")
+    setErrorMonto("")
   }
 
   const pagar = async (e: React.FormEvent) => {
@@ -97,13 +101,14 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
     const valor = parseFloat(monto)
     const saldo = parseFloat(objetivo.saldo_pendiente)
     if (isNaN(valor) || valor <= 0) {
-      setErrorPago("El abono debe ser mayor a 0.")
+      setErrorMonto("Escribe un abono mayor a 0.")
       return
     }
     if (valor > saldo + 0.001) {
-      setErrorPago(`No puedes abonar más de lo que se debe ($${saldo.toFixed(2)}).`)
+      setErrorMonto(`No puedes abonar más de lo que se debe (${formatMoney(saldo)}).`)
       return
     }
+    setErrorMonto("")
     setEnviando(true)
     setErrorPago("")
     try {
@@ -119,7 +124,7 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
       await cargar()
       onPagado?.()
     } catch (err: unknown) {
-      setErrorPago(err instanceof Error ? err.message : "No se pudo registrar el abono")
+      setErrorPago(mensajeError("registrar el abono", err))
     } finally {
       setEnviando(false)
     }
@@ -128,12 +133,9 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
   return (
     <div className="rounded-sm border border-border bg-card p-5 md:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <HandCoins className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-semibold">Deudas con proveedores</h2>
-        </div>
+        <SeccionTitulo icono={HandCoins}>Deudas con proveedores</SeccionTitulo>
         <div className="text-right">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total adeudado</p>
+          <p className="text-xs font-medium text-muted-foreground">Total que debes</p>
           <MoneyValue value={totalAdeudado} className="text-xl font-bold tracking-tight" />
         </div>
       </div>
@@ -161,9 +163,9 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
                   <div className="flex items-center justify-between gap-3 sm:justify-end">
                     <div className="text-left sm:text-right">
                       <p className="text-xs text-muted-foreground">Saldo</p>
-                      <MoneyValue value={d.saldo_pendiente} className="text-lg font-semibold text-destructive" />
+                      <MoneyValue value={d.saldo_pendiente} className="text-lg font-semibold" />
                     </div>
-                    <Button type="button" onClick={() => abrirPago(d)} className="h-11 md:h-11 shrink-0">
+                    <Button type="button" onClick={() => abrirPago(d)} className="shrink-0">
                       Pagar / abonar
                     </Button>
                   </div>
@@ -175,7 +177,7 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
                       type="button"
                       onClick={() => setAbierta(isOpen ? null : d.id)}
                       aria-expanded={isOpen}
-                      className="flex min-h-11 w-full items-center justify-between px-4 py-2 text-xs md:min-h-0 font-medium text-muted-foreground hover:bg-muted/50"
+                      className="flex min-h-11 w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 md:min-h-0"
                     >
                       <span>Abonos hechos ({d.abonos.length})</span>
                       {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -213,26 +215,26 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
               )}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={pagar} className="flex flex-col gap-4">
-            {errorPago && (
-              <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
-                {errorPago}
-              </div>
-            )}
+          <form onSubmit={pagar} noValidate className="flex flex-col gap-4">
+            {errorPago && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{errorPago}</CampoError>}
             <div className="flex flex-col gap-2">
               <Label htmlFor="deudasproveedores-monto" className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
-              <Input id="deudasproveedores-monto" type="number" min={0.01} step="0.01" inputMode="decimal" required value={monto}
-                onChange={e => setMonto(e.target.value)}
-                className="h-14 md:h-14 font-mono text-2xl font-bold" />
+              <Input id="deudasproveedores-monto" type="number" min={0.01} step="0.01" inputMode="decimal" value={monto}
+                onChange={e => { setMonto(e.target.value); setErrorMonto("") }}
+                size="lg"
+                className="font-mono text-2xl font-bold"
+                aria-invalid={!!errorMonto}
+                aria-describedby={errorMonto ? "deudasproveedores-monto-error" : undefined} />
+              {errorMonto && <CampoError id="deudasproveedores-monto-error">{errorMonto}</CampoError>}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="deudasproveedores-de-donde-sale-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
               <Select value={origen} onValueChange={setOrigen}>
-                <SelectTrigger id="deudasproveedores-de-donde-sale-el-dinero" className="h-12 md:h-12 w-full">
+                <SelectTrigger id="deudasproveedores-de-donde-sale-el-dinero" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GAVETA">{GAVETA} (requiere turno abierto)</SelectItem>
+                  <SelectItem value="GAVETA">{GAVETA} (requiere caja abierta)</SelectItem>
                   <SelectItem value="BOVEDA">{BOVEDA}</SelectItem>
                 </SelectContent>
               </Select>
@@ -240,10 +242,10 @@ export function DeudasProveedores({ onPagado }: { onPagado?: () => void }) {
             <div className="flex flex-col gap-2">
               <Label htmlFor="deudasproveedores-nota-opcional" className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
               <Input id="deudasproveedores-nota-opcional" value={nota} maxLength={255} onChange={e => setNota(e.target.value)}
-                placeholder="Ej. Factura 123" className="h-12 md:h-12" />
+                placeholder="Ej. Factura 123" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setObjetivo(null)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => setObjetivo(null)}>Cancelar</Button>
               <Button type="submit" disabled={enviando} className="gap-2">
                 {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
                 Registrar pago

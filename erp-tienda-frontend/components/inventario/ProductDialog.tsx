@@ -26,6 +26,8 @@ import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import { generarId } from "@/lib/id"
+import { CampoError } from "@/components/campo-error"
+import { TERMINOS } from "@/lib/glosario"
 import { errorFactor, errorPrecio, avisoPrecio, MensajeCampo } from "./validacionPresentacion"
 
 // ─── Types ───
@@ -139,13 +141,19 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
     else removePresentacion(p.key)
   }
 
+  // Sin categoría: ni una elegida ni el nombre de una nueva.
+  const sinCategoria = showNewCat ? !newCatName.trim() : !categoriaId
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIntentado(true)
     // Nada se corrige en silencio: si algo está mal, se avisa en el campo.
-    const hayErrores = presentaciones.some(
-      (p) => !p.descripcion.trim() || errorFactor(p.factor_conversion) || errorPrecio(p.precio_venta),
-    )
+    const hayErrores =
+      !nombre.trim() ||
+      sinCategoria ||
+      presentaciones.some(
+        (p) => !p.descripcion.trim() || errorFactor(p.factor_conversion) || errorPrecio(p.precio_venta),
+      )
     if (hayErrores) {
       setError("Revisa los campos marcados en rojo")
       return
@@ -168,7 +176,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
       }
 
       if (!finalCategoriaId || isNaN(finalCategoriaId)) {
-        throw new Error("Debes seleccionar o crear una categoría")
+        throw new Error("Elige una categoría o escribe el nombre de una nueva")
       }
 
       // Una sola llamada: el servidor crea el producto y sus presentaciones
@@ -203,15 +211,14 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
       <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Nuevo producto</DialogTitle>
-          <DialogDescription>Agrega un producto al catálogo con sus presentaciones de venta.</DialogDescription>
+          <DialogDescription>
+            Agrega un producto al catálogo con sus presentaciones de venta. Las existencias se cargan con una compra o
+            con Inventario inicial.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          {error && (
-            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+          {error && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
           {/* Código de barras primero y con el foco: el lector escribe aquí, no en "Nombre". */}
           <div className="flex flex-col gap-2">
@@ -222,7 +229,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
               onChange={(e) => setCodigoPrincipal(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
               placeholder="Escanea el código o déjalo vacío"
-              className="h-11 md:h-11 font-mono"
+              className="font-mono placeholder:font-sans"
             />
           </div>
 
@@ -233,9 +240,10 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Ej: Arroz Blanco Precocido"
-              required
-              className="h-11 md:h-11"
+              aria-invalid={intentado && !nombre.trim()}
+              aria-describedby={intentado && !nombre.trim() ? "producto-nombre-error" : undefined}
             />
+            {intentado && !nombre.trim() && <CampoError id="producto-nombre-error">Escribe el nombre del producto</CampoError>}
           </div>
 
           {/* Categoría */}
@@ -246,7 +254,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-11 md:h-6 px-2 text-xs text-primary hover:text-primary"
+                className="px-2 text-xs text-primary hover:text-primary"
                 onClick={() => setShowNewCat(!showNewCat)}
               >
                 {showNewCat ? "Seleccionar existente" : "+ Crear nueva"}
@@ -258,11 +266,17 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="Nombre de la nueva categoría"
-                className="h-11 md:h-11"
+                aria-invalid={intentado && sinCategoria}
+                aria-describedby={intentado && sinCategoria ? "producto-categoria-error" : undefined}
               />
             ) : (
               <Select value={categoriaId} onValueChange={setCategoriaId}>
-                <SelectTrigger id="producto-categoria" className="h-11 md:h-11 w-full">
+                <SelectTrigger
+                  id="producto-categoria"
+                  className="w-full"
+                  aria-invalid={intentado && sinCategoria}
+                  aria-describedby={intentado && sinCategoria ? "producto-categoria-error" : undefined}
+                >
                   <SelectValue placeholder="Selecciona una categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -274,13 +288,16 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                 </SelectContent>
               </Select>
             )}
+            {intentado && sinCategoria && (
+              <CampoError id="producto-categoria-error">Elige una categoría o escribe el nombre de una nueva</CampoError>
+            )}
           </div>
 
           {/* Presentaciones */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Presentaciones de venta</p>
-              <Button type="button" variant="outline" size="sm" onClick={addPresentacion} className="h-11 md:h-7 gap-1 text-xs">
+              <Button type="button" variant="outline" size="sm" onClick={addPresentacion} className="gap-1 text-xs">
                 <Plus className="h-3 w-3" /> Agregar
               </Button>
             </div>
@@ -288,8 +305,8 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
             {presentaciones.map((pres, idx) => (
               <div key={pres.key} className="relative flex flex-col gap-3 rounded-sm border border-border bg-muted/30 p-4">
                 {idx > 0 && (
-                  <Button type="button" variant="ghost" size="icon"
-                    className="absolute top-2 right-2 size-11 md:size-6 text-muted-foreground hover:text-destructive"
+                  <Button type="button" variant="ghost" size="icon-xs"
+                    className="absolute top-2 right-2 text-muted-foreground hover:text-destructive"
                     aria-label={`Quitar la presentación ${idx + 1}`}
                     onClick={() => pedirQuitarPresentacion(pres)}>
                     <X className="h-3.5 w-3.5" />
@@ -300,30 +317,37 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
                   <div className="col-span-2">
                     <Label htmlFor={`pres-desc-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</Label>
                     <Input id={`pres-desc-${pres.key}`} value={pres.descripcion} onChange={(e) => updatePresentacion(pres.key, "descripcion", e.target.value)}
-                      placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11 md:h-9 text-sm" />
-                    {intentado && !pres.descripcion.trim() && <MensajeCampo error="Falta la descripción" />}
+                      placeholder='Ej: "Unidad", "Fardo de 12"' className="text-sm"
+                      aria-invalid={intentado && !pres.descripcion.trim()}
+                      aria-describedby={intentado && !pres.descripcion.trim() ? `pres-desc-${pres.key}-error` : undefined} />
+                    {intentado && !pres.descripcion.trim() && <MensajeCampo id={`pres-desc-${pres.key}-error`} error="Falta la descripción" />}
                   </div>
                   {idx > 0 && (
                     <div className="col-span-2">
                       <Label htmlFor={`pres-cod-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Código de barras</Label>
                       <Input id={`pres-cod-${pres.key}`} value={pres.codigo_barras} onChange={(e) => updatePresentacion(pres.key, "codigo_barras", e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                        placeholder="Opcional" className="h-11 md:h-9 font-mono text-sm" />
+                        placeholder="Opcional" className="font-mono text-sm placeholder:font-sans" />
                     </div>
                   )}
                   <div>
-                    <Label htmlFor={`pres-mult-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Múltiplo (unidades que trae)</Label>
+                    <Label htmlFor={`pres-mult-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">{TERMINOS.unidadesQueTrae}</Label>
                     <Input id={`pres-mult-${pres.key}`} type="number" min={0.001} step="any" value={pres.factor_conversion}
                       onChange={(e) => updatePresentacion(pres.key, "factor_conversion", e.target.value)}
-                      className="h-11 md:h-9 font-mono text-sm" />
-                    {intentado && <MensajeCampo error={errorFactor(pres.factor_conversion)} />}
+                      className="font-mono text-sm"
+                      aria-invalid={intentado && !!errorFactor(pres.factor_conversion)}
+                      aria-describedby={intentado && errorFactor(pres.factor_conversion) ? `pres-mult-${pres.key}-error` : undefined} />
+                    {intentado && <MensajeCampo id={`pres-mult-${pres.key}-error`} error={errorFactor(pres.factor_conversion)} />}
                   </div>
                   <div>
                     <Label htmlFor={`pres-precio-${pres.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
                     <Input id={`pres-precio-${pres.key}`} type="number" min={0} step="0.01" value={pres.precio_venta}
                       onChange={(e) => updatePresentacion(pres.key, "precio_venta", e.target.value)}
-                      className="h-11 md:h-9 font-mono text-sm" />
+                      className="font-mono text-sm"
+                      aria-invalid={intentado && !!errorPrecio(pres.precio_venta)}
+                      aria-describedby={`pres-precio-${pres.key}-error`} />
                     <MensajeCampo
+                      id={`pres-precio-${pres.key}-error`}
                       error={intentado ? errorPrecio(pres.precio_venta) : null}
                       aviso={avisoPrecio(pres.precio_venta)}
                     />
@@ -335,7 +359,7 @@ export function ProductDialog({ open, onClose, onSuccess, categorias, onCategori
 
           {/* Footer */}
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
@@ -399,7 +423,7 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIntentado(true)
-    if (errorFactor(factorConversion) || errorPrecio(precioVenta)) return
+    if (!descripcion.trim() || errorFactor(factorConversion) || errorPrecio(precioVenta)) return
     setLoading(true)
     setError("")
     try {
@@ -408,7 +432,7 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
         body: JSON.stringify({
           producto_id: productoId,
           codigo_barras: codigoBarras || undefined,
-          descripcion,
+          descripcion: descripcion.trim(),
           factor_conversion: Number(factorConversion),
           precio_venta: Number(precioVenta),
         }),
@@ -432,15 +456,16 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {error && (
-            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-center text-sm font-medium text-destructive">{error}</div>
-          )}
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+          {error && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="productdialog-descripcion-2" className="text-xs font-medium text-muted-foreground">Descripción</Label>
-            <Input id="productdialog-descripcion-2" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required
-              placeholder='Ej: "Unidad", "Fardo de 12"' className="h-11 md:h-11" />
+            <Input id="productdialog-descripcion-2" value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+              placeholder='Ej: "Unidad", "Fardo de 12"'
+              aria-invalid={intentado && !descripcion.trim()}
+              aria-describedby={intentado && !descripcion.trim() ? "pres-nueva-desc-error" : undefined} />
+            {intentado && !descripcion.trim() && <CampoError id="pres-nueva-desc-error">Falta la descripción</CampoError>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -448,14 +473,16 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
               <Label htmlFor="productdialog-codigo-de-barras-2" className="text-xs font-medium text-muted-foreground">Código de barras</Label>
               <Input id="productdialog-codigo-de-barras-2" value={codigoBarras} onChange={(e) => setCodigoBarras(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                placeholder="Opcional" className="h-11 md:h-9 font-mono text-sm" />
+                placeholder="Opcional" className="font-mono text-sm placeholder:font-sans" />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="productdialog-factor-conversion" className="text-xs font-medium text-muted-foreground">Factor conversión</Label>
+              <Label htmlFor="productdialog-factor-conversion" className="text-xs font-medium text-muted-foreground">{TERMINOS.unidadesQueTrae}</Label>
               <Input id="productdialog-factor-conversion" type="number" min={0.001} step="any" value={factorConversion}
                 onChange={(e) => setFactorConversion(e.target.value)}
-                className="h-11 md:h-9 font-mono text-sm" />
-              {intentado && <MensajeCampo error={errorFactor(factorConversion)} />}
+                className="font-mono text-sm"
+                aria-invalid={intentado && !!errorFactor(factorConversion)}
+                aria-describedby={intentado && errorFactor(factorConversion) ? "pres-nueva-factor-error" : undefined} />
+              {intentado && <MensajeCampo id="pres-nueva-factor-error" error={errorFactor(factorConversion)} />}
             </div>
           </div>
 
@@ -463,12 +490,14 @@ export function AddPresentacionDialog({ open, onClose, onSuccess, productoId, pr
             <Label htmlFor="productdialog-precio-de-venta-2" className="text-xs font-medium text-muted-foreground">Precio de venta ($)</Label>
             <Input id="productdialog-precio-de-venta-2" type="number" min={0} step="0.01" value={precioVenta}
               onChange={(e) => setPrecioVenta(e.target.value)}
-              className="h-11 md:h-11 font-mono" />
-            <MensajeCampo error={intentado ? errorPrecio(precioVenta) : null} aviso={avisoPrecio(precioVenta)} />
+              className="font-mono"
+              aria-invalid={intentado && !!errorPrecio(precioVenta)}
+              aria-describedby="pres-nueva-precio-error" />
+            <MensajeCampo id="pres-nueva-precio-error" error={intentado ? errorPrecio(precioVenta) : null} aviso={avisoPrecio(precioVenta)} />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">

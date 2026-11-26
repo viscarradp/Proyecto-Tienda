@@ -42,7 +42,7 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.message || "Credenciales inválidas")
+        throw new Error(body.message || "Nombre o contraseña incorrectos.")
       }
 
       const data: LoginResponse = await res.json()
@@ -74,10 +74,13 @@ export default function LoginPage() {
       router.push(getHomeRoute(data.usuario.rol as Rol))
       router.refresh()
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      // Sin conexión, fetch lanza un TypeError ("Failed to fetch"): no se muestra tal cual.
+      if (err instanceof TypeError) {
+        setError("No hay conexión con el sistema. Revisa el internet e intenta de nuevo.")
+      } else if (err instanceof Error) {
         setError(err.message)
       } else {
-        setError("Error de conexión con el servidor")
+        setError("No hay conexión con el sistema. Revisa el internet e intenta de nuevo.")
       }
     } finally {
       setLoading(false)
@@ -92,7 +95,7 @@ export default function LoginPage() {
         </div>
         <div className="space-y-1">
           <CardTitle className="text-xl font-semibold tracking-tight">Tienda Karlita</CardTitle>
-          <CardDescription>Ingresa tus credenciales para acceder al ERP</CardDescription>
+          <CardDescription>Escribe tu nombre y tu contraseña</CardDescription>
         </div>
       </CardHeader>
 
@@ -114,7 +117,6 @@ export default function LoginPage() {
               onChange={(e) => setNombre(e.target.value)}
               required
               autoComplete="username"
-              className="h-11 md:h-11"
             />
           </div>
 
@@ -128,11 +130,10 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="h-11 md:h-11"
             />
           </div>
 
-          <Button type="submit" className="mt-1 h-11 md:h-11 w-full gap-2" disabled={loading}>
+          <Button type="submit" className="mt-1 w-full gap-2" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />

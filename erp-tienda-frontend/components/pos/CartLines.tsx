@@ -136,7 +136,7 @@ export function CartLines({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-11 md:size-11 rounded-none"
+                    className="rounded-none"
                     aria-label="Restar uno"
                     disabled={item.cantidad <= 1}
                     onClick={() => updateQuantity(item.id, Math.max(1, item.cantidad - 1))}
@@ -155,7 +155,7 @@ export function CartLines({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-11 md:size-11 rounded-none text-primary"
+                    className="rounded-none text-primary"
                     aria-label="Sumar uno"
                     onClick={() => updateQuantity(item.id, item.cantidad + 1)}
                   >
@@ -166,8 +166,8 @@ export function CartLines({
               <div className="flex w-14 shrink-0 flex-col items-end leading-tight">
                 <MoneyValue value={totalLinea} className="text-sm font-semibold" />
                 {porMonto && (
-                  <span className="text-[10px] text-muted-foreground">
-                    ≈ {formatCantidad(item.cantidad)} {unidad || "uds"}
+                  <span className="text-xs text-muted-foreground">
+                    ≈ {formatCantidad(item.cantidad)} {unidad || "unidades"}
                   </span>
                 )}
               </div>
@@ -219,7 +219,7 @@ export function CartLines({
                     onClick={() => setMonto(item.id, Math.min(Math.max(totalLinea, 0.01), MONTO_MAX))}
                     className="h-11 md:h-9 rounded-sm px-2 text-xs font-medium text-primary hover:bg-primary/10"
                   >
-                    Vender por monto ($)
+                    Vender por monto
                   </button>
                 ) : null}
               </div>

@@ -29,6 +29,8 @@ import {
 import { StatePill } from "@/components/state-pill"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch } from "@/lib/api"
+import { etiquetaRol, mensajeError } from "@/lib/glosario"
+import { CampoError } from "@/components/campo-error"
 import type { Rol } from "@/lib/navigation"
 
 interface Usuario {
@@ -45,11 +47,6 @@ type Accion =
   | { tipo: "desactivar"; usuario: Usuario }
   | { tipo: "reactivar"; usuario: Usuario }
 
-const ETIQUETA_ROL: Record<Rol, string> = {
-  ADMIN: "Dueña (administradora)",
-  CAJERO: "Cajera",
-}
-
 /**
  * Gestión de usuarios (solo ADMIN). Los usuarios no se borran: se desactivan,
  * para que quede quién hizo qué en el historial. Un usuario desactivado no
@@ -64,6 +61,9 @@ export default function UsuariosPage() {
   const [accion, setAccion] = React.useState<Accion | null>(null)
   const [guardando, setGuardando] = React.useState(false)
   const [errorDialogo, setErrorDialogo] = React.useState("")
+  // Errores de campo (nombre, contraseña): salen junto al campo.
+  const [errorNombre, setErrorNombre] = React.useState("")
+  const [errorPassword, setErrorPassword] = React.useState("")
 
   // Campos del diálogo activo
   const [nombre, setNombre] = React.useState("")
@@ -76,7 +76,7 @@ export default function UsuariosPage() {
     try {
       setUsuarios(await apiFetch<Usuario[]>("/usuarios"))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar los usuarios")
+      setError(mensajeError("cargar los usuarios", err))
     } finally {
       setLoading(false)
     }
@@ -88,6 +88,8 @@ export default function UsuariosPage() {
 
   const abrir = (a: Accion) => {
     setErrorDialogo("")
+    setErrorNombre("")
+    setErrorPassword("")
     setPassword("")
     setNombre("")
     setRol(a.tipo === "rol" ? a.usuario.rol : "CAJERO")
@@ -112,7 +114,7 @@ export default function UsuariosPage() {
       setAccion(null)
       await cargar()
     } catch (err: unknown) {
-      setErrorDialogo(err instanceof Error ? err.message : "No se pudo completar la acción")
+      setErrorDialogo(mensajeError("completar la acción", err))
     } finally {
       setGuardando(false)
     }
@@ -121,16 +123,20 @@ export default function UsuariosPage() {
   const enviar = (e: React.FormEvent) => {
     e.preventDefault()
     if (!accion) return
+    const MSG_PASSWORD = "La contraseña debe tener al menos 6 caracteres."
     if (accion.tipo === "crear") {
-      if (!nombre.trim()) return setErrorDialogo("Escribe el nombre del usuario")
-      if (password.length < 6) return setErrorDialogo("La contraseña debe tener al menos 6 caracteres")
+      const sinNombre = !nombre.trim()
+      const passCorta = password.length < 6
+      setErrorNombre(sinNombre ? "Escribe el nombre del usuario." : "")
+      setErrorPassword(passCorta ? MSG_PASSWORD : "")
+      if (sinNombre || passCorta) return
       return ejecutar("/usuarios", "POST", { nombre: nombre.trim(), rol, password }, "Usuario creado")
     }
     if (accion.tipo === "rol") {
       return ejecutar(`/usuarios/${accion.usuario.id}`, "PATCH", { rol }, "Rol actualizado")
     }
     if (accion.tipo === "password") {
-      if (password.length < 6) return setErrorDialogo("La contraseña debe tener al menos 6 caracteres")
+      if (password.length < 6) return setErrorPassword(MSG_PASSWORD)
       return ejecutar(`/usuarios/${accion.usuario.id}`, "PATCH", { password }, "Contraseña cambiada")
     }
     if (accion.tipo === "desactivar") {
@@ -159,11 +165,11 @@ export default function UsuariosPage() {
             <p className="text-xs text-muted-foreground">Quién puede entrar al sistema</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button aria-label="Actualizar usuarios" variant="outline" size="icon" onClick={cargar} disabled={loading} className="size-11 md:size-11 ">
+            <Button aria-label="Actualizar usuarios" variant="outline" size="icon" onClick={cargar} disabled={loading} >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
-            <Button onClick={() => abrir({ tipo: "crear" })} className="h-11 md:h-11 gap-2">
-              <PlusCircle className="h-4 w-4" /> Nuevo
+            <Button onClick={() => abrir({ tipo: "crear" })} className="gap-2">
+              <PlusCircle className="h-4 w-4" /> Nuevo usuario
             </Button>
           </div>
         </div>
@@ -204,7 +210,7 @@ export default function UsuariosPage() {
                         {esYo && <span className="text-xs text-muted-foreground">(tú)</span>}
                         <StatePill tone={u.rol === "ADMIN" ? "primary" : "muted"}>
                           {u.rol === "ADMIN" && <ShieldCheck className="h-3 w-3" />}
-                          {ETIQUETA_ROL[u.rol] ?? u.rol}
+                          {etiquetaRol(u.rol)}
                         </StatePill>
                         <StatePill tone={u.activo ? "success" : "destructive"}>
                           {u.activo ? "Activo" : "Desactivado"}
@@ -221,9 +227,9 @@ export default function UsuariosPage() {
                       {u.activo ? (
                         !esYo && (
                           <Button
-                            variant="outline"
+                            variant="destructive"
                             size="sm"
-                            className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="gap-1.5"
                             onClick={() => abrir({ tipo: "desactivar", usuario: u })}
                           >
                             <UserX className="h-4 w-4" /> Desactivar
@@ -252,18 +258,20 @@ export default function UsuariosPage() {
             )}
           </DialogHeader>
 
-          <form onSubmit={enviar} className="flex flex-col gap-4">
+          <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
             {accion?.tipo === "crear" && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="usuarios-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
                 <Input id="usuarios-nombre"
                   value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
+                  onChange={(e) => { setNombre(e.target.value); setErrorNombre("") }}
                   placeholder="Ej. Karla"
                   autoFocus
                   maxLength={100}
-                  className="h-11 md:h-11"
+                  aria-invalid={!!errorNombre}
+                  aria-describedby={errorNombre ? "usuarios-nombre-error" : undefined}
                 />
+                {errorNombre && <CampoError id="usuarios-nombre-error">{errorNombre}</CampoError>}
               </div>
             )}
 
@@ -271,12 +279,12 @@ export default function UsuariosPage() {
               <div className="flex flex-col gap-2">
                 <Label htmlFor="usuarios-rol" className="text-xs font-medium text-muted-foreground">Rol</Label>
                 <Select value={rol} onValueChange={(v) => setRol(v as Rol)}>
-                  <SelectTrigger id="usuarios-rol" className="h-11 md:h-11 w-full">
+                  <SelectTrigger id="usuarios-rol" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CAJERO">{ETIQUETA_ROL.CAJERO}</SelectItem>
-                    <SelectItem value="ADMIN">{ETIQUETA_ROL.ADMIN}</SelectItem>
+                    <SelectItem value="CAJERO">{etiquetaRol("CAJERO")}</SelectItem>
+                    <SelectItem value="ADMIN">{etiquetaRol("ADMIN")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -294,11 +302,13 @@ export default function UsuariosPage() {
                 <Input id="usuarios-minimo-6-caracteres"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setErrorPassword("") }}
                   autoComplete="new-password"
                   autoFocus={accion.tipo === "password"}
-                  className="h-11 md:h-11"
+                  aria-invalid={!!errorPassword}
+                  aria-describedby={errorPassword ? "usuarios-password-error" : undefined}
                 />
+                {errorPassword && <CampoError id="usuarios-password-error">{errorPassword}</CampoError>}
               </div>
             )}
 
@@ -315,19 +325,17 @@ export default function UsuariosPage() {
             )}
 
             {errorDialogo && (
-              <p role="alert" className="rounded-sm border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
-                {errorDialogo}
-              </p>
+              <CampoError className="rounded-sm border border-destructive/30 bg-destructive/10 p-2 text-sm">{errorDialogo}</CampoError>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={cerrar} disabled={guardando}>
+              <Button type="button" variant="outline" onClick={cerrar} disabled={guardando}>
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 disabled={guardando}
-                variant={accion?.tipo === "desactivar" ? "destructive" : "default"}
+                variant={accion?.tipo === "desactivar" ? "destructive-solid" : "default"}
                 className="gap-2"
               >
                 {guardando && <Loader2 className="h-4 w-4 animate-spin" />}

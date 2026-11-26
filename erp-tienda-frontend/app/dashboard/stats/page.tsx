@@ -49,9 +49,11 @@ import {
 } from "@/components/ui/dialog"
 import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
+import { StatCard } from "@/components/stat-card"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 import { formatMoney, montoACentavos, centavosAMonto } from "@/lib/format"
 import { apiFetch } from "@/lib/api"
-import { BOVEDA, GAVETA, GAVETA_AYUDA, BOVEDA_AYUDA, ETIQUETAS_REPORTE as ET } from "@/lib/glosario"
+import { BOVEDA, GAVETA, GAVETA_AYUDA, BOVEDA_AYUDA, ETIQUETAS_REPORTE as ET, mensajeError } from "@/lib/glosario"
 
 /* ─────────────── Types ─────────────── */
 interface EstadoResultados {
@@ -123,13 +125,6 @@ const marginTone = (margenPct: number): MarginTone =>
 const formatUnidades = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
-const toneText: Record<Tone, string> = {
-  success: "text-success",
-  destructive: "text-destructive",
-  warning: "text-warning-text",
-  primary: "text-primary",
-  muted: "text-foreground",
-}
 const toneChartVar: Record<Tone, string> = {
   success: "var(--success)",
   destructive: "var(--destructive)",
@@ -235,7 +230,7 @@ export default function StatsPage() {
       setFlujo(flujoRes)
     } catch (err) {
       if (carga !== cargaRef.current) return
-      setError(err instanceof Error ? err.message : "No se pudieron cargar los números. Intenta de nuevo.")
+      setError(mensajeError("cargar las estadísticas", err))
     } finally {
       if (carga === cargaRef.current) setLoading(false)
     }
@@ -359,8 +354,8 @@ export default function StatsPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">¿Cómo va el negocio?</h1>
-            <p className="text-xs text-muted-foreground">Cuánto ganas, cuánto vendes y dónde está tu dinero</p>
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Estadísticas</h1>
+            <p className="text-xs text-muted-foreground">¿Cómo va el negocio? Cuánto ganas, cuánto vendes y dónde está tu dinero</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -385,7 +380,7 @@ export default function StatsPage() {
               onClick={fetchData}
               disabled={loading}
               aria-label="Actualizar números"
-              className="size-11 md:size-9 shrink-0"
+              className="shrink-0"
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
@@ -414,22 +409,26 @@ export default function StatsPage() {
             {/* Asistente de bóveda inicial */}
             {bovedaSinMovimientos && (
               <div className="rounded-sm border border-primary/30 bg-primary/5 p-4">
-                <h3 className="flex items-center gap-2 text-sm font-semibold">
-                  <Vault className="h-4 w-4" /> ¿Cuánto efectivo tienes guardado fuera de la gaveta hoy?
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Así la {BOVEDA.toLowerCase()} empieza con lo que de verdad tienes y los pagos desde ella cuadran.
-                  Si no tienes nada guardado, ignora este aviso.
-                </p>
+                <SeccionTitulo
+                  icono={Vault}
+                  ayuda={
+                    <>
+                      Así la {BOVEDA.toLowerCase()} empieza con lo que de verdad tienes y los pagos desde ella cuadran.
+                      Si no tienes nada guardado, ignora este aviso.
+                    </>
+                  }
+                >
+                  ¿Cuánto efectivo tienes guardado fuera de la gaveta hoy?
+                </SeccionTitulo>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Input
                     type="number" min={0.01} step="0.01" inputMode="decimal"
                     value={bovedaInicial} onChange={(e) => setBovedaInicial(e.target.value)}
-                    placeholder="0.00" aria-label="Efectivo guardado" className="h-11 md:h-11 w-40 font-mono"
+                    placeholder="0.00" aria-label="Efectivo guardado" className="w-40 font-mono"
                   />
-                  <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="h-11 md:h-11 gap-2">
+                  <Button onClick={handleBovedaInicial} disabled={bovedaInicialLoading || !bovedaInicial} className="gap-2">
                     {bovedaInicialLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    Guardar
+                    {bovedaInicial ? "Guardar" : "Escribe cuánto"}
                   </Button>
                 </div>
               </div>
@@ -440,44 +439,43 @@ export default function StatsPage() {
 
             {/* KPI Cards (la ganancia y lo vendido ya están en la frase principal) */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <KPICard
+              <StatCard
+                size="lg"
                 label={ET.costoVendido}
-                ayuda="Lo que pagaste por la mercadería que vendiste."
+                hint="Lo que pagaste por la mercadería que vendiste."
                 value={formatMoney(estado.costo_de_ventas_fifo)}
                 icon={Package}
-                tone="warning"
               />
-              <KPICard
+              <StatCard
+                size="lg"
                 label={ET.gananciaPor100}
-                ayuda="Antes de pagar gastos."
+                hint="Antes de pagar gastos."
                 value={formatMoney(estado.margen_bruto_porcentaje)}
                 icon={parseFloat(estado.margen_bruto_porcentaje) >= 0 ? ArrowUpRight : ArrowDownRight}
                 tone={marginTone(parseFloat(estado.margen_bruto_porcentaje))}
               />
-              <KPICard
+              <StatCard
+                size="lg"
                 label="Compra promedio"
-                ayuda="Lo que gasta en promedio cada cliente."
+                hint="Lo que gasta en promedio cada cliente."
                 value={formatMoney(estado.ticket_promedio)}
                 icon={ShoppingCart}
-                tone="primary"
               />
-              <KPICard
+              <StatCard
+                size="lg"
                 label="Ventas cobradas"
-                ayuda="Cuántas ventas hiciste."
+                hint="Cuántas ventas hiciste."
                 value={String(estado.total_ventas_completadas)}
                 icon={DollarSign}
-                tone="primary"
               />
             </div>
 
             {/* Bóveda */}
             {saldoBoveda && (
-              <section aria-labelledby="titulo-boveda" className="rounded-sm border border-border bg-card p-5">
+              <section aria-label={BOVEDA} className="rounded-sm border border-border bg-card p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <h2 id="titulo-boveda" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                      <Vault className="h-4 w-4" /> {BOVEDA}
-                    </h2>
+                    <SeccionTitulo icono={Vault}>{BOVEDA}</SeccionTitulo>
                     <MoneyValue
                       value={saldoBoveda.saldo_actual}
                       tone={parseFloat(saldoBoveda.saldo_actual) >= 0 ? "success" : "destructive"}
@@ -490,10 +488,10 @@ export default function StatsPage() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button onClick={() => abrirDialogo("poner")} className="h-11 md:h-11 gap-2">
+                    <Button onClick={() => abrirDialogo("poner")} className="gap-2">
                       <Plus className="h-4 w-4" /> Poner dinero
                     </Button>
-                    <Button variant="outline" onClick={() => abrirDialogo("contar")} className="h-11 md:h-11 gap-2">
+                    <Button variant="outline" onClick={() => abrirDialogo("contar")} className="gap-2">
                       <ClipboardCheck className="h-4 w-4" /> Contar la {BOVEDA.toLowerCase()}
                     </Button>
                   </div>
@@ -504,37 +502,37 @@ export default function StatsPage() {
             {/* Lo que vale el negocio */}
             {patrimonio && (
               <div className="rounded-sm border border-border bg-card p-5">
-                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  <Scale className="h-4 w-4" /> {ET.patrimonio}
-                  <span className="text-xs font-normal opacity-70">— hoy</span>
-                </h2>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  Lo que tienes (mercadería, efectivo y equipo) menos lo que debes.
-                </p>
+                <SeccionTitulo
+                  icono={Scale}
+                  className="mb-4"
+                  ayuda="Lo que tienes (mercadería, efectivo y equipo) menos lo que debes."
+                >
+                  {ET.patrimonio} <span className="text-xs font-normal text-muted-foreground">— hoy</span>
+                </SeccionTitulo>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  <BalanceItem label="Mercadería" value={patrimonio.inventario} icon={Package} />
-                  <BalanceItem
+                  <StatCard size="md" label="Mercadería" value={formatMoney(patrimonio.inventario)} icon={Package} />
+                  <StatCard
+                    size="md"
                     label="Efectivo"
-                    value={patrimonio.efectivo.total}
+                    value={formatMoney(patrimonio.efectivo.total)}
                     icon={Wallet}
                     hint={`${GAVETA} ${formatMoney(patrimonio.efectivo.gaveta)} · ${BOVEDA} ${formatMoney(patrimonio.efectivo.boveda)}`}
                   />
-                  <BalanceItem
+                  <StatCard
+                    size="md"
                     label="Equipo y muebles"
-                    value={patrimonio.activos_fijos}
+                    value={parseFloat(patrimonio.activos_fijos) === 0 ? "no registrado" : formatMoney(patrimonio.activos_fijos)}
                     icon={Landmark}
-                    tone={parseFloat(patrimonio.activos_fijos) > 0 ? "success" : "muted"}
-                    vacio="no registrado"
+                    tone={parseFloat(patrimonio.activos_fijos) === 0 ? "muted" : "default"}
                   />
-                  <BalanceItem label="Lo que debes" value={patrimonio.deudas} icon={TrendingDown} tone="destructive" prefix="− " />
-                  <div className="col-span-2 flex flex-col justify-center rounded-sm border border-primary/30 bg-primary/5 p-4 sm:col-span-3 lg:col-span-1">
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{ET.patrimonio}</span>
-                    <MoneyValue
-                      value={patrimonio.patrimonio_neto}
-                      tone={parseFloat(patrimonio.patrimonio_neto) >= 0 ? "success" : "destructive"}
-                      className="mt-1 text-2xl font-bold"
-                    />
-                  </div>
+                  <StatCard size="md" label="Lo que debes" value={`− ${formatMoney(patrimonio.deudas)}`} icon={TrendingDown} />
+                  <StatCard
+                    size="lg"
+                    label={ET.patrimonio}
+                    value={formatMoney(patrimonio.patrimonio_neto)}
+                    tone={parseFloat(patrimonio.patrimonio_neto) >= 0 ? "success" : "destructive"}
+                    className="col-span-2 justify-center border-primary/30 bg-primary/5 sm:col-span-3 lg:col-span-1"
+                  />
                 </div>
               </div>
             )}
@@ -542,12 +540,13 @@ export default function StatsPage() {
             {/* Entradas y salidas de dinero por cuenta */}
             {flujo && (
               <div className="rounded-sm border border-border bg-card p-5">
-                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  <ArrowRightLeft className="h-4 w-4" /> {ET.flujo} — {periodoLabels[periodo]}
-                </h2>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  A dónde entró y de dónde salió el efectivo. No es lo mismo que la ganancia: comprar mercadería baja el dinero, pero no la ganancia.
-                </p>
+                <SeccionTitulo
+                  icono={ArrowRightLeft}
+                  className="mb-4"
+                  ayuda="A dónde entró y de dónde salió el efectivo. No es lo mismo que la ganancia: comprar mercadería baja el dinero, pero no la ganancia."
+                >
+                  {ET.flujo} — {periodoLabels[periodo]}
+                </SeccionTitulo>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <FlujoCard titulo={GAVETA} ayuda={GAVETA_AYUDA} icon={Wallet} cuenta={flujo.gaveta} />
                   <FlujoCard titulo={BOVEDA} ayuda={BOVEDA_AYUDA} icon={Vault} cuenta={flujo.boveda} />
@@ -570,12 +569,13 @@ export default function StatsPage() {
             {/* Gráfico: lo que más vendes */}
             {chartData.length > 0 && (
               <div className="rounded-sm border border-border bg-card p-5">
-                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-                  <Package className="h-4 w-4 text-muted-foreground" /> Lo que más vendes (top {chartData.length})
-                </h2>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  El largo de la barra es lo vendido; el color dice cuánta ganancia deja cada producto.
-                </p>
+                <SeccionTitulo
+                  icono={Package}
+                  className="mb-3"
+                  ayuda="El largo de la barra es lo vendido; el color dice cuánta ganancia deja cada producto."
+                >
+                  Lo que más vendes (top {chartData.length})
+                </SeccionTitulo>
                 <ul className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <LeyendaColor tone="success" texto={`Deja buena ganancia ($${MARGEN_BUENO} o más por cada $100)`} />
                   <LeyendaColor tone="warning" texto={`Deja poca ($${MARGEN_BAJO} a $${MARGEN_BUENO} por cada $100)`} />
@@ -585,10 +585,10 @@ export default function StatsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
                       <CartesianGrid horizontal={false} stroke="var(--border)" />
-                      <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                      <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
                         tickFormatter={(v) => formatMoney(v)} stroke="var(--border)" />
-                      <YAxis type="category" dataKey="nombre" width={110}
-                        tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} stroke="var(--border)" />
+                      <YAxis type="category" dataKey="nombre" width={116}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} stroke="var(--border)" />
                       <Tooltip
                         cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                         contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "2px", color: "var(--popover-foreground)", fontSize: 12 }}
@@ -609,10 +609,13 @@ export default function StatsPage() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Estado de resultados */}
               <div className="rounded-sm border border-border bg-card p-5 lg:col-span-1">
-                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  <Calendar className="h-4 w-4" /> Cómo salió la ganancia — {periodoLabels[periodo]}
-                </h2>
-                <p className="mb-4 text-xs text-muted-foreground">De lo vendido, restando lo que costó y lo que gastaste.</p>
+                <SeccionTitulo
+                  icono={Calendar}
+                  className="mb-4"
+                  ayuda="De lo vendido, restando lo que costó y lo que gastaste."
+                >
+                  Cómo salió la ganancia — {periodoLabels[periodo]}
+                </SeccionTitulo>
 
                 <div className="flex flex-col gap-3">
                   <PLRow label={ET.cobradoVentas} value={estado.ingreso_bruto_ventas} type="income" />
@@ -632,7 +635,7 @@ export default function StatsPage() {
                   <div className="mt-1 rounded-sm border border-dashed border-border bg-muted/30 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-muted-foreground">{ET.retirosDuena}</span>
-                      <MoneyValue value={estado.retiros_duenos} tone="warning" className="text-sm font-semibold" />
+                      <MoneyValue value={estado.retiros_duenos} className="text-sm font-semibold" />
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{ET.retirosDuenaNota}</p>
                   </div>
@@ -641,19 +644,20 @@ export default function StatsPage() {
                 <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Ventas anuladas</span>
-                    <span className={cn("font-mono tabular-nums", estado.total_ventas_anuladas > 0 ? "text-destructive" : "text-foreground")}>{estado.total_ventas_anuladas}</span>
+                    <span className={cn("font-mono tabular-nums", estado.total_ventas_anuladas > 0 ? "text-warning-text" : "text-foreground")}>{estado.total_ventas_anuladas}</span>
                   </div>
                 </div>
               </div>
 
               {/* Tabla productos */}
               <div className="rounded-sm border border-border bg-card p-5 lg:col-span-2">
-                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  <Package className="h-4 w-4" /> Productos — cuánto dejan
-                </h2>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  Cada producto: cuánto vendiste, cuánto te costó y cuánta ganancia dejó.
-                </p>
+                <SeccionTitulo
+                  icono={Package}
+                  className="mb-4"
+                  ayuda="Cada producto: cuánto vendiste, cuánto te costó y cuánta ganancia dejó."
+                >
+                  Productos — cuánto dejan
+                </SeccionTitulo>
 
                 {productos.length === 0 ? (
                   <div className="py-12 text-center text-muted-foreground">
@@ -666,7 +670,7 @@ export default function StatsPage() {
                       <thead>
                         <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                           <th className="pb-3 text-left font-medium">Producto</th>
-                          <th className="pb-3 text-right font-medium">Uds.</th>
+                          <th className="pb-3 text-right font-medium">Unidades</th>
                           <th className="pb-3 text-right font-medium">Vendido</th>
                           <th className="pb-3 text-right font-medium">Costó</th>
                           <th className="pb-3 text-right font-medium">Ganancia</th>
@@ -686,7 +690,7 @@ export default function StatsPage() {
                               </td>
                               <td className="py-3 text-right font-mono tabular-nums text-muted-foreground">{formatUnidades(p.unidades_vendidas)}</td>
                               <td className="py-3 text-right"><MoneyValue value={p.ingreso} className="text-sm" /></td>
-                              <td className="py-3 text-right"><MoneyValue value={p.costo_fifo} tone="warning" className="text-sm" /></td>
+                              <td className="py-3 text-right"><MoneyValue value={p.costo_fifo} tone="muted" className="text-sm" /></td>
                               <td className="py-3 text-right"><MoneyValue value={p.margen} tone={sinCostoProd ? "muted" : tone} className="text-sm font-semibold" /></td>
                               <td className="py-3 text-right">
                                 {sinCostoProd ? (
@@ -725,14 +729,15 @@ export default function StatsPage() {
               <Input
                 id="poner-monto" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="500.00"
                 value={ponerMonto} onChange={(e) => setPonerMonto(e.target.value)} autoFocus
-                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
+                size="lg"
+                className="text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="poner-desc" className="text-xs font-medium text-muted-foreground">Nota (opcional)</Label>
               <Input
                 id="poner-desc" placeholder="Ej: Dinero que puse del ahorro"
-                value={ponerDesc} onChange={(e) => setPonerDesc(e.target.value)} className="h-11 md:h-11"
+                value={ponerDesc} onChange={(e) => setPonerDesc(e.target.value)}
               />
             </div>
             {parseFloat(ponerMonto) > 0 && saldoBoveda && (
@@ -742,12 +747,12 @@ export default function StatsPage() {
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setDialogo(null)} disabled={ponerLoading}>
+              <Button type="button" variant="outline" onClick={() => setDialogo(null)} disabled={ponerLoading}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={ponerLoading || !(parseFloat(ponerMonto) > 0)} className="gap-2">
                 {ponerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Poner el dinero
+                {parseFloat(ponerMonto) > 0 ? "Poner el dinero" : "Escribe el monto"}
               </Button>
             </DialogFooter>
           </form>
@@ -772,7 +777,8 @@ export default function StatsPage() {
               <Input
                 id="contar-monto" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00"
                 value={contarMonto} onChange={(e) => setContarMonto(e.target.value)} autoFocus
-                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
+                size="lg"
+                className="text-center font-mono text-xl font-bold tabular-nums"
               />
             </div>
 
@@ -797,13 +803,13 @@ export default function StatsPage() {
                 </Label>
                 <Input
                   id="contar-motivo" value={contarMotivo} onChange={(e) => setContarMotivo(e.target.value)}
-                  placeholder="Ej: Saqué para pagar al proveedor y no lo anoté" className="h-11 md:h-11"
+                  placeholder="Ej: Saqué para pagar al proveedor y no lo anoté"
                 />
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setDialogo(null)} disabled={contarLoading}>
+              <Button type="button" variant="outline" onClick={() => setDialogo(null)} disabled={contarLoading}>
                 Cancelar
               </Button>
               <Button
@@ -882,7 +888,7 @@ function Cabecera({
         <p className="mt-2 text-sm text-warning-text">
           ⚠ {formatMoney(estado.ventas_sin_costo.monto_vendido)} de lo vendido no tiene costo registrado, por eso la ganancia puede
           estar de más. Registra la compra de: {estado.ventas_sin_costo.productos.join(", ")}.{" "}
-          <Link href="/dashboard/inventario" className="font-medium underline underline-offset-2">
+          <Link href="/dashboard/inventario" className="inline-flex min-h-11 items-center font-medium underline underline-offset-2 md:min-h-0">
             Ir a Inventario
           </Link>
         </p>
@@ -916,69 +922,6 @@ function LeyendaColor({ tone, texto }: { tone: MarginTone; texto: string }) {
   )
 }
 
-function KPICard({
-  label,
-  ayuda,
-  value,
-  icon: Icon,
-  tone,
-}: {
-  label: string
-  ayuda: string
-  value: string
-  icon: LucideIcon
-  tone: Tone
-}) {
-  return (
-    <div className="flex flex-col rounded-sm border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground">{label}</span>
-        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", toneText[tone])} />
-      </div>
-      <p className={cn("mt-2 font-mono text-xl font-bold tracking-tight tabular-nums", toneText[tone])}>{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{ayuda}</p>
-    </div>
-  )
-}
-
-function BalanceItem({
-  label,
-  value,
-  icon: Icon,
-  tone = "muted",
-  hint,
-  prefix = "",
-  vacio,
-}: {
-  label: string
-  value: string
-  icon: LucideIcon
-  tone?: Tone
-  hint?: string
-  prefix?: string
-  /** Texto gris en lugar de "$0.00" cuando no hay nada registrado. */
-  vacio?: string
-}) {
-  const esVacio = vacio !== undefined && parseFloat(value) === 0
-  return (
-    <div className="flex flex-col rounded-sm border border-border bg-background/40 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-        <Icon className={cn("h-3.5 w-3.5 shrink-0", toneText[tone])} />
-      </div>
-      {esVacio ? (
-        <span className="mt-1 text-base text-muted-foreground">{vacio}</span>
-      ) : (
-        <span className={cn("mt-1 font-mono text-base font-semibold tabular-nums", toneText[tone])}>
-          {prefix}
-          {formatMoney(value)}
-        </span>
-      )}
-      {hint && <span className="mt-0.5 text-[10px] text-muted-foreground">{hint}</span>}
-    </div>
-  )
-}
-
 function FlujoCard({
   titulo,
   ayuda,
@@ -1008,13 +951,13 @@ function FlujoCard({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-1 text-muted-foreground">
-            <ArrowDownRight className="h-3.5 w-3.5 text-destructive" /> Salió
+            <ArrowDownRight className="h-3.5 w-3.5 text-muted-foreground" /> Salió
           </span>
-          <MoneyValue value={cuenta.salidas} tone="destructive" className="text-sm" />
+          <MoneyValue value={cuenta.salidas} className="text-sm" />
         </div>
         <div className="flex items-center justify-between border-t border-dashed border-border pt-2 text-sm">
           <span className="font-medium">{neto >= 0 ? "Aumentó" : "Bajó"}</span>
-          <MoneyValue value={cuenta.neto} tone={neto >= 0 ? "success" : "destructive"} className="text-sm font-semibold" />
+          <MoneyValue value={cuenta.neto} tone={neto >= 0 ? "success" : "default"} className="text-sm font-semibold" />
         </div>
       </div>
     </div>

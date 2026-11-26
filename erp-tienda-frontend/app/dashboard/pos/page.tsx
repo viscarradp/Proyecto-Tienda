@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 import {
   Dialog,
   DialogContent,
@@ -57,6 +59,7 @@ import {
   stockEnPresentacion,
 } from "@/lib/format"
 import { formatStock } from "@/lib/unidades"
+import { TERMINOS, mensajeError } from "@/lib/glosario"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import {
   borrarSesion,
@@ -99,20 +102,20 @@ interface CajaTurno {
 function StockCelda({ row }: { row: PresentacionRow }) {
   if (row.stock <= 0) {
     return (
-      <div className="w-24 shrink-0 text-right leading-tight">
+      <div className="w-20 shrink-0 text-right leading-tight sm:w-24">
         <span className="text-xs font-medium text-warning-text">Sin stock registrado</span>
-        {row.pendiente > 0 && <p className="text-[10px] text-muted-foreground">vendido sin registrar</p>}
+        {row.pendiente > 0 && <p className="text-xs text-muted-foreground">vendido sin registrar</p>}
       </div>
     )
   }
   const { enteras, sueltas, haySueltas } = stockEnPresentacion(row.stock, row.factor_conversion)
   const empaque = row.factor_conversion > 1
   return (
-    <div className="w-24 shrink-0 text-right leading-tight">
+    <div className="w-20 shrink-0 text-right leading-tight sm:w-24">
       {empaque ? (
         <>
           <span className="font-mono text-sm font-medium tabular-nums text-success">{formatCantidad(enteras)}</span>
-          <p className="truncate text-[10px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {row.presentacion_desc}
             {haySueltas ? ` + ${formatCantidad(sueltas)}` : ""}
           </p>
@@ -120,7 +123,7 @@ function StockCelda({ row }: { row: PresentacionRow }) {
       ) : (
         <span className="font-mono text-sm font-medium tabular-nums text-success">{row.stock_texto}</span>
       )}
-      {row.pendiente > 0 && <p className="text-[10px] text-warning-text">vendido sin registrar</p>}
+      {row.pendiente > 0 && <p className="text-xs text-warning-text">vendido sin registrar</p>}
     </div>
   )
 }
@@ -168,6 +171,8 @@ export default function POSPage() {
   const [autoOpenNext, setAutoOpenNext] = React.useState(true)
   const [observacionesCierre, setObservacionesCierre] = React.useState("")
   const [cajaActionLoading, setCajaActionLoading] = React.useState(false)
+  // Errores por campo del cierre de caja (VIS-24).
+  const [errCierre, setErrCierre] = React.useState<{ efectivo?: string; boveda?: string }>({})
 
   // ─── Checkout ───
   const [checkoutLoading, setCheckoutLoading] = React.useState(false)
@@ -263,23 +268,22 @@ export default function POSPage() {
     const bovedaParsed = parseFloat(montoBoveda) || 0
 
     if (isNaN(efectivoParsed) || efectivoParsed < 0) {
-      toast.error("Por favor ingresa un total de efectivo físico válido")
+      setErrCierre({ efectivo: "Escribe cuánto efectivo contaste en la gaveta (desde $0)." })
       return
     }
 
     if (bovedaParsed > efectivoParsed) {
-      toast.error("No puedes mandar a la bóveda más de lo que hay en la gaveta.")
+      setErrCierre({ boveda: "No puedes guardar en la bóveda más de lo que hay en la gaveta." })
       return
     }
+    setErrCierre({})
 
-    // Umbral de descuadre (§7): a partir de $1.00 el backend exige justificación.
+    // Umbral de diferencia (§7): a partir de $1.00 el backend exige justificación.
     // Lo validamos aquí para evitar el round-trip. La diferencia siempre se registra.
     const esperado = parseFloat(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial)
     const descuadre = Math.abs(efectivoParsed - esperado)
-    if (descuadre >= 1 && !observacionesCierre.trim()) {
-      toast.error(`El descuadre de $${descuadre.toFixed(2)} requiere una justificación (Observaciones).`)
-      return
-    }
+    // (El botón ya queda deshabilitado con ese aviso; esto es solo la red de seguridad.)
+    if (descuadre >= 1 && !observacionesCierre.trim()) return
 
     const fondoSiguiente = efectivoParsed - bovedaParsed
 
@@ -300,7 +304,7 @@ export default function POSPage() {
       })
 
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al cerrar caja")
+      toast.error(mensajeError("cerrar la caja", err))
       setCajaActionLoading(false)
       return
     }
@@ -327,7 +331,7 @@ export default function POSPage() {
         setCajaActiva(null)
       }
     } catch {
-      toast.warning("La caja se cerró, pero no se pudo abrir la siguiente: ábrela manualmente.")
+      toast.warning("La caja se cerró, pero no se pudo abrir de nuevo. Ábrela tú desde «Abrir caja».")
       // Consultar el estado real en lugar de suponer cómo quedó.
       await loadCaja()
     } finally {
@@ -339,7 +343,7 @@ export default function POSPage() {
     }
   }
 
-  // ─── PROCESAR PAGO ───
+  // ─── COBRAR ───
   const handleCheckout = async () => {
     if (items.length === 0 || !cajaActiva) return
     setCheckoutLoading(true)
@@ -404,7 +408,7 @@ export default function POSPage() {
       loadCaja()
     } catch (err: unknown) {
       // Se queda visible hasta la siguiente acción (no se oculta solo).
-      const base = err instanceof Error ? err.message : "No se pudo registrar la venta. Intenta de nuevo."
+      const base = err instanceof Error ? err.message : mensajeError("registrar la venta")
       // Con fallo de red o del servidor la venta pudo haber quedado registrada aunque no llegara la respuesta.
       const dudosa = ["red", "servidor"].includes(tipoDeError(err) ?? "")
       const mensaje = dudosa ? `${base} Antes de cobrar otra vez, revisa en Movimientos si la venta ya quedó.` : base
@@ -603,14 +607,14 @@ export default function POSPage() {
   )
 
   return (
-    <div className="flex min-h-full flex-col bg-background text-foreground lg:h-full lg:min-h-0 lg:flex-row">
+    <div className="flex min-h-full flex-col bg-background text-foreground xl:h-full xl:min-h-0 xl:flex-row">
       {/* ════════ CATÁLOGO ════════ */}
-      <section className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
+      <section className="flex min-w-0 flex-col xl:min-h-0 xl:flex-1">
         {/* Encabezado: en escritorio todo pegajoso; en celular solo el buscador (el resto se desplaza con la lista) */}
-        <div className="contents lg:sticky lg:top-0 lg:z-10 lg:block lg:border-b lg:border-border lg:bg-background/95 lg:backdrop-blur">
-          <div className="flex items-center justify-between gap-x-3 gap-y-2 px-4 py-2 lg:flex-wrap lg:py-3 lg:px-6">
+        <div className="contents xl:sticky xl:top-0 xl:z-10 xl:block xl:border-b xl:border-border xl:bg-background/95 xl:backdrop-blur">
+          <div className="flex items-center justify-between gap-x-3 gap-y-2 px-4 py-2 xl:flex-wrap xl:py-3 xl:px-6">
             <div className="min-w-0">
-              <h1 className="text-base font-semibold tracking-tight lg:text-xl">Nueva venta</h1>
+              <h1 className="text-base font-semibold tracking-tight xl:text-xl">Vender</h1>
               {mostrandoCarga ? (
                 <p className="text-xs text-muted-foreground">Revisando caja…</p>
               ) : cajaActiva ? (
@@ -632,7 +636,7 @@ export default function POSPage() {
                   variant="outline"
                   onClick={() => setSacarDineroOpen(true)}
                   aria-label="Sacar dinero de la gaveta"
-                  className="h-11 md:h-11 gap-2"
+                  className="gap-2"
                 >
                   <HandCoins className="h-4 w-4" />
                   <span className="sm:hidden">Sacar</span>
@@ -641,7 +645,7 @@ export default function POSPage() {
                 <Button
                   variant="outline"
                   onClick={() => { loadCaja(); setCloseCajaDialog(true) }}
-                  className="h-11 md:h-11 gap-2"
+                  className="gap-2"
                 >
                   <DoorClosed className="h-4 w-4" />
                   Cerrar caja
@@ -651,14 +655,14 @@ export default function POSPage() {
               <Button
                 variant="outline"
                 onClick={() => loadCaja()}
-                className="h-11 md:h-11 gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <RefreshCw className="h-4 w-4" /> Sin conexión · Reintentar
               </Button>
             ) : (
               <Button
                 onClick={() => { loadCaja(); setOpenCajaDialog(true) }}
-                className="h-11 md:h-11 gap-2 bg-warning text-warning-foreground hover:bg-warning/90"
+                className="gap-2"
               >
                 <DoorOpen className="h-4 w-4" /> Abrir caja
               </Button>
@@ -667,22 +671,23 @@ export default function POSPage() {
 
           {/* Modo apagón: visible mientras esté encendido */}
           {contingencia && (
-            <div className="flex items-center justify-between gap-2 border-t border-warning/30 bg-warning/15 px-4 py-2 text-xs font-medium text-warning-text lg:px-6">
+            <div className="flex items-center justify-between gap-2 border-t border-warning/30 bg-warning/15 px-4 py-2 text-xs font-medium text-warning-text xl:px-6">
               <span className="flex items-center gap-2">
-                <Zap className="h-4 w-4 shrink-0" /> Modo apagón activo: las ventas se guardan con la fecha y hora que pongas
+                <Zap className="h-4 w-4 shrink-0" /> {TERMINOS.ventaCuaderno} activa: las ventas se guardan con la fecha y hora que pongas
               </span>
-              <Button type="button" size="sm" variant="outline" className="h-11 md:h-9 shrink-0" onClick={() => { setContingencia(false); setFechaContingencia(""); setFechaPorAjustar(false) }}>
+              <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => { setContingencia(false); setFechaContingencia(""); setFechaPorAjustar(false) }}>
                 Apagar
               </Button>
             </div>
           )}
 
           {/* Búsqueda + escaneo */}
-          <div className="sticky top-0 z-10 bg-background/95 px-4 pb-2 pt-1 backdrop-blur lg:static lg:bg-transparent lg:px-6 lg:pb-3 lg:pt-0 lg:backdrop-blur-none">
+          <div className="sticky top-0 z-10 bg-background/95 px-4 pb-2 pt-1 backdrop-blur xl:static xl:bg-transparent xl:px-6 xl:pb-3 xl:pt-0 xl:backdrop-blur-none">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-12 md:h-12 pl-10 pr-10 text-base"
+                size="lg"
+                className="pl-10 pr-10"
                 placeholder="Buscar producto o código…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -693,7 +698,7 @@ export default function POSPage() {
           </div>
 
           {/* Chips de categoría */}
-          <div className="flex gap-2 overflow-x-auto px-4 pb-3 lg:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-2 overflow-x-auto px-4 pb-3 xl:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {categoryNames.map((cat) => (
               <button
                 key={cat}
@@ -722,14 +727,14 @@ export default function POSPage() {
             ) : (
               <div className="flex items-center justify-center gap-2 border-t border-warning/20 bg-warning/10 px-4 py-2 text-xs font-medium text-warning-text">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Debes abrir un turno de caja antes de vender
+                Abre la caja para poder vender
               </div>
             )
           )}
         </div>
 
         {/* Lista de presentaciones */}
-        <div className="lg:flex-1 lg:overflow-y-auto">
+        <div className="xl:flex-1 xl:overflow-y-auto">
           {loading && (
             <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -753,23 +758,23 @@ export default function POSPage() {
                 <Search className="h-8 w-8 opacity-30" />
                 <p className="text-sm font-medium text-foreground">No se encontraron productos</p>
                 <p className="text-xs">¿No está en el catálogo? Agrégalo y véndelo ahora.</p>
-                <Button type="button" className="mt-2 h-11 md:h-11 gap-2" onClick={abrirAltaDesdeBusqueda}>
+                <Button type="button" className="mt-2 gap-2" onClick={abrirAltaDesdeBusqueda}>
                   <PackagePlus className="h-4 w-4" /> Agregar como producto nuevo
                 </Button>
               </div>
             ) : (
-              <ul className="divide-y divide-border pb-36 lg:pb-6">
+              <ul className="divide-y divide-border pb-36 xl:pb-6">
                 {filteredRows.map((row) => (
                   <li key={row.presentacion_id}>
                     <button
                       type="button"
                       onClick={() => agregarDesdeFila(row)}
                       className={cn(
-                        "group flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 sm:gap-3 sm:py-3 lg:px-6",
+                        "group flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 sm:gap-3 sm:py-3 xl:px-6",
                         enTicket.has(`pres-${row.presentacion_id}`) && "bg-primary/5",
                       )}
                     >
-                      <div className="hidden w-24 shrink-0 truncate font-mono text-xs text-muted-foreground sm:block">
+                      <div className="hidden w-24 shrink-0 truncate font-mono text-xs text-muted-foreground lg:block">
                         {row.codigo_barras || `P${String(row.presentacion_id).padStart(4, '0')}`}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -785,7 +790,7 @@ export default function POSPage() {
                         {enTicket.has(`pres-${row.presentacion_id}`) && (
                           // Posición absoluta: la insignia no cambia la altura ni el ancho de la fila.
                           <span
-                            className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-primary-foreground ring-2 ring-background"
+                            className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 font-mono text-xs font-semibold leading-none text-primary-foreground ring-2 ring-background"
                             aria-label={`${formatCantidad(enTicket.get(`pres-${row.presentacion_id}`)!.cantidad)} en el ticket`}
                           >
                             ×{formatCantidad(enTicket.get(`pres-${row.presentacion_id}`)!.cantidad)}
@@ -802,11 +807,9 @@ export default function POSPage() {
       </section>
 
       {/* ════════ TICKET (panel de escritorio) ════════ */}
-      <aside className="hidden w-[380px] flex-col border-l border-border bg-card lg:flex lg:h-full">
+      <aside className="hidden w-[380px] flex-col border-l border-border bg-card xl:flex xl:h-full">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <ShoppingCart className="h-5 w-5 text-primary" /> Ticket
-          </h2>
+          <SeccionTitulo icono={ShoppingCart}>Ticket</SeccionTitulo>
           {items.length > 0 && (
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={pedirVaciar}>
               Vaciar
@@ -828,12 +831,11 @@ export default function POSPage() {
         onClick={() => setCartOpen(true)}
         aria-label={itemCount > 0 ? `Cobrar, ${itemCount} ${itemCount === 1 ? "producto" : "productos"}, ${formatMoney(total)}` : "Ver ticket"}
         className={cn(
-          "fixed inset-x-0 z-40 flex items-center justify-between gap-3 border-t px-4 py-3 text-left lg:hidden",
+          "fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 border-t px-4 py-3 text-left md:bottom-0 md:left-64 xl:hidden",
           // Fondo opaco (bg-card); el tinte de éxito va en una capa encima para que nada de atrás se vea.
           "isolate overflow-hidden bg-card",
           itemCount === 0 && ultimaVenta ? "border-success/40" : "border-border",
         )}
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
       >
         {itemCount === 0 && ultimaVenta && <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-success/10" />}
         {itemCount > 0 ? (
@@ -873,9 +875,9 @@ export default function POSPage() {
 
       {/* ════════ BOTTOM SHEET: TICKET (móvil) ════════ */}
       <BottomSheet open={cartOpen} onOpenChange={setCartOpen}>
-        <BottomSheetContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden px-4 lg:hidden">
+        <BottomSheetContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden px-4 xl:hidden">
           <BottomSheetHeader className="flex-row items-center justify-between p-0 pb-1">
-            <BottomSheetTitle>Ticket de compra</BottomSheetTitle>
+            <BottomSheetTitle>Ticket</BottomSheetTitle>
             {items.length > 0 && (
               <Button variant="ghost" size="sm" className="mr-8 text-muted-foreground hover:text-destructive" onClick={pedirVaciar}>
                 Vaciar
@@ -916,28 +918,35 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DoorClosed className="h-5 w-5 text-warning-text" /> Cerrar turno de caja
+              <DoorClosed className="h-5 w-5 text-warning-text" /> Cerrar caja
             </DialogTitle>
             <DialogDescription>
-              Ingresa el total físico y cuánto enviarás a la bóveda.
+              Cuenta el efectivo de la gaveta y escribe cuánto guardas en la bóveda.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCerrarCaja} className="flex flex-col gap-4">
             {cajaActiva && (
               <div className="flex items-center justify-between rounded-sm border border-border bg-muted/50 p-3 text-xs">
-                <span className="text-muted-foreground">Efectivo esperado (sistema)</span>
+                <span className="text-muted-foreground">Lo que debería haber (según el sistema)</span>
                 <MoneyValue value={cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial} className="text-sm font-semibold" />
               </div>
             )}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="pos-total-fisico-en-gaveta" className="text-xs font-medium text-muted-foreground">Total físico en gaveta ($)</Label>
-              <Input id="pos-total-fisico-en-gaveta"
-                type="number" min={0} step="0.01" inputMode="decimal" value={efectivoDeclarado}
-                onChange={(e) => setEfectivoDeclarado(e.target.value)}
-                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
-                autoFocus
-              />
+              <Label htmlFor="pos-total-fisico-en-gaveta" className="text-xs font-medium text-muted-foreground">Efectivo que contaste en la gaveta</Label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xl text-muted-foreground">$</span>
+                <Input id="pos-total-fisico-en-gaveta"
+                  type="number" min={0} step="0.01" inputMode="decimal" value={efectivoDeclarado}
+                  onChange={(e) => { setEfectivoDeclarado(e.target.value); setErrCierre({}) }}
+                  aria-invalid={!!errCierre.efectivo}
+                  aria-describedby={errCierre.efectivo ? "pos-efectivo-error" : undefined}
+                  size="lg"
+                  className="text-center font-mono text-xl font-bold tabular-nums"
+                  autoFocus
+                />
+              </div>
+              {errCierre.efectivo && <CampoError id="pos-efectivo-error">{errCierre.efectivo}</CampoError>}
             </div>
 
             {difCierre !== null && (
@@ -951,31 +960,38 @@ export default function POSPage() {
                 {difCierre === 0
                   ? "Cuadra"
                   : difCierre > 0
-                    ? `Sobran ${formatMoney(centavosAMonto(difCierre))}`
-                    : `Faltan ${formatMoney(centavosAMonto(-difCierre))}`}
+                    ? `${TERMINOS.sobro} ${formatMoney(centavosAMonto(difCierre))}`
+                    : `${TERMINOS.falto} ${formatMoney(centavosAMonto(-difCierre))}`}
               </p>
             )}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="pos-trasladar-a-boveda" className="text-xs font-medium text-success">Trasladar a bóveda ($)</Label>
-              <Input id="pos-trasladar-a-boveda"
-                type="number" min={0} step="0.01" inputMode="decimal" value={montoBoveda}
-                onChange={(e) => setMontoBoveda(e.target.value)}
-                placeholder="0.00"
-                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
-              />
+              <Label htmlFor="pos-trasladar-a-boveda" className="text-xs font-medium text-muted-foreground">Guardar en la bóveda (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xl text-muted-foreground">$</span>
+                <Input id="pos-trasladar-a-boveda"
+                  type="number" min={0} step="0.01" inputMode="decimal" value={montoBoveda}
+                  onChange={(e) => { setMontoBoveda(e.target.value); setErrCierre({}) }}
+                  aria-invalid={!!errCierre.boveda}
+                  aria-describedby={errCierre.boveda ? "pos-boveda-error" : undefined}
+                  placeholder="0.00"
+                  size="lg"
+                  className="text-center font-mono text-xl font-bold tabular-nums"
+                />
+              </div>
+              {errCierre.boveda && <CampoError id="pos-boveda-error">{errCierre.boveda}</CampoError>}
             </div>
 
             <div className="flex items-center justify-between rounded-sm border border-border p-3">
               <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-muted-foreground">Fondo siguiente turno</p>
+                <p className="text-xs font-medium text-muted-foreground">{TERMINOS.fondoSiguiente}</p>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox" checked={autoOpenNext}
                     onChange={e => setAutoOpenNext(e.target.checked)}
                     className="h-4 w-4 rounded-sm accent-primary"
                   />
-                  Reabrir automáticamente
+                  Abrir la caja de nuevo con ese dinero
                 </label>
               </div>
               <MoneyValue
@@ -991,15 +1007,16 @@ export default function POSPage() {
               <Input id="pos-observaciones-cierre"
                 type="text" value={observacionesCierre}
                 onChange={(e) => setObservacionesCierre(e.target.value)}
-                placeholder={exigeExplicacion ? "Ej. Se dio mal un vuelto" : "Razón de descuadre o nota…"}
+                placeholder={exigeExplicacion ? "Ej. Se dio mal un vuelto" : "Por qué faltó o sobró, o una nota…"}
                 aria-invalid={faltaExplicacion}
-                className="h-11 md:h-11"
+                aria-describedby={faltaExplicacion ? "pos-obs-error" : undefined}
               />
+              {faltaExplicacion && <CampoError id="pos-obs-error">Escribe por qué faltó o sobró dinero para poder cerrar.</CampoError>}
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
-              <Button type="submit" disabled={cajaActionLoading || faltaExplicacion} className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
+              <Button type="button" variant="outline" onClick={() => setCloseCajaDialog(false)}>Cancelar</Button>
+              <Button type="submit" variant="warning" disabled={cajaActionLoading || faltaExplicacion} className="gap-2">
                 {cajaActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
                 {faltaExplicacion ? "Explica la diferencia para cerrar" : "Confirmar cierre"}
               </Button>
@@ -1016,8 +1033,8 @@ export default function POSPage() {
             <DialogDescription>Se quitan los {items.length} productos. La venta no se registra.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="secondary" className="h-11 md:h-11" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
-            <Button type="button" variant="destructive" className="h-11 md:h-11" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
+            <Button type="button" variant="outline" onClick={() => setVaciarOpen(false)}>Cancelar</Button>
+            <Button type="button" variant="destructive-solid" onClick={() => { clearCart(); setVaciarOpen(false) }}>Sí, vaciar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

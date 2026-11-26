@@ -21,6 +21,7 @@ import {
   Archive,
   ArchiveRestore,
   PackageSearch,
+  PackageMinus,
   Undo2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -40,8 +41,10 @@ import { MoneyValue } from "@/components/money-value"
 import { StatePill } from "@/components/state-pill"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
-import { GAVETA, BOVEDA } from "@/lib/glosario"
-import { aNumero, formatCantidad, normalizarBusqueda } from "@/lib/format"
+import { GAVETA, BOVEDA, TERMINOS, mensajeError } from "@/lib/glosario"
+import { aNumero, formatCantidad, formatFecha, formatMoney, normalizarBusqueda } from "@/lib/format"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 import { desgloseStock, formatStock } from "@/lib/unidades"
 import { useShallow } from "zustand/react/shallow"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
@@ -96,6 +99,16 @@ const ETIQUETA_MERMA: Record<string, string> = {
   ROBO: "Robo",
   CONTEO: "Conteo (faltante)",
 }
+
+/** La categoría "Por revisar" la crea el alta rápida; la etiqueta ya avisa, así que no se repite como categoría. */
+const CATEGORIA_ALTA_RAPIDA = "Por revisar"
+const nombreCategoria = (prod: Producto) =>
+  prod.por_revisar && prod.categorias.nombre === CATEGORIA_ALTA_RAPIDA ? "Sin categoría" : prod.categorias.nombre
+
+const textoPresentaciones = (n: number) => `${n} ${n === 1 ? "presentación" : "presentaciones"}`
+
+/** Vencimiento: es una fecha sin hora; se fija a mediodía para que la zona horaria no la corra un día. */
+const fechaVence = (iso: string) => formatFecha(`${iso.slice(0, 10)}T12:00:00Z`)
 
 export default function InventarioPage() {
   const [mounted, setMounted] = React.useState(false)
@@ -190,7 +203,7 @@ export default function InventarioPage() {
         setDesactivados(Array.isArray(todos) ? todos.filter(p => p.activo === false) : [])
       }
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : "Error al cargar la base de inventario")
+      setGlobalError(mensajeError("cargar el inventario", err))
     } finally {
       setLoading(false)
     }
@@ -227,7 +240,7 @@ export default function InventarioPage() {
 
   // Merma / conteo: lotes con existencias, del más viejo al más nuevo.
   const pedirAnularCompra = (c: Compra) => {
-    const monto = aNumero(c.monto_total).toLocaleString("en-US", { style: "currency", currency: "USD" })
+    const monto = formatMoney(c.monto_total)
     const dinero =
       c.estado_pago !== "PAGADO"
         ? "la deuda con el proveedor quedará saldada"
@@ -239,15 +252,15 @@ export default function InventarioPage() {
     setAAnular({
       endpoint: `/compras/${c.id}/anular`,
       titulo: `Anular compra #${c.id}`,
-      efecto: `Los lotes quedarán en 0 y ${dinero}. Solo se puede si nada de esta mercadería se ha vendido ni usado. Queda marcada como anulada, no se borra.`,
+      efecto: `La mercadería de esta compra se quita del inventario (queda en 0) y ${dinero}. Solo se puede si nada de esta mercadería se ha vendido ni usado. Queda marcada como anulada, no se borra.`,
     })
   }
 
   const pedirAnularMerma = (m: Ajuste) => {
     setAAnular({
       endpoint: `/ajustes-inventario/${m.id}/anular`,
-      titulo: `Anular merma #${m.id}`,
-      efecto: `Se devolverán ${formatCantidad(m.cantidad_ajustada)} unidades al lote y la merma dejará de contar como pérdida. Queda marcada como anulada, no se borra.`,
+      titulo: `Anular mercadería perdida #${m.id}`,
+      efecto: `Se devolverán ${formatCantidad(m.cantidad_ajustada)} unidades a su ${TERMINOS.tanda.toLowerCase()} y dejarán de contar como pérdida. Queda marcada como anulada, no se borra.`,
     })
   }
 
@@ -273,7 +286,7 @@ export default function InventarioPage() {
       setExpandedProduct(null)
       await loadData(true)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo quitar el producto")
+      toast.error(mensajeError("desactivar el producto", err))
     } finally {
       setQuitando(false)
     }
@@ -286,7 +299,7 @@ export default function InventarioPage() {
       setExpandedProduct(null)
       await loadData(true)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo reactivar")
+      toast.error(mensajeError("reactivar el producto", err))
     }
   }
 
@@ -301,7 +314,7 @@ export default function InventarioPage() {
       if (porRevisar.length <= 1) setSoloPorRevisar(false)
       await loadData(true)
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : "No se pudo marcar como revisado. Intenta de nuevo.")
+      setGlobalError(mensajeError("marcar el producto como revisado", err))
     } finally {
       setRevisandoId(null)
     }
@@ -310,7 +323,10 @@ export default function InventarioPage() {
   // ─── Category create handler ───
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newCatName.trim()) return
+    if (!newCatName.trim()) {
+      setCatError("Escribe el nombre de la categoría.")
+      return
+    }
     setCatLoading(true)
     setCatError("")
     try {
@@ -322,7 +338,7 @@ export default function InventarioPage() {
       setNewCatName("")
       loadData(true)
     } catch (err: unknown) {
-      setCatError(err instanceof Error ? err.message : "Error al crear categoría")
+      setCatError(mensajeError("crear la categoría", err))
     } finally {
       setCatLoading(false)
     }
@@ -330,13 +346,12 @@ export default function InventarioPage() {
 
   // ─── Category delete handler ───
   const handleDeleteCategory = async (id: number, nombre: string) => {
-    setCatError("")
     try {
       await apiFetch(`/categorias/${id}`, { method: "DELETE" })
       toast.success(`Categoría «${nombre}» borrada`)
       loadData(true)
     } catch (err: unknown) {
-      setCatError(err instanceof Error ? err.message : "No se puede eliminar (tiene productos asociados)")
+      toast.error(mensajeError("borrar la categoría", err, "Si tiene productos, pásalos a otra categoría primero."))
     }
   }
 
@@ -352,25 +367,32 @@ export default function InventarioPage() {
     <div className="flex min-h-full flex-col bg-background text-foreground">
       {/* Encabezado */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Inventario</h1>
-            <p className="text-xs text-muted-foreground">Catálogo · Categorías · Compras</p>
+            <p className="text-xs text-muted-foreground">
+              {esCajero ? "Catálogo · Historial" : "Catálogo · Categorías · Historial"}
+            </p>
           </div>
           {!esCajero && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => { setCompraInicial(true); setCompraDialogOpen(true) }} className="h-11 md:h-11 gap-2">
-                <PackagePlus className="h-4 w-4" />
-                <span className="hidden lg:inline">Inventario inicial</span>
-              </Button>
-              <Button variant="outline" onClick={() => { setCompraInicial(false); setCompraDialogOpen(true) }} className="h-11 md:h-11 gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* El inventario inicial se carga una sola vez: con compras ya registradas se esconde. */}
+              {!loading && compras.length === 0 && (
+                <Button variant="outline" onClick={() => { setCompraInicial(true); setCompraDialogOpen(true) }} className="gap-2">
+                  <PackagePlus className="h-4 w-4" />
+                  <span className="sm:hidden">Inicial</span>
+                  <span className="hidden sm:inline">Inventario inicial</span>
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => { setCompraInicial(false); setCompraDialogOpen(true) }} className="gap-2">
                 <Truck className="h-4 w-4" />
+                <span className="sm:hidden">Compra</span>
                 <span className="hidden sm:inline">Nueva compra</span>
               </Button>
-              <Button onClick={() => setProductDialogOpen(true)} className="h-11 md:h-11 gap-2">
+              <Button onClick={() => setProductDialogOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Nuevo producto</span>
                 <span className="sm:hidden">Producto</span>
+                <span className="hidden sm:inline">Nuevo producto</span>
               </Button>
             </div>
           )}
@@ -380,16 +402,17 @@ export default function InventarioPage() {
       {/* Contenido con pestañas */}
       <div className="flex-1 p-4 lg:px-8 lg:py-6">
         <Tabs defaultValue="catalogo" className="w-full">
-          <TabsList className="mb-5 h-auto flex-wrap gap-1">
-            <TabsTrigger value="catalogo" className="gap-1.5 px-4 py-2">
+          {/* Una sola fila siempre (VIV-04): las pestañas se reparten el ancho. */}
+          <TabsList className={cn("mb-5 grid w-full gap-1 sm:w-fit", esCajero ? "grid-cols-2" : "grid-cols-3")}>
+            <TabsTrigger value="catalogo" className="gap-1.5 sm:px-4">
               <Package className="h-4 w-4" /> Catálogo
             </TabsTrigger>
             {!esCajero && (
-              <TabsTrigger value="categorias" className="gap-1.5 px-4 py-2">
+              <TabsTrigger value="categorias" className="gap-1.5 sm:px-4">
                 <Tags className="h-4 w-4" /> Categorías
               </TabsTrigger>
             )}
-            <TabsTrigger value="historial" className="gap-1.5 px-4 py-2">
+            <TabsTrigger value="historial" className="gap-1.5 sm:px-4">
               <History className="h-4 w-4" /> Historial
             </TabsTrigger>
           </TabsList>
@@ -436,14 +459,14 @@ export default function InventarioPage() {
                         onChange={(e) => setBusqueda(e.target.value)}
                         placeholder="Buscar por nombre, presentación o código…"
                         aria-label="Buscar producto"
-                        className="h-11 md:h-11 pl-9"
+                        className="pl-9"
                       />
                     </div>
                     {!esCajero && (
                       <Button
                         type="button"
                         variant={verDesactivados ? "default" : "outline"}
-                        className="h-11 md:h-11 gap-2"
+                        className="gap-2"
                         onClick={() => { setVerDesactivados(v => !v); setExpandedProduct(null) }}
                       >
                         <Archive className="h-4 w-4" />
@@ -476,7 +499,6 @@ export default function InventarioPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-11 md:h-9 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
                         onClick={() => setSoloPorRevisar(v => !v)}
                       >
                         {soloPorRevisar ? "Ver todos" : "Ver solo los por revisar"}
@@ -484,14 +506,12 @@ export default function InventarioPage() {
                     </div>
                   )}
                   <div className="overflow-hidden rounded-sm border border-border">
-                    {/* Encabezado de tabla (solo desktop) */}
-                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+                    {/* Encabezado de tabla (solo desde lg: con menos ancho el nombre queda aplastado, VIS-31) */}
+                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium text-muted-foreground lg:flex">
                       <div className="w-6" />
-                      <div className="w-14 font-mono">ID</div>
                       <div className="flex-1">Producto</div>
                       <div className="w-32 text-right">Categoría</div>
-                      <div className="w-24 text-right">Stock</div>
-                      <div className="w-24 text-right">Present.</div>
+                      <div className="w-28 text-right">Stock</div>
                     </div>
 
                     {productosVisibles.map(prod => {
@@ -511,13 +531,10 @@ export default function InventarioPage() {
                                 ? <ChevronDown className="h-4 w-4 text-primary" />
                                 : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </div>
-                            <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground sm:block">
-                              {String(prod.id).padStart(4, '0')}
-                            </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-foreground">{prod.nombre}</p>
-                              <p className="truncate text-xs text-muted-foreground sm:hidden">
-                                {prod.categorias.nombre} · {prod.presentaciones.length} pres.
+                              <p className="truncate text-xs text-muted-foreground lg:hidden">
+                                {nombreCategoria(prod)} · {textoPresentaciones(prod.presentaciones.length)}
                               </p>
                               {(prod.por_revisar || pendiente > 0) && (
                                 <div className="mt-1 flex flex-wrap gap-1">
@@ -528,22 +545,19 @@ export default function InventarioPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="hidden w-32 text-right sm:block">
-                              <Badge variant="outline" className="text-xs font-normal">{prod.categorias.nombre}</Badge>
+                            <div className="hidden w-32 text-right lg:block">
+                              <Badge variant="outline" className="text-xs font-normal">{nombreCategoria(prod)}</Badge>
                             </div>
-                            <div className="w-auto shrink-0 text-right sm:w-24">
-                              <StatePill tone={stock > 0 ? "success" : "destructive"} className="font-mono tabular-nums">
-                                {stock > 0 ? formatStock(stock, prod.presentaciones) : "Agotado"}
+                            <div className="w-auto shrink-0 text-right lg:w-28">
+                              <StatePill tone={stock > 0 ? "success" : "warning"} className="font-mono tabular-nums">
+                                {stock > 0 ? formatStock(stock, prod.presentaciones) : "Sin stock"}
                               </StatePill>
-                            </div>
-                            <div className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
-                              {prod.presentaciones.length} pres.
                             </div>
                           </button>
 
                           {/* Detalle expandido */}
                           {isOpen && (
-                            <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
+                            <div className="border-t border-border bg-muted/20 px-4 py-4 lg:pl-13">
                               <div className="flex flex-col gap-4">
                                 {desgloseStock(stock, prod.presentaciones) && (
                                   <p className="text-xs text-muted-foreground">
@@ -560,7 +574,7 @@ export default function InventarioPage() {
                                       <Button
                                         type="button"
                                         size="sm"
-                                        className="h-11 md:h-9 gap-1.5"
+                                        className="gap-1.5"
                                         disabled={revisandoId === prod.id}
                                         onClick={(e) => { e.stopPropagation(); handleYaRevise(prod) }}
                                       >
@@ -583,25 +597,26 @@ export default function InventarioPage() {
                                 )}
                                 {/* Presentaciones */}
                                 <div>
-                                  <div className="mb-2 flex items-center justify-between">
-                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Presentaciones</p>
+                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <SeccionTitulo>Presentaciones</SeccionTitulo>
                                     {!esCajero && prod.activo === false && (
-                                      <Button type="button" size="sm" className="h-11 md:h-9 gap-1"
+                                      <Button type="button" size="sm" className="gap-1"
                                         onClick={(e) => { e.stopPropagation(); handleReactivar(prod) }}>
                                         <ArchiveRestore className="h-4 w-4" /> Reactivar
                                       </Button>
                                     )}
+                                    {/* Una acción principal (Editar); las demás, secundarias. */}
                                     {!esCajero && prod.activo !== false && (
                                       <div className="flex flex-wrap items-center justify-end gap-2">
-                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
+                                        <Button type="button" size="sm" className="gap-1"
                                           onClick={(e) => { e.stopPropagation(); setEditProductTarget(prod); setEditProductDialogOpen(true) }}>
                                           <Pencil className="h-3.5 w-3.5" /> Editar
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
+                                        <Button type="button" variant="ghost" size="sm" className="gap-1"
                                           onClick={(e) => { e.stopPropagation(); openPresDialog(prod) }}>
-                                          <Plus className="h-3.5 w-3.5" /> Agregar
+                                          <Plus className="h-3.5 w-3.5" /> Agregar presentación
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm" className="h-11 md:h-8 gap-1"
+                                        <Button type="button" variant="ghost" size="sm" className="gap-1 text-muted-foreground"
                                           onClick={(e) => { e.stopPropagation(); setProductoAQuitar(prod) }}>
                                           <Archive className="h-3.5 w-3.5" /> Desactivar
                                         </Button>
@@ -635,17 +650,15 @@ export default function InventarioPage() {
                                 {/* Lotes */}
                                 <div>
                                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes de inventario activos</p>
+                                    <SeccionTitulo>Existencias por compra</SeccionTitulo>
                                     {prod.activo !== false && (
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <Button type="button" variant="outline" size="sm"
-                                          className="h-11 md:h-9 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
+                                        <Button type="button" variant="ghost" size="sm" className="gap-1"
                                           onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar") }}>
-                                          <AlertTriangle className="h-3.5 w-3.5" /> Registrar merma
+                                          <PackageMinus className="h-3.5 w-3.5" /> {TERMINOS.mercaderiaPerdida}
                                         </Button>
                                         {!esCajero && (
-                                          <Button type="button" variant="outline" size="sm"
-                                            className="h-11 md:h-9 gap-1 border-success/40 text-success hover:bg-success/10 hover:text-success"
+                                          <Button type="button" variant="ghost" size="sm" className="gap-1"
                                             onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "agregar") }}>
                                             <Plus className="h-3.5 w-3.5" /> Encontré producto
                                           </Button>
@@ -656,26 +669,27 @@ export default function InventarioPage() {
                                   {(() => {
                                     const activeLotes = prod.lotes_inventario.filter(l => aNumero(l.cantidad_disponible) > 0)
                                     if (activeLotes.length === 0) {
-                                      return <p className="text-xs italic text-muted-foreground">No hay existencias almacenadas para ningún lote.</p>
+                                      return <p className="text-xs italic text-muted-foreground">No hay existencias registradas. Se cargan con una compra o con Inventario inicial.</p>
                                     }
                                     return (
                                       <div className="flex flex-col gap-1.5">
                                         {activeLotes.map((lote, idx) => (
-                                          <div key={`lote-${lote.id}-${idx}`} className="group flex items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
-                                            <span className="w-12 font-mono text-xs text-muted-foreground">#{lote.id}</span>
-                                            <span className="w-16 text-right font-mono text-xs font-medium tabular-nums text-success">{formatStock(lote.cantidad_disponible, prod.presentaciones)}</span>
-                                            <span className="flex-1 font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
+                                          <div key={`lote-${lote.id}-${idx}`} className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-border bg-card px-3 py-2 text-sm">
+                                            <span className="w-20 font-mono text-xs text-muted-foreground">{TERMINOS.tanda} #{lote.id}</span>
+                                            <span className="min-w-16 text-right font-mono text-xs font-medium tabular-nums">{formatStock(lote.cantidad_disponible, prod.presentaciones)}</span>
+                                            <span className="flex-1 font-mono text-xs text-muted-foreground">costó <MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                             {lote.fecha_vencimiento && (
                                               <span className="text-xs text-warning-text">
-                                                Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}
+                                                Vence: {fechaVence(lote.fecha_vencimiento)}
                                               </span>
                                             )}
                                             {prod.activo !== false && (
-                                              <Button variant="outline" size="sm"
-                                                className="h-11 md:h-7 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
+                                              <Button variant="ghost" size="icon-sm"
+                                                aria-label={`${TERMINOS.mercaderiaPerdida}: ${TERMINOS.tanda.toLowerCase()} #${lote.id}`}
+                                                title={TERMINOS.mercaderiaPerdida}
                                                 onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                               >
-                                                <AlertTriangle className="h-3.5 w-3.5" /> Merma
+                                                <PackageMinus className="h-4 w-4" />
                                               </Button>
                                             )}
                                           </div>
@@ -700,28 +714,30 @@ export default function InventarioPage() {
                 <div className="flex max-w-2xl flex-col gap-6">
                   {/* Crear categoría */}
                   <div className="flex flex-col gap-4 rounded-sm border border-border bg-card p-5">
-                    <h3 className="text-sm font-semibold">Crear nueva categoría</h3>
+                    <SeccionTitulo>Crear nueva categoría</SeccionTitulo>
 
-                    {catError && (
-                      <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{catError}</div>
-                    )}
-
-                    <form onSubmit={handleCreateCategory} className="flex items-end gap-3">
-                      <div className="flex flex-1 flex-col gap-2">
-                        <Label htmlFor="inventario-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
-                        <Input id="inventario-nombre" value={newCatName} onChange={(e) => setNewCatName(e.target.value)}
-                          placeholder="Ej: Lácteos, Limpieza, Bebidas…" required className="h-11 md:h-11" />
+                    <form onSubmit={handleCreateCategory} noValidate className="flex flex-col gap-2">
+                      <div className="flex items-end gap-3">
+                        <div className="flex flex-1 flex-col gap-2">
+                          <Label htmlFor="inventario-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
+                          <Input id="inventario-nombre" value={newCatName}
+                            onChange={(e) => { setNewCatName(e.target.value); setCatError("") }}
+                            placeholder="Ej: Lácteos, Limpieza, Bebidas…"
+                            aria-invalid={!!catError}
+                            aria-describedby={catError ? "inventario-nombre-error" : undefined} />
+                        </div>
+                        <Button type="submit" disabled={catLoading} className="gap-2">
+                          {catLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                          Crear
+                        </Button>
                       </div>
-                      <Button type="submit" disabled={catLoading} className="h-11 md:h-11 gap-2">
-                        {catLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                        Crear
-                      </Button>
+                      {catError && <CampoError id="inventario-nombre-error">{catError}</CampoError>}
                     </form>
                   </div>
 
                   {/* Lista de categorías */}
                   <div className="flex flex-col gap-2">
-                    <h3 className="px-1 text-sm font-semibold">Categorías existentes ({categorias.length})</h3>
+                    <SeccionTitulo className="px-1">Categorías existentes ({categorias.length})</SeccionTitulo>
                     {categorias.length === 0 ? (
                       <div className="rounded-sm border border-dashed border-border p-10 text-center">
                         <p className="text-sm text-muted-foreground">No hay categorías creadas.</p>
@@ -740,8 +756,8 @@ export default function InventarioPage() {
                                 <p className="text-xs text-muted-foreground">{productCount} producto{productCount !== 1 ? 's' : ''}</p>
                               </div>
                             </div>
-                            <Button aria-label={`Borrar la categoría ${cat.nombre}`} variant="ghost" size="icon"
-                              className="size-11 md:size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            <Button aria-label={`Borrar la categoría ${cat.nombre}`} variant="ghost" size="icon-sm"
+                              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => setCatABorrar({ id: cat.id, nombre: cat.nombre, productos: productCount })}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -762,9 +778,9 @@ export default function InventarioPage() {
                   </div>
                 ) : (
                   <div className="overflow-hidden rounded-sm border border-border">
-                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+                    <div className="hidden items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-xs font-medium text-muted-foreground lg:flex">
                       <div className="w-6" />
-                      <div className="w-14 font-mono">ID</div>
+                      <div className="w-14 font-mono">N.º</div>
                       <div className="flex-1">Proveedor</div>
                       <div className="w-28 text-right">Monto</div>
                       <div className="w-24 text-right">Estado</div>
@@ -786,33 +802,36 @@ export default function InventarioPage() {
                                 ? <ChevronDown className="h-4 w-4 text-primary" />
                                 : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </div>
-                            <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground sm:block">#{compra.id}</div>
+                            <div className="hidden w-14 shrink-0 font-mono text-xs text-muted-foreground lg:block">#{compra.id}</div>
                             <div className="min-w-0 flex-1">
                               <p className={cn("truncate text-sm font-medium", compra.anulado && "text-muted-foreground line-through")}>{compra.proveedor}</p>
                               {compra.anulado && <AnuladoNota motivo={compra.motivo_anulacion} quien={compra.anulado_por?.nombre} />}
-                              <p className="text-xs text-muted-foreground sm:hidden">{new Date(compra.fecha).toLocaleDateString('es-SV')}</p>
+                              <p className="text-xs text-muted-foreground lg:hidden">
+                                {formatFecha(compra.fecha)}
+                                {!compra.anulado && compra.estado_pago !== "PAGADO" ? " · Al crédito" : ""}
+                              </p>
                             </div>
-                            <div className="w-auto text-right sm:w-28">
+                            <div className="w-auto text-right lg:w-28">
                               <MoneyValue value={compra.monto_total} className="text-sm font-semibold" />
                             </div>
-                            <div className="hidden w-24 text-right sm:block">
+                            <div className="hidden w-24 text-right lg:block">
                               {compra.anulado ? (
                                 <StatePill tone="muted">Anulada</StatePill>
                               ) : (
                                 <StatePill tone={compra.estado_pago === 'PAGADO' ? "success" : "warning"}>
-                                  {compra.estado_pago === 'PAGADO' ? 'Pagado' : 'Crédito'}
+                                  {compra.estado_pago === 'PAGADO' ? 'Pagado' : 'Al crédito'}
                                 </StatePill>
                               )}
                             </div>
-                            <div className="hidden w-28 text-right text-xs text-muted-foreground sm:block">
-                              {new Date(compra.fecha).toLocaleDateString('es-SV')}
+                            <div className="hidden w-28 text-right text-xs text-muted-foreground lg:block">
+                              {formatFecha(compra.fecha)}
                             </div>
                           </button>
 
                           {isOpen && compra.lotes_inventario.length > 0 && (
-                            <div className="border-t border-border bg-muted/20 px-4 py-4 sm:pl-13">
+                            <div className="border-t border-border bg-muted/20 px-4 py-4 lg:pl-13">
                               <div className="mb-2 flex items-center justify-between gap-2">
-                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lotes generados</p>
+                                <SeccionTitulo>Productos de la compra</SeccionTitulo>
                                 {!esCajero && !compra.anulado && (
                                   <Button variant="outline" size="sm" className="gap-1"
                                     onClick={() => pedirAnularCompra(compra)}>
@@ -827,16 +846,17 @@ export default function InventarioPage() {
                                     <div key={`compra-lote-${lote.id}-${idx}`} className="flex flex-wrap items-center gap-3 rounded-sm border border-border bg-card px-3 py-2 text-sm">
                                       <span className="flex-1 truncate font-medium">{prod?.nombre || `Producto #${lote.producto_id}`}</span>
                                       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatStock(lote.cantidad_disponible, prod?.presentaciones)} de {formatStock(lote.cantidad_inicial, prod?.presentaciones)}</span>
-                                      <span className="font-mono text-xs text-muted-foreground">@<MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
+                                      <span className="font-mono text-xs text-muted-foreground">costó <MoneyValue value={lote.costo_unitario_adquisicion} tone="muted" className="text-xs" /></span>
                                       {lote.fecha_vencimiento && (
-                                        <span className="text-xs text-warning-text">Vence: {new Date(lote.fecha_vencimiento).toLocaleDateString('es-SV')}</span>
+                                        <span className="text-xs text-warning-text">Vence: {fechaVence(lote.fecha_vencimiento)}</span>
                                       )}
                                       {aNumero(lote.cantidad_disponible) > 0 && prod && (
-                                        <Button variant="outline" size="sm"
-                                          className="ml-auto h-11 md:h-7 gap-1 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
+                                        <Button variant="ghost" size="icon-sm" className="ml-auto"
+                                          aria-label={`${TERMINOS.mercaderiaPerdida}: ${prod.nombre}`}
+                                          title={TERMINOS.mercaderiaPerdida}
                                           onClick={(e) => { e.stopPropagation(); abrirAjuste(prod, "quitar", lote.id) }}
                                         >
-                                          <AlertTriangle className="h-3.5 w-3.5" /> Merma
+                                          <PackageMinus className="h-4 w-4" />
                                         </Button>
                                       )}
                                     </div>
@@ -853,16 +873,16 @@ export default function InventarioPage() {
 
                 {!esCajero && mermas.length > 0 && (
                   <div className="mt-8">
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Mermas y conteos recientes</p>
+                    <SeccionTitulo className="mb-2">Mercadería perdida y conteos recientes</SeccionTitulo>
                     <div className="overflow-hidden rounded-sm border border-border">
                       {mermas.map(m => (
                         <div key={m.id} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
                           <div className="min-w-0 flex-1">
                             <p className={cn("truncate text-sm font-medium", m.anulado && "text-muted-foreground line-through")}>
-                              {m.lotes_inventario?.productos?.nombre ?? "Producto"} · {ETIQUETA_MERMA[m.tipo_ajuste] ?? m.tipo_ajuste} · {formatCantidad(m.cantidad_ajustada)} uds
+                              {m.lotes_inventario?.productos?.nombre ?? "Producto"} · {ETIQUETA_MERMA[m.tipo_ajuste] ?? m.tipo_ajuste} · {formatCantidad(m.cantidad_ajustada)} {TERMINOS.unidades}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {m.fecha ? new Date(m.fecha).toLocaleDateString('es-SV') : ""}{m.justificacion ? ` · ${m.justificacion}` : ""}
+                              {formatFecha(m.fecha)}{m.justificacion ? ` · ${m.justificacion}` : ""}
                             </p>
                             {m.anulado && <AnuladoNota motivo={m.motivo_anulacion} quien={m.anulado_por?.nombre} />}
                           </div>
@@ -897,7 +917,7 @@ export default function InventarioPage() {
               {compraInicial ? (
                 <><PackagePlus className="h-5 w-5 text-primary" /> Cargar inventario inicial</>
               ) : (
-                <><Truck className="h-5 w-5 text-primary" /> Registro de compra</>
+                <><Truck className="h-5 w-5 text-primary" /> Nueva compra</>
               )}
             </DialogTitle>
           </DialogHeader>
@@ -976,10 +996,10 @@ export default function InventarioPage() {
             reactivar en «Ver desactivados»). Si nunca se usó, se elimina del catálogo.
           </p>
           <DialogFooter>
-            <Button type="button" variant="secondary" disabled={quitando} onClick={() => setProductoAQuitar(null)}>
+            <Button type="button" variant="outline" disabled={quitando} onClick={() => setProductoAQuitar(null)}>
               Cancelar
             </Button>
-            <Button type="button" disabled={quitando} onClick={confirmarQuitar} className="gap-2">
+            <Button type="button" variant="destructive-solid" disabled={quitando} onClick={confirmarQuitar} className="gap-2">
               {quitando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
               Desactivar
             </Button>

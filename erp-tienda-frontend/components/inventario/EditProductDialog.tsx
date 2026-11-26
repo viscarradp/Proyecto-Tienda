@@ -2,9 +2,9 @@ import * as React from "react"
 import { Loader2, History, ArrowRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { formatMoney, aNumero, montoACentavos } from "@/lib/format"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
+import { formatMoney, formatFecha, aNumero, montoACentavos } from "@/lib/format"
+import { CampoError } from "@/components/campo-error"
+import { TERMINOS } from "@/lib/glosario"
 
 import {
   Dialog,
@@ -116,7 +116,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
     e.preventDefault()
     setIntentado(true)
     if (!nombre.trim() || !categoriaId) {
-      setError("El nombre y la categoría son obligatorios")
+      setError("Revisa los campos marcados en rojo")
       return
     }
     // Nada se corrige en silencio: solo se valida lo que se cambió.
@@ -129,7 +129,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
     setLoading(true)
     setError("")
 
-    // Aviso de múltiplo con ventas (no bloquea: puede ser una corrección legítima).
+    // Aviso de «Unidades que trae» con ventas (no bloquea: puede ser una corrección legítima).
     const factorCambiado = cambiadas.filter(
       (p) => aNumero(base.pres.find((b) => b.id === p.id)?.factor_conversion) !== aNumero(p.factor_conversion),
     )
@@ -144,7 +144,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
         if (usos.some((u) => u.ventas > 0)) {
           setFactorAvisado(firma)
           setAvisoFactor(
-            "Esta presentación ya tiene ventas: cambiar el múltiplo cambia cómo se cuentan las unidades vendidas antes. " +
+            "Esta presentación ya tiene ventas: cambiar las unidades que trae cambia cómo se cuentan las unidades vendidas antes. " +
               "Si es una corrección, toca «Guardar de todos modos».",
           )
           setLoading(false)
@@ -233,16 +233,13 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="text-lg font-semibold">Edición de producto</DialogTitle>
           <DialogDescription>
-            Modifica nombres, categorías, códigos de barras y precios de venta. El stock sigue bloqueado por seguridad.
+            Cambia nombres, categorías, códigos de barras y precios de venta. Las existencias no se cambian aquí: se
+            cargan con una compra o se corrigen con un conteo.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
-          {error && (
-            <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
+          {error && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
           {avisoFactor && (
             <div className="rounded-sm border border-warning/30 bg-warning/10 p-3 text-sm font-medium text-warning-text">
@@ -258,14 +255,20 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                 <Input id="editproductdialog-nombre-del-producto"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="h-11 md:h-11"
-                  required
+                  aria-invalid={intentado && !nombre.trim()}
+                  aria-describedby={intentado && !nombre.trim() ? "edit-nombre-error" : undefined}
                 />
+                {intentado && !nombre.trim() && <CampoError id="edit-nombre-error">Escribe el nombre del producto</CampoError>}
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="editproductdialog-categoria" className="text-xs font-medium text-muted-foreground">Categoría</Label>
                 <Select value={categoriaId} onValueChange={setCategoriaId}>
-                  <SelectTrigger id="editproductdialog-categoria" className="h-11 md:h-11 w-full">
+                  <SelectTrigger
+                    id="editproductdialog-categoria"
+                    className="w-full"
+                    aria-invalid={intentado && !categoriaId}
+                    aria-describedby={intentado && !categoriaId ? "edit-categoria-error" : undefined}
+                  >
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,6 +277,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                     ))}
                   </SelectContent>
                 </Select>
+                {intentado && !categoriaId && <CampoError id="edit-categoria-error">Elige una categoría</CampoError>}
               </div>
             </div>
           </div>
@@ -292,8 +296,13 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                       <Input id={`ep-desc-${pres.id}`}
                         value={pres.descripcion}
                         onChange={(e) => handleUpdatePresentacion(idx, "descripcion", e.target.value)}
-                        className="h-11 md:h-8 text-xs"
+                        className="text-xs"
+                        aria-invalid={intentado && cambioPresentacion(pres) && !pres.descripcion.trim()}
+                        aria-describedby={intentado && cambioPresentacion(pres) && !pres.descripcion.trim() ? `ep-desc-${pres.id}-error` : undefined}
                       />
+                      {intentado && cambioPresentacion(pres) && !pres.descripcion.trim() && (
+                        <MensajeCampo id={`ep-desc-${pres.id}-error`} error="Falta la descripción" />
+                      )}
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor={`ep-cod-${pres.id}`} className="text-xs font-medium text-muted-foreground">Cód. barras</Label>
@@ -301,11 +310,11 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                         value={pres.codigo_barras || ""}
                         onChange={(e) => handleUpdatePresentacion(idx, "codigo_barras", e.target.value)}
                         placeholder="Sin código"
-                        className="h-11 md:h-8 font-mono text-xs"
+                        className="font-mono text-xs placeholder:font-sans"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label htmlFor={`ep-mult-${pres.id}`} className="text-xs font-medium text-muted-foreground">Múltiplo</Label>
+                      <Label htmlFor={`ep-mult-${pres.id}`} className="text-xs font-medium text-muted-foreground">{TERMINOS.unidadesQueTrae}</Label>
                       <Input
                         id={`ep-mult-${pres.id}`}
                         type="number"
@@ -313,9 +322,11 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                         step="any"
                         value={pres.factor_conversion}
                         onChange={(e) => handleUpdatePresentacion(idx, "factor_conversion", e.target.value)}
-                        className="h-11 md:h-8 font-mono text-xs"
+                        className="font-mono text-xs"
+                        aria-invalid={intentado && cambioPresentacion(pres) && !!errorFactor(String(pres.factor_conversion))}
+                        aria-describedby={`ep-mult-${pres.id}-error`}
                       />
-                      {intentado && cambioPresentacion(pres) && <MensajeCampo error={errorFactor(String(pres.factor_conversion))} />}
+                      {intentado && cambioPresentacion(pres) && <MensajeCampo id={`ep-mult-${pres.id}-error`} error={errorFactor(String(pres.factor_conversion))} />}
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
@@ -341,9 +352,12 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                         min="0"
                         value={pres.precio_venta}
                         onChange={(e) => handleUpdatePresentacion(idx, "precio_venta", e.target.value)}
-                        className="h-11 md:h-8 font-mono text-xs font-semibold text-success"
+                        className="font-mono text-xs font-semibold"
+                        aria-invalid={intentado && cambioPresentacion(pres) && !!errorPrecio(pres.precio_venta)}
+                        aria-describedby={`ep-precio-${pres.id}-error`}
                       />
                       <MensajeCampo
+                        id={`ep-precio-${pres.id}-error`}
                         error={intentado && cambioPresentacion(pres) ? errorPrecio(pres.precio_venta) : null}
                         aviso={avisoPrecio(pres.precio_venta)}
                       />
@@ -358,13 +372,13 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
                         <p className="text-xs text-muted-foreground">Sin cambios de precio registrados.</p>
                       ) : (
                         <div className="flex flex-col gap-1.5">
-                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          <p className="text-xs font-medium text-muted-foreground">
                             Historial de precios
                           </p>
                           {histData[pres.id].map((h) => (
                             <div key={h.id} className="flex flex-wrap items-center gap-2 text-xs">
                               <span className="text-muted-foreground">
-                                {format(new Date(h.fecha), "dd MMM yyyy HH:mm", { locale: es })}
+                                {formatFecha(h.fecha, "con hora")}
                               </span>
                               <span className="font-mono text-muted-foreground">{formatMoney(h.precio_anterior)}</span>
                               <ArrowRight className="h-3 w-3 text-muted-foreground" />
@@ -381,7 +395,7 @@ export function EditProductDialog({ open, onClose, onSuccess, producto }: EditPr
           </div>
 
           <DialogFooter className="-mx-6 -mb-6 px-6 py-4">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">

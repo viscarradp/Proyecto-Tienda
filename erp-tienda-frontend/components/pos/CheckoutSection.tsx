@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { MoneyValue } from "@/components/money-value"
 import { centavosAMonto, formatMoney, montoACentavos } from "@/lib/format"
+import { TERMINOS } from "@/lib/glosario"
 
 const BILLETES = [1, 5, 10, 20]
 
@@ -73,9 +74,9 @@ export function CheckoutSection({
           <MoneyValue value={total} className="text-3xl font-bold leading-none tracking-tight" />
         </div>
         {falta !== null ? (
-          <div className="flex items-baseline gap-2 text-destructive">
+          <div className="flex items-baseline gap-2 text-warning-text">
             <span className="text-sm font-semibold">Falta</span>
-            <MoneyValue value={falta} className="text-2xl font-bold leading-none" />
+            <MoneyValue value={falta} tone="warning" className="text-2xl font-bold leading-none" />
           </div>
         ) : cambio !== null ? (
           <div className="flex items-baseline gap-2 text-success">
@@ -106,7 +107,8 @@ export function CheckoutSection({
               setPagoCliente(v)
             }}
             placeholder="0.00"
-            className="h-11 md:h-11 min-w-0 flex-1 text-right font-mono tabular-nums"
+            size="lg"
+            className="flex-1 text-right font-mono tabular-nums"
           />
         </div>
         <div className="grid grid-cols-5 gap-1.5">
@@ -115,7 +117,7 @@ export function CheckoutSection({
             variant="outline"
             disabled={total <= 0}
             onClick={() => setPagoCliente(total.toFixed(2))}
-            className="h-10 md:h-10 px-1 text-xs font-semibold"
+            className="px-1 text-xs font-semibold"
           >
             Exacto
           </Button>
@@ -125,7 +127,7 @@ export function CheckoutSection({
               type="button"
               variant="outline"
               onClick={() => setPagoCliente(String(b))}
-              className="h-10 md:h-10 px-1 font-mono text-sm font-semibold"
+              className="px-1 font-mono text-sm font-semibold"
             >
               ${b}
             </Button>
@@ -134,7 +136,8 @@ export function CheckoutSection({
       </div>
 
       <Button
-        className="h-14 md:h-14 w-full justify-center gap-2 text-base font-semibold"
+        size="lg"
+        className="w-full justify-center gap-2 font-semibold"
         disabled={disabled}
         onClick={onCheckout}
       >
@@ -147,7 +150,9 @@ export function CheckoutSection({
             <DoorOpen className="h-5 w-5" /> Abre la caja primero
           </>
         ) : faltaFecha ? (
-          "Pon la fecha de la venta del cuaderno"
+          `Pon la fecha de la ${TERMINOS.ventaCuaderno.toLowerCase()}`
+        ) : itemCount === 0 ? (
+          "Agrega un producto para cobrar"
         ) : (
           <>Cobrar {formatMoney(total)}</>
         )}
@@ -194,7 +199,7 @@ export function ModoApagon({
         onClick={() => setAbierto(true)}
         className="mt-2 flex h-11 items-center gap-1.5 self-start rounded-sm px-1 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline md:h-9"
       >
-        <Clock className="h-3.5 w-3.5" /> ¿Venta del cuaderno?
+        <Clock className="h-3.5 w-3.5" /> ¿{TERMINOS.ventaCuaderno}?
       </button>
     )
   }
@@ -217,7 +222,7 @@ export function ModoApagon({
         aria-checked={contingencia}
       >
         <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Clock className="h-4 w-4" /> Modo apagón (ventas del cuaderno)
+          <Clock className="h-4 w-4" /> {TERMINOS.ventaCuaderno}
         </span>
         <span
           className={cn(
@@ -244,15 +249,15 @@ export function ModoApagon({
             max={ahoraLocal}
             value={fechaContingencia}
             onChange={(e) => { setFechaContingencia(e.target.value); setFechaPorAjustar(false) }}
-            className={cn("h-11 md:h-11", fechaPorAjustar && "border-warning ring-2 ring-warning/50")}
+            className={cn(fechaPorAjustar && "border-warning ring-2 ring-warning/50")}
           />
           {fechaPorAjustar && (
             <p className="text-xs font-semibold text-warning-text">
               Ajusta la fecha y hora para la siguiente venta del cuaderno.
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground">
-            El modo apagón sigue encendido hasta que lo apagues. Cada venta se guarda con esta hora; el efectivo entra a la gaveta actual.
+          <p className="text-xs text-muted-foreground">
+            La venta del cuaderno sigue encendida hasta que la apagues. Cada venta se guarda con esta hora; el efectivo entra a la gaveta actual.
           </p>
         </div>
       )}

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Loader2, AlertTriangle, AlertCircle, Minus, Plus } from "lucide-react"
+import { Loader2, AlertTriangle, Minus, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
 import { aNumero, formatCantidad } from "@/lib/format"
+import { CampoError } from "@/components/campo-error"
+import { TERMINOS, mensajeError } from "@/lib/glosario"
 import { LoteStock } from "@/src/store/inventoryStore"
 
 interface AjusteInventarioDialogProps {
@@ -62,9 +64,12 @@ export function AjusteInventarioDialog({
 
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  // Errores de campo: salen junto al campo, no como aviso aparte.
+  const [errores, setErrores] = React.useState<{ cantidad?: string; lote?: string; motivo?: string }>({})
 
   React.useEffect(() => {
     if (open) {
+      setErrores({})
       setDireccion(esCajero ? "quitar" : inicio)
       setLoteId(String(loteInicialId ?? lotes[0]?.id ?? ""))
       setCantidad("1")
@@ -85,22 +90,20 @@ export function AjusteInventarioDialog({
     e.preventDefault()
     const cantNum = parseFloat(cantidad)
 
+    const nuevos: typeof errores = {}
     if (isNaN(cantNum) || cantNum <= 0) {
-      setError("Ingresa una cantidad mayor a 0.")
-      return
+      nuevos.cantidad = "Escribe una cantidad mayor a 0."
+    } else if (!esAgregar && cantNum > disponible) {
+      nuevos.cantidad = `Solo quedan ${formatCantidad(disponible)} en esa ${TERMINOS.tanda.toLowerCase()}.`
     }
     if (!esAgregar && !lote) {
-      setError("Elige el lote del que se quita.")
-      return
-    }
-    if (!esAgregar && cantNum > disponible) {
-      setError(`Solo quedan ${formatCantidad(disponible)} en ese lote.`)
-      return
+      nuevos.lote = `Elige la ${TERMINOS.tanda.toLowerCase()} de la que se quita.`
     }
     if (esCajero && !justificacion.trim()) {
-      setError("Escribe qué pasó con el producto (el motivo).")
-      return
+      nuevos.motivo = "Escribe qué pasó con el producto (el motivo)."
     }
+    setErrores(nuevos)
+    if (Object.keys(nuevos).length > 0) return
 
     setLoading(true)
     setError("")
@@ -120,12 +123,12 @@ export function AjusteInventarioDialog({
       toast.success(
         esAgregar
           ? `Se sumaron ${formatCantidad(cantNum)} a «${productoNombre}»`
-          : `Merma de ${formatCantidad(cantNum)} registrada en «${productoNombre}»`,
+          : `Mercadería perdida: ${formatCantidad(cantNum)} registradas en «${productoNombre}»`,
       )
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al registrar el ajuste")
+      setError(mensajeError("registrar el ajuste", err))
     } finally {
       setLoading(false)
     }
@@ -137,22 +140,17 @@ export function AjusteInventarioDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-warning-text" />
-            {esCajero ? "Registrar merma" : esAgregar ? "Encontré producto" : "Ajuste de inventario"}
+            {esCajero ? "Registrar mercadería perdida" : esAgregar ? "Encontré producto" : "Ajuste de inventario"}
           </DialogTitle>
           <DialogDescription>
             {esAgregar
-              ? "Suma unidades que están en el estante pero el sistema no tiene. Se agregan al lote más reciente del producto."
+              ? "Suma unidades que están en el estante pero el sistema no tiene. Se agregan a la compra más reciente del producto."
               : "Descuenta unidades que se perdieron, quebraron o vencieron. Queda anotado quién lo registró."}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6 pt-2">
-          {error && (
-            <div className="flex items-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <p className="font-medium">{error}</p>
-            </div>
-          )}
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6 pt-2">
+          {error && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
           {/* Dirección del ajuste (solo la dueña: los conteos son suyos) */}
           {!esCajero && (
@@ -160,7 +158,7 @@ export function AjusteInventarioDialog({
               <button type="button" onClick={() => setDireccion("quitar")} aria-pressed={!esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
                   !esAgregar ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-foreground")}>
-                <Minus className="h-4 w-4" /> Quitar (merma)
+                <Minus className="h-4 w-4" /> Quitar (se perdió)
               </button>
               <button type="button" onClick={() => setDireccion("agregar")} aria-pressed={esAgregar}
                 className={cn("flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
@@ -183,24 +181,30 @@ export function AjusteInventarioDialog({
             <>
               {!esAgregar && lotes.length > 1 && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="text-xs font-medium text-muted-foreground">¿De qué lote? (el más viejo sale primero)</Label>
+                  <Label htmlFor="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="text-xs font-medium text-muted-foreground">¿De qué tanda? (la más vieja sale primero)</Label>
                   <Select value={loteId} onValueChange={setLoteId}>
-                    <SelectTrigger id="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal" className="h-12 md:h-12 w-full">
+                    <SelectTrigger
+                      id="ajusteinventariodialog-de-que-lote-el-mas-viejo-sal"
+                      className="w-full"
+                      aria-invalid={!!errores.lote}
+                      aria-describedby={errores.lote ? "ajuste-lote-error" : undefined}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {lotes.map((l) => (
                         <SelectItem key={l.id} value={String(l.id)}>
-                          Lote #{l.id} · quedan {formatCantidad(l.cantidad_disponible)}
+                          Tanda #{l.id} · quedan {formatCantidad(l.cantidad_disponible)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {errores.lote && <CampoError id="ajuste-lote-error">{errores.lote}</CampoError>}
                 </div>
               )}
               {!esAgregar && lotes.length === 1 && (
                 <p className="font-mono text-xs text-muted-foreground">
-                  Quedan {formatCantidad(disponible)} uds en el lote #{lote?.id}
+                  Quedan {formatCantidad(disponible)} unidades en la tanda #{lote?.id}
                 </p>
               )}
 
@@ -218,15 +222,18 @@ export function AjusteInventarioDialog({
                     inputMode="decimal"
                     value={cantidad}
                     onChange={(e) => setCantidad(e.target.value)}
-                    required
-                    className="h-12 md:h-12 font-mono text-lg"
+                    size="lg"
+                    className="font-mono text-lg"
+                    aria-invalid={!!errores.cantidad}
+                    aria-describedby={errores.cantidad ? "ajuste-cantidad-error" : undefined}
                   />
+                  {errores.cantidad && <CampoError id="ajuste-cantidad-error">{errores.cantidad}</CampoError>}
                 </div>
                 {!esAgregar && (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="ajusteinventariodialog-que-paso" className="text-xs font-medium text-muted-foreground">¿Qué pasó?</Label>
                     <Select value={tipoAjuste} onValueChange={setTipoAjuste}>
-                      <SelectTrigger id="ajusteinventariodialog-que-paso" className="h-12 md:h-12 w-full">
+                      <SelectTrigger id="ajusteinventariodialog-que-paso" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -248,23 +255,26 @@ export function AjusteInventarioDialog({
                   id="ajuste-motivo"
                   value={justificacion}
                   onChange={(e) => setJustificacion(e.target.value)}
-                  required={esCajero}
                   placeholder={esAgregar ? "Ej: Estaba en la bodega" : "Ej: Se cayó de la estantería…"}
-                  className="h-12 md:h-12"
+                  aria-invalid={!!errores.motivo}
+                  aria-describedby={errores.motivo ? "ajuste-motivo-error" : undefined}
                 />
+                {errores.motivo && <CampoError id="ajuste-motivo-error">{errores.motivo}</CampoError>}
               </div>
             </>
           )}
 
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || sinExistencias}
-              className={cn("gap-2", esAgregar
-                ? "bg-success text-success-foreground hover:bg-success/90"
-                : "bg-warning text-warning-foreground hover:bg-warning/90")}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : esAgregar ? "Sumar al inventario" : "Registrar merma"}
+              variant={esAgregar ? "success" : "warning"} className="gap-2">
+              {loading
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : sinExistencias
+                  ? "No hay existencias que quitar"
+                  : esAgregar ? "Sumar al inventario" : "Registrar pérdida"}
             </Button>
           </DialogFooter>
         </form>
