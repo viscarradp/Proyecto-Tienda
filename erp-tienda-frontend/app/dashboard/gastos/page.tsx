@@ -28,11 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { MoneyValue } from "@/components/money-value"
 import { StatCard } from "@/components/stat-card"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 import { apiFetch } from "@/lib/api"
+import { formatFecha, formatMoney } from "@/lib/format"
 import { DeudasProveedores } from "@/components/gastos/DeudasProveedores"
-import { GAVETA, BOVEDA } from "@/lib/glosario"
+import { GAVETA, BOVEDA, mensajeError } from "@/lib/glosario"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
@@ -86,12 +88,15 @@ export default function GastosPage() {
   const [origenFondos, setOrigenFondos] = React.useState("CAJA_POS")
   const [submitLoading, setSubmitLoading] = React.useState(false)
   const [aAnular, setAAnular] = React.useState<AnularObjetivo | null>(null)
+  // Errores de campo del gasto: salen junto al campo (VIS-24).
+  const [errores, setErrores] = React.useState<{ monto?: string; descripcion?: string; origen?: string }>({})
 
   // New Category Modal State
   const [showNewCatDialog, setShowNewCatDialog] = React.useState(false)
   const [newCatNombre, setNewCatNombre] = React.useState("")
-  const [newCatTipo, setNewCatTipo] = React.useState("VARIABLE")
+  // El tipo (fijo/variable) no lo usa ningún reporte: se guarda siempre como variable (DUE-20).
   const [newCatLoading, setNewCatLoading] = React.useState(false)
+  const [newCatError, setNewCatError] = React.useState("")
 
   const loadData = React.useCallback(async () => {
     setLoading(true)
@@ -127,15 +132,14 @@ export default function GastosPage() {
     setError("")
 
     const montoParsed = parseFloat(monto)
-    if (isNaN(montoParsed) || montoParsed <= 0) {
-      setError("El monto debe ser mayor a 0.")
-      return
-    }
-
+    const nuevos: typeof errores = {}
+    if (isNaN(montoParsed) || montoParsed <= 0) nuevos.monto = "Escribe un monto mayor a 0."
+    if (!descripcion.trim()) nuevos.descripcion = "Escribe en qué se gastó."
     if (origenFondos === "CAJA_POS" && !cajaActiva) {
-      setError(`No hay un turno abierto: abre la caja en Vender, o paga el gasto desde la ${BOVEDA.toLowerCase()}.`)
-      return
+      nuevos.origen = `No hay caja abierta: ábrela en Vender, o paga el gasto desde la ${BOVEDA.toLowerCase()}.`
     }
+    setErrores(nuevos)
+    if (Object.keys(nuevos).length > 0) return
 
     // Sin validar fondos aquí: si el sistema cree que no alcanza, el gasto se
     // registra igual y el backend devuelve un aviso (registrar y avisar).
@@ -157,7 +161,7 @@ export default function GastosPage() {
         })
       })
 
-      toast.success(`Gasto registrado: ${montoParsed.toLocaleString("en-US", { style: "currency", currency: "USD" })}`)
+      toast.success(`Gasto registrado: ${formatMoney(montoParsed)}`)
       for (const aviso of resp.avisos ?? []) {
         toast.warning(aviso, { duration: 12000 })
       }
@@ -168,7 +172,7 @@ export default function GastosPage() {
       loadData()
 
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al registrar el gasto")
+      setError(mensajeError("registrar el gasto", err))
     } finally {
       setSubmitLoading(false)
     }
@@ -176,16 +180,19 @@ export default function GastosPage() {
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newCatNombre.trim() || !newCatTipo) return
+    if (!newCatNombre.trim()) {
+      setNewCatError("Escribe el nombre de la categoría.")
+      return
+    }
 
     setNewCatLoading(true)
-    setError("")
+    setNewCatError("")
     try {
       await apiFetch("/categorias-gastos", {
         method: "POST",
         body: JSON.stringify({
           nombre: newCatNombre.trim(),
-          tipo: newCatTipo
+          tipo: "VARIABLE"
         })
       })
 
@@ -197,14 +204,15 @@ export default function GastosPage() {
       setShowNewCatDialog(false)
       toast.success("Categoría creada")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al crear la categoría")
+      // Dentro del diálogo: el error de la página queda tapado por el diálogo (DUE-20).
+      setNewCatError(mensajeError("crear la categoría", err))
     } finally {
       setNewCatLoading(false)
     }
   }
 
   const pedirAnular = (g: MovimientoFinanciero) => {
-    const monto = parseFloat(g.monto).toLocaleString("en-US", { style: "currency", currency: "USD" })
+    const monto = formatMoney(g.monto)
     const lugar = g.cuenta_origen === "BOVEDA" ? `la ${BOVEDA.toLowerCase()}` : `la ${GAVETA.toLowerCase()}`
     setAAnular({
       endpoint: `/movimientos-financieros/${g.id}/anular`,
@@ -217,7 +225,7 @@ export default function GastosPage() {
   const sePuedeAnular = (g: MovimientoFinanciero) =>
     !g.anulado && (g.cuenta_origen === "BOVEDA" || (g.caja_turno_id !== null && g.caja_turno_id === cajaActiva?.id))
   // Si no se puede, se muestra el botón apagado con el motivo (en vez de esconderlo).
-  const MOTIVO_TURNO_CERRADO = "Ese turno ya cerró: el dinero ya se contó al cerrar."
+  const MOTIVO_TURNO_CERRADO = "Esa caja ya se cerró: el dinero ya se contó al cerrar."
 
   if (!mounted) return <EsqueletoPagina />
 
@@ -226,10 +234,10 @@ export default function GastosPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:px-8 lg:py-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Control de gastos</h1>
+            <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Gastos</h1>
             <p className="text-xs text-muted-foreground">Lo que pagas para que el negocio funcione</p>
           </div>
-          <Button aria-label="Actualizar gastos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="size-11 md:size-11 shrink-0">
+          <Button aria-label="Actualizar gastos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="shrink-0">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
         </div>
@@ -240,68 +248,91 @@ export default function GastosPage() {
 
           {/* Tarjetas de saldo */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <StatCard label={GAVETA} icon={Store}>
-              {cajaActiva ? (
-                <>
-                  <MoneyValue value={cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial} className="text-3xl font-bold tracking-tight" />
-                  <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Turno #{cajaActiva.id} abierto
-                  </p>
-                </>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 text-warning-text" /> No hay turno abierto
-                </div>
-              )}
-            </StatCard>
+            {cajaActiva ? (
+              <StatCard
+                label={GAVETA}
+                icon={Store}
+                size="lg"
+                value={formatMoney(cajaActiva.efectivo_esperado || cajaActiva.fondo_inicial)}
+                hint={
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Caja abierta
+                  </span>
+                }
+              />
+            ) : (
+              <StatCard
+                label={GAVETA}
+                icon={Store}
+                size="lg"
+                hint={
+                  <span className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-warning-text" /> No hay caja abierta
+                  </span>
+                }
+              />
+            )}
 
-            <StatCard label={BOVEDA} icon={Wallet}>
-              {cajaGeneral ? (
-                <>
-                  <MoneyValue value={cajaGeneral.saldo_actual} className="text-3xl font-bold tracking-tight" />
-                  {parseFloat(cajaGeneral.saldo_actual) < 0 ? (
-                    <p className="mt-1 text-xs font-medium text-warning-text">
+            {cajaGeneral ? (
+              <StatCard
+                label={BOVEDA}
+                icon={Wallet}
+                size="lg"
+                value={formatMoney(cajaGeneral.saldo_actual)}
+                tone={parseFloat(cajaGeneral.saldo_actual) < 0 ? "warning" : "default"}
+                hint={
+                  parseFloat(cajaGeneral.saldo_actual) < 0 ? (
+                    <span className="font-medium text-warning-text">
                       Negativo según el sistema: falta registrar efectivo. Cuenta la bóveda o pon dinero en Estadísticas.
-                    </p>
+                    </span>
                   ) : (
-                    <p className="mt-1 text-xs font-medium text-success">Dinero disponible</p>
-                  )}
-                </>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 text-warning-text" /> No disponible o vacía
-                </div>
-              )}
-            </StatCard>
+                    "Dinero disponible"
+                  )
+                }
+              />
+            ) : (
+              <StatCard
+                label={BOVEDA}
+                icon={Wallet}
+                size="lg"
+                hint={
+                  <span className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-warning-text" /> No disponible o vacía
+                  </span>
+                }
+              />
+            )}
           </div>
 
           {/* Formulario de registro */}
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">
-            <div className="mb-6 flex items-center gap-2">
-              <PlusCircle className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Nuevo gasto</h2>
-            </div>
+            <SeccionTitulo icono={PlusCircle} className="mb-6">Nuevo gasto</SeccionTitulo>
 
-            {error && (
-              <div className="mb-5 flex items-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
-                <AlertTriangle className="h-5 w-5 shrink-0" /> {error}
-              </div>
-            )}
+            {error && <CampoError className="mb-5 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="gastos-monto-del-gasto" className="text-xs font-medium text-muted-foreground">Monto del gasto ($)</Label>
-                  <Input id="gastos-monto-del-gasto" type="number" min={0.01} step="0.01" required value={monto}
-                    onChange={e => setMonto(e.target.value)}
+                  <Input id="gastos-monto-del-gasto" type="number" min={0.01} step="0.01" value={monto}
+                    onChange={e => { setMonto(e.target.value); setErrores(p => ({ ...p, monto: undefined })) }}
                     placeholder="0.00"
-                    className="h-14 md:h-14 font-mono text-2xl font-bold" />
+                    size="lg"
+                    className="font-mono text-2xl font-bold"
+                    aria-invalid={!!errores.monto}
+                    aria-describedby={errores.monto ? "gastos-monto-error" : undefined} />
+                  {errores.monto && <CampoError id="gastos-monto-error">{errores.monto}</CampoError>}
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="gastos-de-donde-sale-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde sale el dinero?</Label>
-                  <Select value={origenFondos} onValueChange={setOrigenFondos}>
-                    <SelectTrigger id="gastos-de-donde-sale-el-dinero" className="h-14 md:h-14 w-full">
+                  <Select value={origenFondos} onValueChange={(v) => { setOrigenFondos(v); setErrores(p => ({ ...p, origen: undefined })) }}>
+                    <SelectTrigger
+                      id="gastos-de-donde-sale-el-dinero"
+                      className="w-full"
+                      aria-invalid={!!errores.origen}
+                      aria-describedby={errores.origen ? "gastos-origen-error" : undefined}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -309,26 +340,29 @@ export default function GastosPage() {
                       <SelectItem value="CAJA_GENERAL">{BOVEDA} (dinero guardado aparte)</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errores.origen && <CampoError id="gastos-origen-error">{errores.origen}</CampoError>}
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="gastos-descripcion" className="text-xs font-medium text-muted-foreground">Descripción</Label>
-                  <Input id="gastos-descripcion" required value={descripcion}
-                    onChange={e => setDescripcion(e.target.value)}
+                  <Input id="gastos-descripcion" value={descripcion}
+                    onChange={e => { setDescripcion(e.target.value); setErrores(p => ({ ...p, descripcion: undefined })) }}
                     placeholder="Ej. Pago de Internet mes de Marzo"
-                    className="h-12 md:h-12" />
+                    aria-invalid={!!errores.descripcion}
+                    aria-describedby={errores.descripcion ? "gastos-descripcion-error" : undefined} />
+                  {errores.descripcion && <CampoError id="gastos-descripcion-error">{errores.descripcion}</CampoError>}
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="gastos-categoria-opcional" className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
-                    <Button type="button" variant="link" onClick={() => setShowNewCatDialog(true)}
-                      className="h-auto p-0 text-xs text-primary">
+                    <Button type="button" variant="link" size="sm" onClick={() => { setNewCatError(""); setShowNewCatDialog(true) }}
+                      className="px-0 text-xs">
                       + Nueva
                     </Button>
                   </div>
                   <Select value={categoriaId} onValueChange={setCategoriaId}>
-                    <SelectTrigger id="gastos-categoria-opcional" className="h-12 md:h-12 w-full">
+                    <SelectTrigger id="gastos-categoria-opcional" className="w-full">
                       <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                     </SelectTrigger>
                     <SelectContent>
@@ -339,13 +373,13 @@ export default function GastosPage() {
                     </SelectContent>
                   </Select>
                   {origenFondos === "CAJA_GENERAL" && (
-                    <p className="pl-1 text-xs text-muted-foreground">Se paga desde la bóveda; no hace falta turno abierto</p>
+                    <p className="pl-1 text-xs text-muted-foreground">Se paga desde la bóveda; no hace falta caja abierta</p>
                   )}
                 </div>
               </div>
 
               <div className="flex justify-end border-t border-border pt-4">
-                <Button type="submit" disabled={submitLoading || loading} className="h-12 md:h-12 gap-2 px-8">
+                <Button type="submit" size="lg" disabled={submitLoading || loading} className="px-8">
                   {submitLoading ? (
                     <><Loader2 className="h-5 w-5 animate-spin" /> Registrando…</>
                   ) : (
@@ -361,29 +395,26 @@ export default function GastosPage() {
 
           {/* Historial de gastos recientes */}
           <div className="rounded-sm border border-border bg-card p-5 md:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold">Últimos gastos</h2>
-            </div>
+            <SeccionTitulo icono={Receipt} className="mb-4">Últimos gastos</SeccionTitulo>
 
             {loading && gastosRecientes.length === 0 ? (
               <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
             ) : gastosRecientes.length === 0 ? (
               <div className="rounded-sm border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                No hay gastos registrados recientemente.
+                Todavía no hay gastos. Anota el primero arriba.
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {gastosRecientes.map(gasto => (
                   <div key={gasto.id} className={cn("flex flex-col justify-between gap-3 rounded-sm border border-border px-4 py-3 md:flex-row md:items-center", gasto.anulado && "bg-muted/30")}>
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary/10 font-semibold text-primary">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted font-semibold text-muted-foreground">
                         {gasto.categorias_gastos?.nombre?.charAt(0) || '-'}
                       </div>
                       <div className="min-w-0">
                         <p className={cn("truncate font-medium", gasto.anulado && "text-muted-foreground line-through")}>{gasto.descripcion}</p>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{new Date(gasto.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>{formatFecha(gasto.fecha, "con hora")}</span>
                           <span>·</span>
                           <span>{gasto.categorias_gastos?.nombre || 'Sin categoría'}</span>
                         </div>
@@ -404,8 +435,8 @@ export default function GastosPage() {
                           <Undo2 className="h-3.5 w-3.5" /> Anular
                         </Button>
                       )}
-                      <div className={cn("font-mono text-lg font-semibold text-destructive", gasto.anulado && "text-muted-foreground line-through")}>
-                        -{parseFloat(gasto.monto).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                      <div className={cn("font-mono text-lg font-semibold text-foreground", gasto.anulado && "text-muted-foreground line-through")}>
+                        -{formatMoney(gasto.monto)}
                       </div>
                     </div>
                   </div>
@@ -426,32 +457,22 @@ export default function GastosPage() {
               <PlusCircle className="h-5 w-5 text-primary" /> Nueva categoría de gasto
             </DialogTitle>
             <DialogDescription>
-              Define el nombre y tipo de gasto para organizar tus egresos.
+              Ponle un nombre para organizar tus gastos.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateCategory} className="flex flex-col gap-4">
+          <form onSubmit={handleCreateCategory} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="gastos-nombre-de-la-categoria" className="text-xs font-medium text-muted-foreground">Nombre de la categoría</Label>
-              <Input id="gastos-nombre-de-la-categoria" required value={newCatNombre}
-                onChange={(e) => setNewCatNombre(e.target.value)}
+              <Input id="gastos-nombre-de-la-categoria" value={newCatNombre}
+                onChange={(e) => { setNewCatNombre(e.target.value); setNewCatError("") }}
                 placeholder="Ej. Suministros de Oficina"
-                className="h-12 md:h-12"
+                aria-invalid={!!newCatError}
+                aria-describedby={newCatError ? "gastos-nombre-categoria-error" : undefined}
                 autoFocus />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="gastos-tipo-de-gasto" className="text-xs font-medium text-muted-foreground">Tipo de gasto</Label>
-              <Select value={newCatTipo} onValueChange={setNewCatTipo}>
-                <SelectTrigger id="gastos-tipo-de-gasto" className="h-12 md:h-12 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="VARIABLE">Variable (Ej. Reparaciones)</SelectItem>
-                  <SelectItem value="FIJO">Fijo (Ej. Alquiler, Luz)</SelectItem>
-                </SelectContent>
-              </Select>
+              {newCatError && <CampoError id="gastos-nombre-categoria-error">{newCatError}</CampoError>}
             </div>
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setShowNewCatDialog(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => setShowNewCatDialog(false)}>Cancelar</Button>
               <Button type="submit" disabled={newCatLoading} className="gap-2">
                 {newCatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                 Crear categoría

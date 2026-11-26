@@ -16,9 +16,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
 import { centavosAMonto, montoACentavos } from "@/lib/format"
+import { mensajeError } from "@/lib/glosario"
 
 type Origen = "BOVEDA" | "APORTE" | "RETIRO" | "NO_SE"
 
@@ -53,6 +55,7 @@ export function AbrirCajaDialog<T>({
   const [origen, setOrigen] = React.useState<Origen | null>(null)
   const [nota, setNota] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const [errorFondo, setErrorFondo] = React.useState("")
 
   // Al abrir el diálogo, consulta lo que quedó en la gaveta y lo propone.
   React.useEffect(() => {
@@ -62,6 +65,7 @@ export function AbrirCajaDialog<T>({
     setOrigen(null)
     setNota("")
     setFondo("")
+    setErrorFondo("")
     apiFetch<UltimoCierre>("/cajas-turnos/ultimo-cierre")
       .then((ult) => {
         if (cancelado) return
@@ -119,7 +123,7 @@ export function AbrirCajaDialog<T>({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fondoValido) {
-      toast.error("Escribe con cuánto empiezas en la gaveta (desde $0)")
+      setErrorFondo("Escribe con cuánto empiezas en la gaveta (desde $0).")
       return
     }
     setLoading(true)
@@ -142,7 +146,7 @@ export function AbrirCajaDialog<T>({
       onAbierta(turno)
       onOpenChange(false)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al abrir caja")
+      toast.error(mensajeError("abrir la caja", err))
     } finally {
       setLoading(false)
     }
@@ -153,30 +157,37 @@ export function AbrirCajaDialog<T>({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <DoorOpen className="h-5 w-5 text-success" /> Abrir turno de caja
+            <DoorOpen className="h-5 w-5 text-success" /> Abrir caja
           </DialogTitle>
           <DialogDescription>
-            Cuenta el efectivo que hay en la gaveta y escribe con cuánto empiezas el turno.
+            Cuenta el efectivo que hay en la gaveta y escribe con cuánto empiezas.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {remanente !== null && (
             <div className="flex items-center justify-between rounded-sm border border-border bg-muted/50 p-3 text-xs">
               <span className="text-muted-foreground">
-                {primerTurno ? "Aún no hay un turno anterior" : "Lo que quedó en la gaveta al cerrar el turno anterior"}
+                {primerTurno ? "Aún no has cerrado ninguna caja" : "Lo que quedó en la gaveta la última vez que cerraste caja"}
               </span>
               <MoneyValue value={remanente} className="text-sm font-semibold" />
             </div>
           )}
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="abrircajadialog-efectivo-con-el-que-empiezas" className="text-xs font-medium text-muted-foreground">Efectivo con el que empiezas en la gaveta ($)</Label>
-            <Input id="abrircajadialog-efectivo-con-el-que-empiezas"
-              type="number" min={0} step="0.01" inputMode="decimal" value={fondo}
-              onChange={(e) => setFondo(e.target.value)}
-              className="h-14 md:h-14 text-center font-mono text-2xl font-bold tabular-nums"
-              autoFocus
-            />
+            <Label htmlFor="abrircajadialog-efectivo-con-el-que-empiezas" className="text-xs font-medium text-muted-foreground">Efectivo con el que empiezas en la gaveta</Label>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xl text-muted-foreground">$</span>
+              <Input id="abrircajadialog-efectivo-con-el-que-empiezas"
+                type="number" min={0} step="0.01" inputMode="decimal" value={fondo}
+                onChange={(e) => { setFondo(e.target.value); setErrorFondo("") }}
+                aria-invalid={!!errorFondo}
+                aria-describedby={errorFondo ? "abrircaja-fondo-error" : undefined}
+                size="lg"
+                className="text-center font-mono text-2xl font-bold tabular-nums"
+                autoFocus
+              />
+            </div>
+            {errorFondo && <CampoError id="abrircaja-fondo-error">{errorFondo}</CampoError>}
           </div>
 
           {hayDiferencia && (
@@ -196,7 +207,7 @@ export function AbrirCajaDialog<T>({
                       variant={activo ? "default" : "outline"}
                       aria-pressed={activo}
                       onClick={() => setOrigen(o.valor)}
-                      className={cn("h-11 md:h-9", !activo && "bg-background")}
+                      className={cn(!activo && "bg-background")}
                     >
                       {o.label}
                     </Button>
@@ -208,7 +219,7 @@ export function AbrirCajaDialog<T>({
                 onChange={(e) => setNota(e.target.value)}
                 maxLength={200}
                 placeholder="Nota (opcional)"
-                className="h-11 md:h-10 bg-background"
+                className="bg-background"
               />
               <p className="text-xs text-muted-foreground">
                 Puedes abrir de todos modos: la diferencia queda anotada para revisarla después.
@@ -217,10 +228,10 @@ export function AbrirCajaDialog<T>({
           )}
 
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => handleOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="gap-2 bg-success text-success-foreground hover:bg-success/90">
+            <Button type="submit" variant="success" disabled={loading} className="gap-2">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorOpen className="h-4 w-4" />}
               Abrir caja
             </Button>

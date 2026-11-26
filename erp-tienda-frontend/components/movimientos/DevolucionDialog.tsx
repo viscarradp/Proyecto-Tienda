@@ -16,8 +16,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
 import { MoneyValue } from "@/components/money-value"
-import { formatMoney, aNumero, formatCantidad } from "@/lib/format"
+import { formatMoney, aNumero, formatCantidad, formatNumeroVenta } from "@/lib/format"
+import { TERMINOS, mensajeError } from "@/lib/glosario"
 import { apiFetch } from "@/lib/api"
 
 interface DetalleVenta {
@@ -40,8 +42,8 @@ interface LineaEstado {
 
 /**
  * Diálogo de devolución de cliente (Bloque 3.B, ítem 13). Ligada a la venta
- * original: por cada línea se elige cuánto devolver y su destino (reingresar al
- * stock / merma). El reembolso sale de la caja actual. Backend valida el tope.
+ * original: por cada línea se elige cuánto devolver y su destino (vuelve al
+ * estante / mercadería perdida). El reembolso sale de la caja actual. Backend valida el tope.
  */
 export function DevolucionDialog({
   venta,
@@ -86,6 +88,9 @@ export function DevolucionDialog({
   const hayAlgo = venta.detalle_ventas.some(
     (d) => parseFloat(lineas[d.id]?.cantidad || "0") > 0,
   )
+  // Devolver más de lo vendido: se marca en el campo y no se deja confirmar (el servidor también lo rechaza).
+  const excede = (d: DetalleVenta) => parseFloat(lineas[d.id]?.cantidad || "0") > aNumero(d.cantidad)
+  const hayExceso = venta.detalle_ventas.some(excede)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -96,7 +101,7 @@ export function DevolucionDialog({
         cantidad: parseFloat(lineas[d.id].cantidad),
         destino: lineas[d.id].destino,
       }))
-    if (detalles.length === 0) return
+    if (detalles.length === 0 || hayExceso) return
 
     setLoading(true)
     setError("")
@@ -112,7 +117,7 @@ export function DevolucionDialog({
       onDone()
       onOpenChange(false)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al registrar la devolución")
+      setError(mensajeError("registrar la devolución", err))
     } finally {
       setLoading(false)
     }
@@ -123,10 +128,10 @@ export function DevolucionDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
-            <Undo2 className="h-5 w-5" /> Devolver venta #{venta.id}
+            <Undo2 className="h-5 w-5" /> Devolver venta {formatNumeroVenta(venta.id)}
           </DialogTitle>
           <DialogDescription>
-            Elige cuánto devolver de cada artículo y su destino. El reembolso sale de la{" "}
+            Elige cuánto devolver de cada producto y a dónde va. El reembolso sale de la{" "}
             <strong className="text-foreground">caja abierta actual</strong>.
           </DialogDescription>
         </DialogHeader>
@@ -161,15 +166,22 @@ export function DevolucionDialog({
                         placeholder="0"
                         value={linea.cantidad}
                         onChange={(e) => setLinea(d.id, { cantidad: e.target.value })}
-                        className="h-11 md:h-10 text-center font-mono tabular-nums"
+                        aria-invalid={excede(d)}
+                        aria-describedby={excede(d) ? `dev-cant-${d.id}-error` : undefined}
+                        className="text-center font-mono tabular-nums"
                       />
                     </div>
                   </div>
+                  {excede(d) && (
+                    <CampoError id={`dev-cant-${d.id}-error`} className="mb-2">
+                      Solo se vendieron {formatCantidad(d.cantidad)}: no puedes devolver más.
+                    </CampoError>
+                  )}
                   <div className="flex gap-1 rounded-sm border border-border bg-muted/40 p-1">
                     {(
                       [
-                        { key: "REINGRESO" as Destino, label: "Reingresar", icon: PackageCheck },
-                        { key: "MERMA" as Destino, label: "Merma", icon: Trash2 },
+                        { key: "REINGRESO" as Destino, label: TERMINOS.vuelveAlEstante, icon: PackageCheck },
+                        { key: "MERMA" as Destino, label: TERMINOS.mercaderiaPerdida, icon: Trash2 },
                       ]
                     ).map(({ key, label, icon: Icon }) => (
                       <button
@@ -203,7 +215,6 @@ export function DevolucionDialog({
               value={justif}
               onChange={(e) => setJustif(e.target.value)}
               placeholder="Ej. Producto vencido / cliente cambió de opinión"
-              className="h-11 md:h-11"
             />
           </div>
 
@@ -214,15 +225,15 @@ export function DevolucionDialog({
             </span>
           </div>
 
-          {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+          {error && <CampoError>{error}</CampoError>}
 
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || !hayAlgo} className="gap-2">
+            <Button type="submit" disabled={loading || !hayAlgo || hayExceso} className="gap-2">
               {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
-              Confirmar devolución
+              {hayExceso ? "Corrige las cantidades" : !hayAlgo ? "Escribe cuánto devuelves" : "Confirmar devolución"}
             </Button>
           </DialogFooter>
         </form>

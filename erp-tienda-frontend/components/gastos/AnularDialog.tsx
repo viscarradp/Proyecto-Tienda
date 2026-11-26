@@ -16,6 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api"
+import { mensajeError } from "@/lib/glosario"
+import { CampoError } from "@/components/campo-error"
 
 /** Qué se va a anular y qué va a pasar (lo muestra la confirmación). */
 export interface AnularObjetivo {
@@ -74,7 +76,7 @@ export function AnularDialog({
       onHecho()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "No se pudo anular.")
+      setError(mensajeError("anular", err))
     } finally {
       setEnviando(false)
     }
@@ -98,18 +100,19 @@ export function AnularDialog({
               onChange={(e) => setMotivo(e.target.value)}
               maxLength={500}
               placeholder="Ej. Me equivoqué en el monto"
-              className="h-12 md:h-12"
+              aria-invalid={!!error}
+              aria-describedby={error ? "anulardialog-motivo-error" : undefined}
               autoFocus
             />
+            {error && <CampoError id="anulardialog-motivo-error">{error}</CampoError>}
           </div>
-          {error && <p className="text-xs font-medium text-destructive">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={enviando}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={enviando}>
               Cancelar
             </Button>
-            <Button type="submit" variant="destructive" disabled={enviando || !motivo.trim()} className="gap-2">
+            <Button type="submit" variant="destructive-solid" disabled={enviando || !motivo.trim()} className="gap-2">
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
-              Anular
+              {motivo.trim() ? "Anular" : "Escribe el motivo para anular"}
             </Button>
           </DialogFooter>
         </form>

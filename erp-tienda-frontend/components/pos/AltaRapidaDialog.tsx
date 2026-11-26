@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { AlertCircle, Loader2, PackagePlus } from "lucide-react"
+import { Loader2, PackagePlus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api"
 import { parseDecimal } from "@/lib/format"
+import { mensajeError } from "@/lib/glosario"
 
 export interface ProductoRapido {
   id: number
@@ -54,7 +56,10 @@ export function AltaRapidaDialog({
   const [unidad, setUnidad] = React.useState("Unidad")
   const [codigo, setCodigo] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  // Error general (servidor) y errores por campo (VIS-24).
   const [error, setError] = React.useState("")
+  const [errorNombre, setErrorNombre] = React.useState("")
+  const [errorPrecio, setErrorPrecio] = React.useState("")
 
   // Cada vez que se abre, parte de lo que se buscó/escaneó.
   React.useEffect(() => {
@@ -64,6 +69,8 @@ export function AltaRapidaDialog({
     setPrecio("")
     setUnidad("Unidad")
     setError("")
+    setErrorNombre("")
+    setErrorPrecio("")
     setLoading(false)
   }, [open, nombreInicial, codigoInicial])
 
@@ -72,20 +79,22 @@ export function AltaRapidaDialog({
     if (loading) return
     const nombreLimpio = nombre.trim()
     const precioNum = parseDecimal(precio)
+    setError("")
+    setErrorNombre("")
+    setErrorPrecio("")
     if (!nombreLimpio) {
-      setError("Escribe el nombre del producto.")
+      setErrorNombre("Escribe el nombre del producto.")
       return
     }
     if (precioNum === null || precioNum <= 0) {
-      setError("Escribe el precio de venta, mayor que $0.")
+      setErrorPrecio("Escribe el precio de venta, mayor que $0.")
       return
     }
     if (Math.round(precioNum * 100) / 100 !== precioNum) {
-      setError("El precio solo puede tener hasta 2 decimales (centavos).")
+      setErrorPrecio("El precio solo puede tener hasta 2 decimales (centavos).")
       return
     }
     setLoading(true)
-    setError("")
     try {
       const body: Record<string, unknown> = {
         nombre: nombreLimpio,
@@ -100,7 +109,7 @@ export function AltaRapidaDialog({
       await onCreado(producto)
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo agregar el producto. Intenta de nuevo.")
+      setError(mensajeError("agregar el producto", err))
     } finally {
       setLoading(false)
     }
@@ -119,12 +128,7 @@ export function AltaRapidaDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {error && (
-            <div className="flex items-center gap-3 rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <p className="font-medium">{error}</p>
-            </div>
-          )}
+          {error && <CampoError>{error}</CampoError>}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="rapido-nombre" className="text-xs font-medium text-muted-foreground">Nombre</Label>
@@ -132,11 +136,14 @@ export function AltaRapidaDialog({
               id="rapido-nombre"
               value={nombre}
               maxLength={150}
-              onChange={(e) => setNombre(e.target.value)}
+              onChange={(e) => { setNombre(e.target.value); setErrorNombre("") }}
+              aria-invalid={!!errorNombre}
+              aria-describedby={errorNombre ? "rapido-nombre-error" : undefined}
               placeholder="Ej: Queso fresco"
-              className="h-12 md:h-12 text-base"
+              size="lg"
               autoFocus
             />
+            {errorNombre && <CampoError id="rapido-nombre-error">{errorNombre}</CampoError>}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -147,11 +154,15 @@ export function AltaRapidaDialog({
                 id="rapido-precio"
                 inputMode="decimal"
                 value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
+                onChange={(e) => { setPrecio(e.target.value); setErrorPrecio("") }}
+                aria-invalid={!!errorPrecio}
+                aria-describedby={errorPrecio ? "rapido-precio-error" : undefined}
                 placeholder="0.00"
-                className="h-12 md:h-12 font-mono text-lg"
+                size="lg"
+                className="font-mono text-lg"
               />
             </div>
+            {errorPrecio && <CampoError id="rapido-precio-error">{errorPrecio}</CampoError>}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -180,7 +191,6 @@ export function AltaRapidaDialog({
               maxLength={100}
               onChange={(e) => setUnidad(e.target.value)}
               placeholder="Otra unidad: caja, docena…"
-              className="h-11 md:h-11"
             />
           </div>
 
@@ -193,12 +203,12 @@ export function AltaRapidaDialog({
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
               placeholder="Escanéalo o déjalo vacío"
-              className="h-11 md:h-11 font-mono"
+              className="font-mono"
             />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="min-w-40 gap-2">

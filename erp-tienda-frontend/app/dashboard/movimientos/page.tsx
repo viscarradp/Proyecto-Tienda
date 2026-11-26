@@ -25,18 +25,18 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { MoneyValue } from "@/components/money-value"
-import { formatMoney, aNumero, formatCantidad, montoACentavos, centavosAMonto } from "@/lib/format"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
+import { formatMoney, aNumero, formatCantidad, montoACentavos, centavosAMonto, formatFecha, formatNumeroVenta } from "@/lib/format"
 import { StatePill } from "@/components/state-pill"
 import { StatCard } from "@/components/stat-card"
 import { DevolucionDialog } from "@/components/movimientos/DevolucionDialog"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { apiFetch, tipoDeError } from "@/lib/api"
-import { GAVETA, BOVEDA } from "@/lib/glosario"
+import { GAVETA, BOVEDA, TERMINOS, mensajeError } from "@/lib/glosario"
 import { rotuloMovimiento } from "@/lib/rotulo-movimiento"
 import { AnularDialog, AnuladoNota, type AnularObjetivo } from "@/components/gastos/AnularDialog"
 import { toast } from "sonner"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
 import { EsqueletoPagina } from "@/components/esqueleto-pagina"
 
 // ─── Tipos ───
@@ -117,10 +117,10 @@ type BusquedaVenta =
   | { estado: "no_existe"; numero: string }
   | { estado: "error"; mensaje: string }
 
-// Un turno cerrado a la fuerza también cuenta como cerrado y entra al descuadre
+// Una caja cerrada a la fuerza también cuenta como cerrada y entra a lo que faltó o sobró
 const estaCerrado = (estado: string) => estado === 'CERRADA' || estado === 'CERRADA_FORZADA'
 const etiquetaEstado = (estado: string) =>
-  estado === 'ABIERTA' ? 'Abierto' : estado === 'CERRADA_FORZADA' ? 'Cerrado (forzado)' : estado === 'CERRADA' ? 'Cerrado' : estado
+  estado === 'ABIERTA' ? 'Abierta' : estado === 'CERRADA_FORZADA' ? 'Cerrada a la fuerza' : estado === 'CERRADA' ? 'Cerrada' : estado
 
 const ZONA_NEGOCIO = "America/El_Salvador"
 const HORAS_TURNO_VIEJO = 14
@@ -139,9 +139,7 @@ function esTurnoViejo(fechaApertura: string | Date, ahora: Date = new Date()): b
 /** Las descripciones viejas de abonos terminan en "(deuda ID 1)": no le dice nada a la dueña. */
 const sinIdInterno = (texto: string) => texto.replace(/\s*\(deuda ID \d+\)\s*$/i, "")
 
-const numeroVenta = (id: number) => `#${String(id).padStart(5, '0')}`
-
-const MOTIVO_TURNO_CERRADO = "Ese turno ya cerró: el dinero ya se contó al cerrar."
+const MOTIVO_TURNO_CERRADO = "Esa caja ya se cerró: el dinero ya se contó al cerrar."
 
 /** Movimientos de dinero que se muestran en el turno (la merma no es dinero). */
 const movimientosDeDinero = (turno: CajaTurno) =>
@@ -164,7 +162,7 @@ function MovimientoFila({ mov, onAnular, motivoNoAnular }: { mov: MovimientoTurn
           {descripcion && <span className="text-muted-foreground">: {descripcion}</span>}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {mov.fecha && format(new Date(mov.fecha), "HH:mm")}
+          {mov.fecha && formatFecha(mov.fecha, "hora")}
           {mov.categorias_gastos?.nombre && <> · {mov.categorias_gastos.nombre}</>}
           {soloBoveda && !rotulo.toLowerCase().includes(BOVEDA.toLowerCase()) && <> · {mov.cuenta_origen === 'BOVEDA' ? `salió de la ${BOVEDA.toLowerCase()}` : `no tocó la ${GAVETA.toLowerCase()}`}</>}
           {nombre && <> · {nombre}</>}
@@ -187,7 +185,7 @@ function MovimientoFila({ mov, onAnular, motivoNoAnular }: { mov: MovimientoTurn
       <span
         className={cn(
           "shrink-0 font-mono text-sm font-semibold tabular-nums",
-          mov.anulado ? "text-muted-foreground line-through" : sale ? "text-destructive" : entra ? "text-success" : "text-muted-foreground",
+          mov.anulado ? "text-muted-foreground line-through" : sale ? "text-foreground" : entra ? "text-success" : "text-muted-foreground",
         )}
       >
         {sale ? "−" : entra ? "+" : ""}{formatMoney(mov.monto)}
@@ -275,6 +273,7 @@ export default function MovimientosPage() {
   const [forzarJustif, setForzarJustif] = React.useState("")
   const [forzarLoading, setForzarLoading] = React.useState(false)
   const [forzarError, setForzarError] = React.useState("")
+  const [forzarErrorEfectivo, setForzarErrorEfectivo] = React.useState("")
 
   React.useEffect(() => { setMounted(true) }, [])
 
@@ -295,7 +294,7 @@ export default function MovimientosPage() {
       const activo = pagina.items.find(t => t.estado === 'ABIERTA')
       if (activo) setExpandedTurno(activo.id)
     } catch (err: unknown) {
-      const mensaje = err instanceof Error ? err.message : "Error al cargar movimientos"
+      const mensaje = mensajeError("cargar los movimientos", err)
       // Si ya hay lista en pantalla, no se borra: solo se avisa.
       if (turnosCargados.current > 0) toast.error(mensaje)
       else setError(mensaje)
@@ -320,7 +319,7 @@ export default function MovimientosPage() {
       setHayMas(pagina.hay_mas)
       turnosCargados.current += pagina.items.length
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al cargar turnos anteriores")
+      toast.error(mensajeError("cargar las cajas anteriores", err))
     } finally {
       setCargandoMas(false)
     }
@@ -348,7 +347,7 @@ export default function MovimientosPage() {
         setBusqueda(
           tipoDeError(err) === "no_encontrado"
             ? { estado: "no_existe", numero }
-            : { estado: "error", mensaje: err instanceof Error ? err.message : "Error al buscar la venta" },
+            : { estado: "error", mensaje: mensajeError("buscar la venta", err) },
         )
       }
     }, 400)
@@ -366,7 +365,7 @@ export default function MovimientosPage() {
       const searchLower = searchTerm.toLowerCase()
       base = base.filter(turno => {
         const matchId = String(turno.id).includes(searchLower)
-        const matchDate = format(new Date(turno.fecha_apertura), "dd/MMM/yyyy HH:mm", { locale: es }).toLowerCase().includes(searchLower)
+        const matchDate = formatFecha(turno.fecha_apertura, "con hora").toLowerCase().includes(searchLower)
         const matchEstado = turno.estado.toLowerCase().includes(searchLower) || etiquetaEstado(turno.estado).toLowerCase().includes(searchLower)
         const matchMov = movimientosDeDinero(turno).some(m => m.descripcion.toLowerCase().includes(searchLower))
         return matchId || matchDate || matchEstado || matchMov
@@ -388,7 +387,7 @@ export default function MovimientosPage() {
 
   const turnosCerradosPeriodo = filteredTurnos.filter(t => estaCerrado(t.estado))
   const descuadreTotal = turnosCerradosPeriodo.reduce((acc, t) => acc + parseFloat(t.diferencia || "0"), 0)
-  const textoDia = (t: CajaTurno) => format(new Date(t.fecha_apertura), "d MMM", { locale: es })
+  const textoDia = (t: CajaTurno) => formatFecha(t.fecha_apertura)
   const primerTurno = filteredTurnos[filteredTurnos.length - 1] // el más viejo cargado
   const ultimoTurno = filteredTurnos[0] // el más reciente
   const rangoFechas = primerTurno && ultimoTurno
@@ -418,12 +417,12 @@ export default function MovimientosPage() {
       setIsAnulando(false)
       setMotivoAnulacion("")
       setVentaAAnular(null)
-      toast.success(`Venta ${numeroVenta(id)} anulada`)
+      toast.success(`Venta ${formatNumeroVenta(id)} anulada`)
       resaltarFila(id)
       await loadData() // recarga todo (ventas y saldos de caja)
     } catch (err: unknown) {
       // El diálogo sigue abierto con el motivo escrito, para reintentar.
-      setAnularError(err instanceof Error ? err.message : "No se pudo anular la venta")
+      setAnularError(mensajeError("anular la venta", err))
     } finally {
       setAnularLoading(false)
     }
@@ -434,11 +433,12 @@ export default function MovimientosPage() {
     if (!forzarTurnoId || !forzarJustif.trim()) return
     const efectivoParsed = parseFloat(forzarEfectivo)
     if (isNaN(efectivoParsed) || efectivoParsed < 0) {
-      setForzarError("Escribe el efectivo que contaste (0 o más).")
+      setForzarErrorEfectivo("Escribe el efectivo que contaste (desde $0).")
       return
     }
     setForzarLoading(true)
     setForzarError("")
+    setForzarErrorEfectivo("")
     try {
       await apiFetch(`/cajas-turnos/${forzarTurnoId}/cerrar-forzado`, {
         method: "PATCH",
@@ -451,16 +451,16 @@ export default function MovimientosPage() {
       setForzarTurnoId(null)
       setForzarEfectivo("")
       setForzarJustif("")
-      toast.success("Turno cerrado")
+      toast.success("Caja cerrada")
       await loadData()
     } catch (err: unknown) {
-      setForzarError(err instanceof Error ? err.message : "No se pudo cerrar el turno")
+      setForzarError(mensajeError("cerrar la caja", err))
     } finally {
       setForzarLoading(false)
     }
   }
 
-  // Tono semántico para el descuadre
+  // Tono de lo que faltó o sobró al cerrar
   const getDiferenciaTone = (diferencia: string | null): "success" | "destructive" | "muted" => {
     if (!diferencia) return "muted"
     const val = parseFloat(diferencia)
@@ -472,7 +472,7 @@ export default function MovimientosPage() {
   // Fila de una venta (con su desglose y acciones). La usan la lista de turnos y el resultado de buscar por número.
   const renderVenta = (venta: Venta, turnoAbierto: boolean) => {
     const isVentaExpanded = expandedVenta === venta.id
-    const totalArticulos = venta.detalle_ventas.reduce((acc, d) => acc + aNumero(d.cantidad), 0)
+    const totalProductos = venta.detalle_ventas.length
     const anulada = venta.estado === 'ANULADA'
 
     return (
@@ -486,13 +486,13 @@ export default function MovimientosPage() {
           <div className="w-6 shrink-0">
             {isVentaExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
           </div>
-          <div className="w-24 font-mono text-sm text-muted-foreground">{numeroVenta(venta.id)}</div>
+          <div className="w-24 font-mono text-sm text-muted-foreground">{formatNumeroVenta(venta.id)}</div>
           <div className="hidden w-28 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
             <Clock className="h-3.5 w-3.5 opacity-60" />
-            {format(new Date(venta.fecha), "HH:mm:ss")}
+            {formatFecha(venta.fecha, "hora")}
           </div>
           <div className="hidden w-24 text-right sm:block">
-            <StatePill tone="muted">{formatCantidad(totalArticulos)} uds</StatePill>
+            <StatePill tone="muted">{totalProductos} {totalProductos === 1 ? "producto" : "productos"}</StatePill>
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
             {anulada && <StatePill tone="destructive">Anulada</StatePill>}
@@ -500,10 +500,10 @@ export default function MovimientosPage() {
           </div>
         </button>
 
-        {/* Detalle de Artículos */}
+        {/* Detalle de productos */}
         {isVentaExpanded && (
           <div className="border-l-2 border-primary/30 bg-background/40 px-4 py-3 sm:ml-6">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Desglose de artículos</p>
+            <SeccionTitulo className="mb-2">Productos de la venta</SeccionTitulo>
             {venta.usuarios?.nombre && (
               <p className="mb-2 text-xs text-muted-foreground">Vendió: {venta.usuarios.nombre}</p>
             )}
@@ -519,7 +519,7 @@ export default function MovimientosPage() {
                           ? [detalle.presentaciones.productos?.nombre, detalle.presentaciones.descripcion].filter(Boolean).join(" · ")
                           : `Producto ID #${detalle.presentacion_id}`}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCantidad(detalle.cantidad)} uds · <MoneyValue value={aNumero(detalle.subtotal) / (aNumero(detalle.cantidad) || 1)} tone="muted" className="text-xs" /> c/u
+                        {formatCantidad(detalle.cantidad)} unidades · <MoneyValue value={aNumero(detalle.subtotal) / (aNumero(detalle.cantidad) || 1)} tone="muted" className="text-xs" /> c/u
                       </p>
                     </div>
                   </div>
@@ -546,14 +546,14 @@ export default function MovimientosPage() {
                 )}
                 {!turnoAbierto && (venta._count?.devoluciones ?? 0) === 0 && (
                   <p className="self-center text-xs text-muted-foreground">
-                    Es de un turno ya cerrado: no se puede anular, solo devolver
+                    Es de una caja ya cerrada: no se puede anular, solo devolver
                   </p>
                 )}
                 {turnoAbierto && (venta._count?.devoluciones ?? 0) === 0 && (
                   <Button
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
-                    className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="gap-2"
                     onClick={() => { setVentaAAnular(venta.id); setAnularError(""); setIsAnulando(true) }}
                   >
                     <XCircle className="h-4 w-4" /> Anular venta
@@ -586,20 +586,20 @@ export default function MovimientosPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight lg:text-xl">Movimientos</h1>
-            <p className="text-xs text-muted-foreground">Lo que se vendió y el dinero que entró o salió, turno por turno</p>
+            <p className="text-xs text-muted-foreground">Lo que se vendió y el dinero que entró o salió, caja por caja</p>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1 md:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar turno, gasto o nº de venta…"
+                placeholder="Buscar caja, gasto o número de venta…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="h-11 md:h-11 pl-9"
+                className="pl-9"
               />
             </div>
-            <Button aria-label="Actualizar movimientos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="size-11 md:size-11 shrink-0">
+            <Button aria-label="Actualizar movimientos" variant="outline" size="icon" onClick={loadData} disabled={loading} className="shrink-0">
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
           </div>
@@ -613,38 +613,38 @@ export default function MovimientosPage() {
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <StatCard
-              label={`${GAVETA} (hoy)`}
+              label="Caja de hoy"
               icon={cajaActiva ? DoorOpen : DoorClosed}
-              footer={cajaActiva ? <>Empezó con: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
-              className={cn("order-2 p-3 md:order-1 md:p-4", cajaActiva && "border-success/30")}
-            >
-              <div className="flex items-center gap-2">
-                <span className={cn("h-2 w-2 rounded-full", cajaActiva ? "bg-success" : "bg-destructive")} />
-                <p className={cn("text-lg font-semibold", cajaActiva ? "text-success" : "text-muted-foreground")}>
-                  {cajaActiva ? "Abierta" : "Cerrada"}
-                </p>
-              </div>
-            </StatCard>
+              value={cajaActiva ? "Abierta" : "Cerrada"}
+              tone={cajaActiva ? "success" : "muted"}
+              hint={cajaActiva ? <>Empezó con: <MoneyValue value={cajaActiva.fondo_inicial} tone="muted" className="text-xs" /></> : undefined}
+              className={cn("order-2 md:order-1", cajaActiva && "border-success/30")}
+            />
 
             <StatCard
-              label={filteredTurnos.length === 1 ? "Vendido (último turno)" : `Vendido (últimos ${filteredTurnos.length} turnos)`}
-              className="order-1 col-span-2 p-3 md:order-2 md:p-4"
-              footer={`${rangoFechas ? `${rangoFechas} · ` : ""}${ventasCompletadas.length} ${ventasCompletadas.length === 1 ? "venta" : "ventas"}${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}
-            >
-              <MoneyValue value={ingresosPeriodo} className="text-2xl font-bold tracking-tight md:text-3xl" />
-            </StatCard>
+              label={filteredTurnos.length === 1 ? "Vendido (última caja)" : `Vendido (últimas ${filteredTurnos.length} cajas)`}
+              className="order-1 col-span-2 md:order-2"
+              value={formatMoney(ingresosPeriodo)}
+              tone="success"
+              hint={`${rangoFechas ? `${rangoFechas} · ` : ""}${ventasCompletadas.length} ${ventasCompletadas.length === 1 ? "venta" : "ventas"}${devueltoCentavos > 0 ? ` · ya sin ${formatMoney(centavosAMonto(devueltoCentavos))} devueltos` : ""}`}
+            />
 
-            <StatCard label="Faltó/Sobró en los cierres" className="order-3 p-3 md:p-4">
-              {turnosCerradosPeriodo.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aún sin cierres</p>
-              ) : Math.abs(descuadreTotal) < 0.005 ? (
-                <p className="text-lg font-semibold text-muted-foreground">Cuadraron</p>
-              ) : (
-                <p className={cn("font-mono text-lg font-semibold tabular-nums", descuadreTotal > 0 ? "text-success" : "text-destructive")}>
-                  {descuadreTotal > 0 ? "+" : "−"}{formatMoney(Math.abs(descuadreTotal))}
-                </p>
-              )}
-            </StatCard>
+            <StatCard
+              label="Faltó o sobró al cerrar"
+              className="order-3"
+              value={
+                turnosCerradosPeriodo.length === 0
+                  ? "Aún sin cierres"
+                  : Math.abs(descuadreTotal) < 0.005
+                    ? "Cuadraron"
+                    : `${descuadreTotal > 0 ? TERMINOS.sobro : TERMINOS.falto} ${formatMoney(Math.abs(descuadreTotal))}`
+              }
+              tone={
+                turnosCerradosPeriodo.length === 0 || Math.abs(descuadreTotal) < 0.005
+                  ? "muted"
+                  : descuadreTotal > 0 ? "success" : "destructive"
+              }
+            />
           </div>
 
           {/* Resultado de buscar una venta por número */}
@@ -665,13 +665,13 @@ export default function MovimientosPage() {
             <div className="overflow-hidden rounded-sm border border-primary/40 bg-card">
               <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 text-sm">
                 <Search className="h-4 w-4 text-primary" />
-                <span className="font-semibold">Venta {numeroVenta(busqueda.venta.id)}</span>
-                <span className="text-muted-foreground">· Turno #{busqueda.turno.id}</span>
+                <span className="font-semibold">Venta {formatNumeroVenta(busqueda.venta.id)}</span>
+                <span className="text-muted-foreground">· Caja #{busqueda.turno.id}</span>
                 <StatePill tone={busqueda.turno.estado === 'ABIERTA' ? "success" : busqueda.turno.estado === 'CERRADA_FORZADA' ? "warning" : "muted"}>
                   {etiquetaEstado(busqueda.turno.estado)}
                 </StatePill>
                 <span className="text-xs text-muted-foreground">
-                  {format(new Date(busqueda.venta.fecha), "dd MMM yyyy, HH:mm", { locale: es })}
+                  {formatFecha(busqueda.venta.fecha, "con hora")}
                 </span>
               </div>
               {renderVenta(busqueda.venta, busqueda.turno.estado === 'ABIERTA')}
@@ -695,16 +695,16 @@ export default function MovimientosPage() {
           ) : filteredTurnos.length === 0 ? (
             busqueda.estado !== "inactiva" ? null : hayMas ? (
               <div className="flex flex-col items-center gap-3 rounded-sm border border-dashed border-border py-12 text-muted-foreground">
-                <p className="text-sm">Ningún turno cargado coincide con la búsqueda.</p>
+                <p className="text-sm">Ninguna caja cargada coincide con la búsqueda.</p>
                 <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="gap-2">
                   {cargandoMas && <RefreshCw className="h-4 w-4 animate-spin" />}
-                  Ver turnos anteriores
+                  Ver cajas anteriores
                 </Button>
               </div>
             ) : (
             <div className="flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border py-24 text-muted-foreground">
               <Filter className="h-10 w-10 opacity-20" />
-              <p className="text-sm font-medium text-foreground">No se encontraron turnos de caja</p>
+              <p className="text-sm font-medium text-foreground">No hay cajas para mostrar</p>
             </div>
             )
           ) : (
@@ -732,15 +732,15 @@ export default function MovimientosPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">Turno #{turno.id}</h3>
+                            <h3 className="font-semibold">Caja #{turno.id}</h3>
                             <StatePill tone={isAbierta ? "success" : turno.estado === 'CERRADA_FORZADA' ? "warning" : "muted"}>{etiquetaEstado(turno.estado)}</StatePill>
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Calendar className="h-3.5 w-3.5" />
-                            {format(new Date(turno.fecha_apertura), "dd MMM yyyy", { locale: es })}
+                            {formatFecha(turno.fecha_apertura)}
                             <Clock className="ml-1 h-3.5 w-3.5" />
-                            {format(new Date(turno.fecha_apertura), "HH:mm")}
-                            {turno.fecha_cierre && <>→ {format(new Date(turno.fecha_cierre), "HH:mm")}</>}
+                            {formatFecha(turno.fecha_apertura, "hora")}
+                            {turno.fecha_cierre && <>→ {formatFecha(turno.fecha_cierre, "hora")}</>}
                           </div>
                           {(turno.usuarios?.nombre || turno.cerrado_por?.nombre) && (
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -771,7 +771,7 @@ export default function MovimientosPage() {
                               <MoneyValue value={turno.efectivo_esperado || "0"} className="text-sm" />
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground">Contó</p>
+                              <p className="text-xs text-muted-foreground">{TERMINOS.loQueConto}</p>
                               <MoneyValue value={turno.efectivo_declarado || "0"} className="text-sm" />
                             </div>
                             <div>
@@ -787,7 +787,7 @@ export default function MovimientosPage() {
                           </>
                         ) : (
                           <div className="col-span-2 flex items-center text-sm text-muted-foreground md:col-span-3 md:justify-end">
-                            Turno en curso
+                            Caja abierta ahora
                           </div>
                         )}
                       </div>
@@ -799,16 +799,17 @@ export default function MovimientosPage() {
 
                     {isAbierta && esAdmin && esTurnoViejo(turno.fecha_apertura) && (
                       <div className="flex items-center justify-between gap-2 border-t border-border bg-warning/5 px-4 py-2">
-                        <span className="text-xs text-muted-foreground">¿Turno abandonado sin cerrar?</span>
+                        <span className="text-xs text-muted-foreground">¿Caja abandonada sin cerrar?</span>
                         <Button
-                          variant="outline"
+                          variant="warning"
                           size="sm"
-                          className="gap-2 border-warning/40 text-warning-text hover:bg-warning/10 hover:text-warning-text"
+                          className="gap-2"
                           onClick={() => {
                             setForzarTurnoId(turno.id)
                             setForzarEfectivo("")
                             setForzarJustif("")
                             setForzarError("")
+                            setForzarErrorEfectivo("")
                             setForzarOpen(true)
                           }}
                         >
@@ -834,9 +835,7 @@ export default function MovimientosPage() {
                         )}
                         {/* Dinero que se movió en el turno (UX-12) */}
                         <div className="border-b border-border">
-                          <p className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Dinero que se movió en este turno
-                          </p>
+                          <SeccionTitulo className="px-4 pt-3">Dinero que se movió en esta caja</SeccionTitulo>
                           {movimientosDeDinero(turno).length === 0 ? (
                             <p className="px-4 py-3 text-sm text-muted-foreground">
                               No hubo gastos ni otros movimientos de dinero.
@@ -864,20 +863,20 @@ export default function MovimientosPage() {
                             </div>
                           )}
                         </div>
-                        <p className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Ventas del turno</p>
+                        <SeccionTitulo className="px-4 pt-3">Ventas de esta caja</SeccionTitulo>
                         {/* Cabecera de la tabla de ventas (desktop) */}
                         <div className="hidden items-center border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
                           <div className="w-6" />
-                          <div className="w-24">Venta ID</div>
+                          <div className="w-24">Venta</div>
                           <div className="w-28">Hora</div>
-                          <div className="w-24 text-right">Artículos</div>
+                          <div className="w-24 text-right">Productos</div>
                           <div className="flex-1 text-right">Total</div>
                         </div>
 
                         {ventasDelTurno.length === 0 ? (
                           <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
                             <ShoppingCart className="h-6 w-6 opacity-30" />
-                            <p className="text-sm">No se registraron ventas en este turno.</p>
+                            <p className="text-sm">No se registraron ventas en esta caja.</p>
                           </div>
                         ) : (
                           <div>
@@ -890,9 +889,9 @@ export default function MovimientosPage() {
                 )
               })}
               {hayMas && (
-                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="h-11 md:h-11 gap-2 self-center">
+                <Button variant="outline" onClick={cargarMas} disabled={cargandoMas} className="gap-2 self-center">
                   {cargandoMas && <RefreshCw className="h-4 w-4 animate-spin" />}
-                  Ver turnos anteriores
+                  Ver cajas anteriores
                 </Button>
               )}
             </div>
@@ -907,7 +906,7 @@ export default function MovimientosPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-5 w-5" /> Anular venta {ventaAAnular !== null && numeroVenta(ventaAAnular)}
+              <XCircle className="h-5 w-5" /> Anular venta {ventaAAnular !== null && formatNumeroVenta(ventaAAnular)}
             </DialogTitle>
             <DialogDescription>
               Se devuelve el producto al inventario y se quita el dinero de la gaveta.
@@ -915,19 +914,20 @@ export default function MovimientosPage() {
           </DialogHeader>
           <form onSubmit={handleAnularVenta} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="movimientos-motivo-de-la-anulacion" className="text-xs font-medium text-muted-foreground">Motivo de la anulación</Label>
-              <Input id="movimientos-motivo-de-la-anulacion" required value={motivoAnulacion}
+              <Label htmlFor="movimientos-motivo-de-la-anulacion" className="text-xs font-medium text-muted-foreground">Motivo de la anulación (obligatorio)</Label>
+              <Input id="movimientos-motivo-de-la-anulacion" value={motivoAnulacion}
                 onChange={(e) => setMotivoAnulacion(e.target.value)}
+                aria-invalid={!!anularError}
+                aria-describedby={anularError ? "movimientos-anular-error" : undefined}
                 placeholder="Ej. El cliente devolvió el producto empacado"
-                className="h-12 md:h-12"
                 autoFocus />
+              {anularError && <CampoError id="movimientos-anular-error">{anularError}</CampoError>}
             </div>
-            {anularError && <p role="alert" className="text-xs font-medium text-destructive">{anularError}</p>}
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setIsAnulando(false)} disabled={anularLoading}>
+              <Button type="button" variant="outline" onClick={() => setIsAnulando(false)} disabled={anularLoading}>
                 Cancelar
               </Button>
-              <Button type="submit" variant="destructive" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2">
+              <Button type="submit" variant="destructive-solid" disabled={anularLoading || !motivoAnulacion.trim()} className="gap-2">
                 {anularLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                 Confirmar anulación
               </Button>
@@ -941,34 +941,41 @@ export default function MovimientosPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-warning-text">
-              <DoorClosed className="h-5 w-5" /> Cierre forzado del turno #{forzarTurnoId}
+              <DoorClosed className="h-5 w-5" /> Cerrar forzado la caja #{forzarTurnoId}
             </DialogTitle>
             <DialogDescription>
-              Solo la dueña. Cuenta el efectivo que hay de verdad en la gaveta y explica por qué cierras tú el turno.
-              Quedará marcado como <strong className="text-foreground">cerrado a la fuerza</strong>.
+              Solo la dueña. Cuenta el efectivo que hay de verdad en la gaveta y explica por qué cierras tú la caja.
+              Quedará marcada como <strong className="text-foreground">cerrada a la fuerza</strong>.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleForzarCierre} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="movimientos-efectivo-contado" className="text-xs font-medium text-muted-foreground">Efectivo que contaste ($)</Label>
-              <Input id="movimientos-efectivo-contado" type="number" min={0} step="0.01" inputMode="decimal" required
-                value={forzarEfectivo} onChange={(e) => setForzarEfectivo(e.target.value)}
-                placeholder="0.00" className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums" autoFocus />
+              <Label htmlFor="movimientos-efectivo-contado" className="text-xs font-medium text-muted-foreground">Efectivo que contaste</Label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xl text-muted-foreground">$</span>
+                <Input id="movimientos-efectivo-contado" type="number" min={0} step="0.01" inputMode="decimal"
+                  value={forzarEfectivo} onChange={(e) => { setForzarEfectivo(e.target.value); setForzarErrorEfectivo("") }}
+                  aria-invalid={!!forzarErrorEfectivo}
+                  aria-describedby={forzarErrorEfectivo ? "movimientos-efectivo-error" : undefined}
+                  placeholder="0.00" size="lg" className="text-center font-mono text-xl font-bold tabular-nums" autoFocus />
+              </div>
+              {forzarErrorEfectivo && <CampoError id="movimientos-efectivo-error">{forzarErrorEfectivo}</CampoError>}
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="movimientos-justificacion" className="text-xs font-medium text-muted-foreground">¿Por qué lo cierras tú?</Label>
-              <Input id="movimientos-justificacion" required value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
-                placeholder="Ej. La cajera se retiró sin cerrar" className="h-11 md:h-11" />
+              <Label htmlFor="movimientos-justificacion" className="text-xs font-medium text-muted-foreground">¿Por qué la cierras tú? (obligatorio)</Label>
+              <Input id="movimientos-justificacion" value={forzarJustif} onChange={(e) => setForzarJustif(e.target.value)}
+                aria-invalid={!!forzarError}
+                aria-describedby={forzarError ? "movimientos-forzar-error" : undefined}
+                placeholder="Ej. La cajera se retiró sin cerrar" />
+              {forzarError && <CampoError id="movimientos-forzar-error">{forzarError}</CampoError>}
             </div>
-            {forzarError && <p role="alert" className="text-xs font-medium text-destructive">{forzarError}</p>}
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setForzarOpen(false)} disabled={forzarLoading}>
+              <Button type="button" variant="outline" onClick={() => setForzarOpen(false)} disabled={forzarLoading}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={forzarLoading || !forzarJustif.trim()}
-                className="gap-2 bg-warning text-warning-foreground hover:bg-warning/90">
+              <Button type="submit" variant="warning" disabled={forzarLoading || !forzarJustif.trim()} className="gap-2">
                 {forzarLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <DoorClosed className="h-4 w-4" />}
-                Forzar cierre
+                Cerrar forzado
               </Button>
             </DialogFooter>
           </form>

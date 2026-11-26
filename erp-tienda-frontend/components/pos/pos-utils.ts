@@ -1,4 +1,5 @@
 import { centavosAMonto, formatMoney } from "@/lib/format"
+import { TERMINOS } from "@/lib/glosario"
 
 /**
  * ¿La presentación se vende por peso o medida (libra, onza, kilo, gramo)?
@@ -19,9 +20,9 @@ export function textoResultadoCierre(diferenciaCentavos: number | null, fondoSig
     diferenciaCentavos === null || diferenciaCentavos === 0
       ? "Cuadró"
       : diferenciaCentavos < 0
-        ? `Faltaron ${formatMoney(centavosAMonto(-diferenciaCentavos))}`
-        : `Sobraron ${formatMoney(centavosAMonto(diferenciaCentavos))}`
-  return `Caja cerrada · ${resultado} · Fondo para mañana: ${formatMoney(fondoSiguiente)}`
+        ? `${TERMINOS.falto} ${formatMoney(centavosAMonto(-diferenciaCentavos))}`
+        : `${TERMINOS.sobro} ${formatMoney(centavosAMonto(diferenciaCentavos))}`
+  return `Caja cerrada · ${resultado} · ${TERMINOS.fondoSiguiente}: ${formatMoney(fondoSiguiente)}`
 }
 
 /** Un solo aviso corto para los productos vendidos sin stock registrado. */

@@ -18,6 +18,9 @@ import {
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
 import { formatMoney } from "@/lib/format"
+import { GAVETA, BOVEDA, TERMINOS, mensajeError } from "@/lib/glosario"
+import { CampoError } from "@/components/campo-error"
+import { SeccionTitulo } from "@/components/seccion-titulo"
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner"
 import { generarId } from "@/lib/id"
 
@@ -37,8 +40,12 @@ function ProductSearchableSelect({
   value,
   onChange,
   id,
+  invalid,
+  describedBy,
 }: {
   id?: string
+  invalid?: boolean
+  describedBy?: string
   productos: Producto[]
   value: string
   onChange: (v: string) => void
@@ -94,7 +101,9 @@ function ProductSearchableSelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex h-11 md:h-9 w-full cursor-pointer items-center justify-between rounded-sm border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        data-invalid={invalid || undefined}
+        aria-describedby={describedBy}
+        className="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 md:h-10"
         onClick={() => (open ? close(false) : setOpen(true))}
       >
         <span className={cn("truncate", !selectedProduct && "text-muted-foreground")}>
@@ -164,6 +173,7 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
   const [lineas, setLineas] = React.useState<LoteLineForm[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [intentado, setIntentado] = React.useState(false)
   const cambioSucioRef = React.useRef(onCambioSucio)
   React.useEffect(() => {
     cambioSucioRef.current = onCambioSucio
@@ -217,34 +227,42 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
     return sum + (qty * cost)
   }, 0)
 
+  const alCredito = !inicial && estadoPago === "AL_CREDITO"
+  // La carga inicial siempre es aporte en especie; una compra pagada exige
+  // elegir de dónde salió el dinero (sin valor por defecto: así no se olvida).
+  const origen = inicial ? "CAPITAL_DUEÑOS" : origenFondos
+
+  // Errores de campo: salen junto al campo una vez que se intentó registrar.
+  const errProveedor = intentado && !proveedor.trim() ? "Escribe el nombre del proveedor." : null
+  const errOrigen =
+    intentado && !alCredito && !origen
+      ? `Elige de dónde salió el dinero: ${GAVETA.toLowerCase()}, ${BOVEDA.toLowerCase()} o ${TERMINOS.aporteDuena.toLowerCase()}.`
+      : null
+  const errLinea = (l: LoteLineForm) => ({
+    producto: intentado && !l.producto_id ? "Elige el producto." : null,
+    cantidad: intentado && (parseFloat(l.cantidad_inicial) || 0) <= 0 ? "La cantidad debe ser mayor a 0." : null,
+    costo: intentado && (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0 ? "Escribe cuánto costó (mayor a 0)." : null,
+  })
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setIntentado(true)
     setError("")
 
-    const alCredito = !inicial && estadoPago === "AL_CREDITO"
-    // La carga inicial siempre es aporte en especie; una compra pagada exige
-    // elegir de dónde salió el dinero (sin valor por defecto: así no se olvida).
-    const origen = inicial ? "CAPITAL_DUEÑOS" : origenFondos
-    if (!alCredito && !origen) {
-      setError("Elige de dónde salió el dinero: gaveta, bóveda o capital de la dueña.")
-      setLoading(false)
-      return
-    }
-
     if (lineas.length === 0) {
-      setError("Debes agregar al menos un lote de producto")
-      setLoading(false)
+      setError("Agrega al menos un producto a la compra.")
+      return
+    }
+    const hayErrores =
+      !proveedor.trim() ||
+      (!alCredito && !origen) ||
+      lineas.some(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) <= 0 || (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0)
+    if (hayErrores) {
+      setError("Revisa los campos marcados en rojo.")
       return
     }
 
-    const invalidLines = lineas.filter(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) <= 0 || (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0)
-    if (invalidLines.length > 0) {
-      setError("Todos los lotes deben tener producto, cantidad > 0 y costo > 0")
-      setLoading(false)
-      return
-    }
-
+    setLoading(true)
     try {
       const res = await apiFetch<{ avisos?: string[] }>("/compras", {
         method: "POST",
@@ -265,7 +283,7 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
       toast.success(
         alCredito
           ? `Compra registrada · ${formatMoney(montoTotal)}. Quedó como deuda con el proveedor; la pagas desde Gastos → Deudas.`
-          : `Compra registrada · ${formatMoney(montoTotal)}. Los lotes de inventario fueron creados.`,
+          : `Compra registrada · ${formatMoney(montoTotal)}. La mercadería ya está en el inventario.`,
         { duration: 8000 },
       )
       for (const aviso of res?.avisos ?? []) toast.warning(aviso, { duration: 12000 })
@@ -273,53 +291,53 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
       setEstadoPago("PAGADO")
       setOrigenFondos("")
       setLineas([])
+      setIntentado(false)
       onSuccess()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error al registrar la compra")
+      setError(mensajeError("registrar la compra", err))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-4xl flex-col gap-6">
-      {error && (
-        <div className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
-          {error}
-        </div>
-      )}
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-4xl flex-col gap-6">
+      {error && <CampoError className="rounded-sm border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium">{error}</CampoError>}
 
       {/* Cabecera de la compra */}
       <div className="flex flex-col gap-4 rounded-sm border border-border bg-card p-5">
-        <h3 className="text-sm font-semibold">{inicial ? "Inventario inicial" : "Datos de la compra"}</h3>
+        <SeccionTitulo>{inicial ? "Inventario inicial" : "Datos de la compra"}</SeccionTitulo>
 
         {inicial && (
           <p className="rounded-sm bg-muted/50 p-3 text-xs text-muted-foreground">
-            Registra el stock con el que ya arranca la tienda. Se contabiliza como
-            aporte del dueño en especie (capital), sin salida de la gaveta ni turno abierto.
+            Registra la mercadería con la que ya arranca la tienda. Se anota como «{TERMINOS.aporteDuena}», sin salida
+            de la {GAVETA.toLowerCase()} ni turno abierto.
           </p>
         )}
 
         <div className={inicial ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 gap-4 md:grid-cols-3"}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="compra-proveedor" className="text-xs font-medium text-muted-foreground">
-              {inicial ? "Origen del inventario" : "Proveedor"}
+              {inicial ? "¿De dónde viene este inventario?" : "Proveedor"}
             </Label>
-            <Input id="compra-proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)} required
-              placeholder={inicial ? "Ej. Inventario propio inicial" : "Nombre del proveedor"} className="h-11 md:h-11" />
+            <Input id="compra-proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)}
+              placeholder={inicial ? "Ej. Inventario propio inicial" : "Nombre del proveedor"}
+              aria-invalid={!!errProveedor}
+              aria-describedby={errProveedor ? "compra-proveedor-error" : undefined} />
+            {errProveedor && <CampoError id="compra-proveedor-error">{errProveedor}</CampoError>}
           </div>
 
           {!inicial && (
             <>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="compraform-estado-de-pago" className="text-xs font-medium text-muted-foreground">Estado de pago</Label>
+                <Label htmlFor="compraform-estado-de-pago" className="text-xs font-medium text-muted-foreground">¿Ya la pagaste?</Label>
                 <Select value={estadoPago} onValueChange={setEstadoPago}>
-                  <SelectTrigger id="compraform-estado-de-pago" className="h-11 md:h-11 w-full">
+                  <SelectTrigger id="compraform-estado-de-pago" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PAGADO">Pagado</SelectItem>
-                    <SelectItem value="AL_CREDITO">Al crédito</SelectItem>
+                    <SelectItem value="PAGADO">Ya la pagué</SelectItem>
+                    <SelectItem value="AL_CREDITO">Al crédito (la debo)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -328,15 +346,21 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="compraform-de-donde-salio-el-dinero" className="text-xs font-medium text-muted-foreground">¿De dónde salió el dinero?</Label>
                   <Select value={origenFondos} onValueChange={setOrigenFondos}>
-                    <SelectTrigger id="compraform-de-donde-salio-el-dinero" className="h-11 md:h-11 w-full">
+                    <SelectTrigger
+                      id="compraform-de-donde-salio-el-dinero"
+                      className="w-full"
+                      aria-invalid={!!errOrigen}
+                      aria-describedby={errOrigen ? "compra-origen-error" : undefined}
+                    >
                       <SelectValue placeholder="Elige una opción" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CAJA_POS">Gaveta (requiere turno abierto)</SelectItem>
-                      <SelectItem value="CAJA_GENERAL">Bóveda</SelectItem>
-                      <SelectItem value="CAPITAL_DUEÑOS">Capital de la dueña</SelectItem>
+                      <SelectItem value="CAJA_POS">{GAVETA} (requiere caja abierta)</SelectItem>
+                      <SelectItem value="CAJA_GENERAL">{BOVEDA}</SelectItem>
+                      <SelectItem value="CAPITAL_DUEÑOS">{TERMINOS.aporteDuena}</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errOrigen && <CampoError id="compra-origen-error">{errOrigen}</CampoError>}
                 </div>
               )}
             </>
@@ -353,25 +377,27 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
       {/* Líneas de lotes */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Lotes de inventario</h3>
-          <Button type="button" variant="outline" size="sm" onClick={addLinea} className="h-11 md:h-9 gap-1.5 text-xs">
-            <Plus className="h-3.5 w-3.5" /> Agregar lote
+          <SeccionTitulo>Productos de la compra</SeccionTitulo>
+          <Button type="button" variant="outline" size="sm" onClick={addLinea} className="gap-1.5 text-xs">
+            <Plus className="h-3.5 w-3.5" /> Agregar producto
           </Button>
         </div>
 
         {lineas.length === 0 && (
           <div className="rounded-sm border border-dashed border-border p-10 text-center">
-            <p className="text-sm text-muted-foreground">No hay lotes. Haz clic en &quot;Agregar lote&quot; para añadir productos a esta compra.</p>
+            <p className="text-sm text-muted-foreground">Todavía no hay productos. Toca «Agregar producto» (o escanea el código) para añadirlos a esta compra.</p>
           </div>
         )}
 
-        {lineas.map((linea, idx) => (
+        {lineas.map((linea, idx) => {
+          const errs = errLinea(linea)
+          return (
           <div key={linea.key} className="rounded-sm border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lote #{idx + 1}</span>
-              <Button type="button" variant="ghost" size="icon"
-                className="size-11 md:size-6 text-muted-foreground hover:text-destructive"
-                aria-label={`Quitar lote ${idx + 1}`}
+              <span className="text-xs font-medium text-muted-foreground">Producto {idx + 1}</span>
+              <Button type="button" variant="ghost" size="icon-xs"
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={`Quitar el producto ${idx + 1}`}
                 onClick={() => removeLinea(linea.key)}>
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -385,28 +411,37 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
                   productos={productos}
                   value={linea.producto_id}
                   onChange={(v) => updateLinea(linea.key, "producto_id", v)}
+                  invalid={!!errs.producto}
+                  describedBy={errs.producto ? `compra-producto-${linea.key}-error` : undefined}
                 />
+                {errs.producto && <CampoError id={`compra-producto-${linea.key}-error`} className="mt-1">{errs.producto}</CampoError>}
               </div>
 
               <div>
                 <Label htmlFor={`compra-cant-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
                 <Input id={`compra-cant-${linea.key}`} type="number" min={0.001} step="0.001" inputMode="decimal" value={linea.cantidad_inicial}
                   onChange={(e) => updateLinea(linea.key, "cantidad_inicial", e.target.value)}
-                  className="h-11 md:h-9 font-mono text-sm" />
+                  className="font-mono text-sm"
+                  aria-invalid={!!errs.cantidad}
+                  aria-describedby={errs.cantidad ? `compra-cant-${linea.key}-error` : undefined} />
+                {errs.cantidad && <CampoError id={`compra-cant-${linea.key}-error`} className="mt-1">{errs.cantidad}</CampoError>}
               </div>
 
               <div>
-                <Label htmlFor={`compra-costo-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Costo unit. ($)</Label>
+                <Label htmlFor={`compra-costo-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Costo por unidad ($)</Label>
                 <Input id={`compra-costo-${linea.key}`} type="number" min={0} step="0.01" value={linea.costo_unitario_adquisicion}
                   onChange={(e) => updateLinea(linea.key, "costo_unitario_adquisicion", e.target.value)}
-                  className="h-11 md:h-9 font-mono text-sm" />
+                  className="font-mono text-sm"
+                  aria-invalid={!!errs.costo}
+                  aria-describedby={errs.costo ? `compra-costo-${linea.key}-error` : undefined} />
+                {errs.costo && <CampoError id={`compra-costo-${linea.key}-error`} className="mt-1">{errs.costo}</CampoError>}
               </div>
 
               <div className="col-span-2">
                 <Label htmlFor={`compra-venc-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Vencimiento (opcional)</Label>
                 <Input id={`compra-venc-${linea.key}`} type="date" value={linea.fecha_vencimiento}
                   onChange={(e) => updateLinea(linea.key, "fecha_vencimiento", e.target.value)}
-                  className="h-11 md:h-9 text-sm" />
+                  className="text-sm" />
               </div>
 
               <div className="col-span-2 flex items-end justify-end">
@@ -420,22 +455,25 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Footer con total y botón */}
       <div className="sticky bottom-0 z-10 -mb-6 flex flex-col items-center justify-between gap-4 rounded-sm border border-border bg-card p-4 shadow-[0_-6px_10px_-6px_rgb(0_0_0/0.15)] md:flex-row md:p-5">
         <div>
-          <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Monto total calculado</p>
+          <p className="mb-0.5 text-xs font-medium text-muted-foreground">Total de la compra</p>
           <MoneyValue value={montoTotal} className="text-3xl font-bold tracking-tight" />
         </div>
 
-        <Button type="submit" disabled={loading || lineas.length === 0} className="h-12 md:h-12 gap-2 px-8">
+        <Button type="submit" size="lg" disabled={loading || lineas.length === 0} className="px-8">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               Registrando…
             </>
+          ) : lineas.length === 0 ? (
+            "Agrega un producto primero"
           ) : (
             inicial ? "Cargar inventario inicial" : "Registrar compra"
           )}

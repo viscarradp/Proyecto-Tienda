@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CampoError } from "@/components/campo-error"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { apiFetch } from "@/lib/api"
 import { formatMoney } from "@/lib/format"
+import { mensajeError } from "@/lib/glosario"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 interface CategoriaGasto {
@@ -40,13 +42,13 @@ const OPCIONES: { modo: Modo; label: string; desc: string; icon: LucideIcon }[] 
   {
     modo: "boveda",
     label: "Guardar en la bóveda",
-    desc: "Trasladar efectivo de la gaveta a la bóveda",
+    desc: "Pasa efectivo de la gaveta a la bóveda",
     icon: Vault,
   },
   {
     modo: "gasto",
     label: "Pagar algo",
-    desc: "Registrar un gasto pagado desde la gaveta",
+    desc: "Anota un gasto pagado con la gaveta",
     icon: Receipt,
   },
   {
@@ -91,9 +93,11 @@ export function SacarDineroDialog({
   const [categoriaId, setCategoriaId] = React.useState("")
   const [categorias, setCategorias] = React.useState<CategoriaGasto[]>([])
   const [loading, setLoading] = React.useState(false)
+  const [errorMonto, setErrorMonto] = React.useState("")
 
   const reset = () => {
     setModo(null)
+    setErrorMonto("")
     setMonto("")
     setDescripcion("")
     setCategoriaId("")
@@ -117,7 +121,7 @@ export function SacarDineroDialog({
     e.preventDefault()
     const m = parseFloat(monto)
     if (isNaN(m) || m <= 0) {
-      toast.error("Ingresa un monto válido")
+      setErrorMonto("Escribe un monto mayor que $0.")
       return
     }
 
@@ -164,7 +168,7 @@ export function SacarDineroDialog({
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error al registrar el movimiento")
+      toast.error(mensajeError("registrar el movimiento", err))
     } finally {
       setLoading(false)
     }
@@ -182,7 +186,7 @@ export function SacarDineroDialog({
       : modo === "traer"
         ? `Vas a meter ${montoTxt} a la gaveta, sacados de la bóveda.`
         : modo === "retiro"
-          ? `Vas a sacar ${montoTxt} de la gaveta como retiro personal.`
+          ? `Vas a sacar ${montoTxt} de la gaveta como retiro personal (no es gasto del negocio).`
           : `Vas a sacar ${montoTxt} de la gaveta para: ${nota || "un gasto"}.`
 
   return (
@@ -223,25 +227,32 @@ export function SacarDineroDialog({
               </p>
             )}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="sacardinerodialog-monto" className="text-xs font-medium text-muted-foreground">Monto ($)</Label>
-              <Input id="sacardinerodialog-monto"
-                type="number"
-                min={0.01}
-                step="0.01"
-                inputMode="decimal"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-                placeholder="0.00"
-                autoFocus
-                className="h-12 md:h-12 text-center font-mono text-xl font-bold tabular-nums"
-              />
+              <Label htmlFor="sacardinerodialog-monto" className="text-xs font-medium text-muted-foreground">Monto</Label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xl text-muted-foreground">$</span>
+                <Input id="sacardinerodialog-monto"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={monto}
+                  onChange={(e) => { setMonto(e.target.value); setErrorMonto("") }}
+                  aria-invalid={!!errorMonto}
+                  aria-describedby={errorMonto ? "sacardinero-monto-error" : undefined}
+                  placeholder="0.00"
+                  autoFocus
+                  size="lg"
+                  className="text-center font-mono text-xl font-bold tabular-nums"
+                />
+              </div>
+              {errorMonto && <CampoError id="sacardinero-monto-error">{errorMonto}</CampoError>}
             </div>
 
             {modo === "gasto" && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="sacardinerodialog-categoria-opcional" className="text-xs font-medium text-muted-foreground">Categoría (opcional)</Label>
                 <Select value={categoriaId} onValueChange={setCategoriaId}>
-                  <SelectTrigger id="sacardinerodialog-categoria-opcional" className="h-11 md:h-11 w-full">
+                  <SelectTrigger id="sacardinerodialog-categoria-opcional" className="w-full">
                     <SelectValue placeholder="Sin categoría (se guarda en Otros)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -264,7 +275,6 @@ export function SacarDineroDialog({
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 placeholder={modo === "gasto" ? "Ej. Pago de agua" : "Nota opcional"}
-                className="h-11 md:h-11"
               />
             </div>
 
@@ -275,7 +285,7 @@ export function SacarDineroDialog({
             )}
 
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setModo(null)}>
+              <Button type="button" variant="outline" onClick={() => setModo(null)}>
                 Atrás
               </Button>
               <Button type="submit" disabled={loading} className="gap-2">

@@ -4,6 +4,8 @@
  * silencio.
  */
 
+import { CampoError } from "@/components/campo-error"
+
 const FACTOR_MIN = 0.001
 const FACTOR_MAX = 99999
 const PRECIO_MAX = 999999.99
@@ -23,7 +25,7 @@ function decimales(texto: string): number {
   return i === -1 ? 0 : t.length - i - 1
 }
 
-/** Mensaje de error del factor ("Múltiplo"), o null si es válido. */
+/** Mensaje de error de "Unidades que trae" (el factor), o null si es válido. */
 export function errorFactor(texto: string): string | null {
   const n = leer(texto)
   if (n === null) return "Escribe cuántas unidades trae (por ejemplo 1 o 12)"
@@ -49,9 +51,12 @@ export function avisoPrecio(texto: string): string | null {
   return n === 0 ? "Se venderá gratis" : null
 }
 
-/** Mensaje bajo un campo: error en rojo o aviso en ámbar. */
-export function MensajeCampo({ error, aviso }: { error?: string | null; aviso?: string | null }) {
-  if (error) return <p className="text-[11px] font-medium text-destructive">{error}</p>
-  if (aviso) return <p className="text-[11px] font-medium text-warning-text">{aviso}</p>
+/**
+ * Mensaje bajo un campo: error en rojo (con `role="alert"`) o aviso en ámbar.
+ * Pasa `id` y conéctalo al campo con `aria-describedby` (y `aria-invalid`).
+ */
+export function MensajeCampo({ id, error, aviso }: { id?: string; error?: string | null; aviso?: string | null }) {
+  if (error) return <CampoError id={id}>{error}</CampoError>
+  if (aviso) return <p id={id} className="text-xs font-medium text-warning-text">{aviso}</p>
   return null
 }
