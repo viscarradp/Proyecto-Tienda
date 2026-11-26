@@ -1,476 +1,106 @@
-# Plan de Endurecimiento Post-Auditoría — Estado y Hoja de Ruta
+# Estado del proyecto y qué sigue
 
-> **Propósito de este documento:** que cualquiera (incluyendo un asistente de IA sin memoria de conversaciones anteriores) pueda retomar este trabajo en cualquier momento sabiendo exactamente qué se hizo, por qué, qué falta, y qué decisiones ya están tomadas vs. cuáles siguen abiertas.
+> Documento vivo: dónde está el proyecto, qué falta antes de usarlo con dinero real y qué viene después. Se actualiza
+> en el mismo cambio que avanza el trabajo. El detalle de cada lote está en el
+> [backlog del ciclo](backlog-ciclo-2026-11.md); el porqué de cada decisión técnica, en los [ADRs](../decisions/).
 >
-> **Origen:** [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md), sección 5 "Plan de Acción Inmediato". Este documento es el tracker vivo de ese plan; `auditorias/2026-07-02-auditoria-tecnica.md` queda congelado como el informe original.
->
-> **Última actualización:** 2026-11-24 (**Ciclo 2026-11 terminado y ⏸ en pausa para la prueba con la tienda real**; ver [Pausa para la prueba real](#pausa-para-la-prueba-real)).
->
-> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó los Niveles 1 y 2 de su backlog (lotes L1–L14 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **El desarrollo está en pausa a propósito** para que la tienda lo use de verdad. El 2026-11-26 quedaron aplicados el esquema en Supabase (conservando el catálogo real) y el despliegue en Render + Vercel; antes de la prueba faltan el primer ingreso, activar el respaldo y ensayar una restauración: checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después de la prueba se retoma con lo que la tienda reporte, el Nivel 3 y las decisiones del primer mes; ver [Pausa para la prueba real](#pausa-para-la-prueba-real). El 2026-11-25 se hizo además una **[auditoría integral de UX/UI](../auditorias/2026-11-25-auditoria-ux-ui.md)** (143 hallazgos, 6 🔴 verificados) con seis olas de corrección, **todas implementadas y verificadas en el navegador entre el 2026-11-25 y el 2026-11-26** (estado y detalle en el §5 del [backlog](backlog-ciclo-2026-11.md)). Desde entonces la dueña entra a "Mi negocio" y el menú dice Mi negocio · Vender · Inventario · Gastos y deudas · Ventas y turnos · Usuarios.
-
----
-
-## Cómo usar este documento
-
-1. Lee la sección **"Reglas del proyecto"** primero — son restricciones de diseño no negociables que el usuario fijó explícitamente.
-2. Revisa qué Fase está `✅ COMPLETADA`, `🔄 EN PROGRESO` o `⏳ PENDIENTE`.
-3. Si vas a retomar una fase pendiente, lee su sección completa antes de escribir código — cada una enlaza a los hallazgos de la auditoría y a los ADRs relevantes.
-4. Actualiza este archivo (estado, commits, decisiones) cada vez que avances una fase. Es un documento vivo, no un registro histórico congelado (para eso está `auditorias/2026-07-02-auditoria-tecnica.md`).
-
----
-
-## Reglas del proyecto (fijadas por el usuario, aplican a todas las fases)
-
-1. **Escalabilidad ante todo.**
-2. **Soluciones escalables sobre soluciones rápidas y momentáneas.**
-3. **No sobreingeniería.** El usuario final es una persona no-empresaria (dueña de una tienda de colonia) que solo quiere llevar su negocio de forma más fácil y saber si es rentable. Las soluciones deben ser proporcionales a ese contexto, no a un escenario enterprise/multi-tenant.
-4. **Documentar todo en `docs/`**, de forma que se pueda leer rápido y que cualquiera pueda darle mantenimiento sin importar quién continúe el proyecto.
-
-Restricciones operativas específicas (confirmadas con el usuario el 2026-07-02):
-- **Sin migraciones de Prisma todavía** — el proyecto está en desarrollo activo, sin instancias de producción. Ver [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md). Cuando se entre a producción, SÍ se adoptan migraciones.
-- **Despliegue agnóstico de proveedor**: originalmente se consideró AWS; ahora el usuario está evaluando **GCP** para el backend, manteniendo **Supabase** para la base de datos. Ninguna decisión de código debe atarse a un proveedor específico — todo pasa por variables de entorno (ver [`../operations/configuration.md`](../operations/configuration.md)).
-- **Git**: trabajar siempre en ramas `feature/*`, nunca directo en `master`; pushear a `origin`. (Confirmado como preferencia general del usuario, no solo para este trabajo.)
-
----
-
-## Fase 0 — Concurrencia y Seguridad — ✅ COMPLETADA (2026-07-02)
-
-**Rama:** `feature/fase0-hardening` — mergeada a `master` con `--no-ff` (commit `9a563a1`) y pusheada a `origin/master` el 2026-07-02.
-
-**Hallazgos de la auditoría que resuelve:** H1, H2, H3, H4, H7, H15, H16 (ver `auditorias/2026-07-02-auditoria-tecnica.md` sección 3).
-
-### Bloque A — Concurrencia (bloqueo pesimista)
-Commit: `4dc95bd fix(backend): bloqueo pesimista para evitar sobreventa y sobregiro de caja`
-
-- `ventas.service.ts create()`: `FOR UPDATE` sobre los lotes candidatos en el motor FIFO (antes: `findMany` sin lock → sobreventa posible).
-- `ventas.service.ts anular()`: `FOR UPDATE` sobre el turno de caja antes de validar `estado === 'ABIERTA'`.
-- `compras.service.ts create()`: `FOR UPDATE` sobre el turno abierto (rama `CAJA_POS`); advisory lock `caja_general_ledger` (rama `CAJA_GENERAL`, porque el saldo es un agregado `SUM()`, no una fila).
-- `movimientos_financieros.service.ts create()`: `FOR UPDATE` sobre el turno antes de validar fondos en egresos. Se eliminó un comentario que afirmaba falsamente que el `SELECT` ya aplicaba row-lock.
-- `cajas_turnos.service.ts abrir()`: advisory lock `caja_turno_abrir` (no hay fila que bloquear antes de crear el primer turno).
-- `cajas_turnos.service.ts cerrar()`: `FOR UPDATE` sobre el turno (evita doble cierre / doble ajuste financiero — hallazgo adicional encontrado durante la implementación, no estaba en la auditoría original).
-- Nuevo módulo compartido: `erp-tienda-backend/src/common/concurrency.ts` (tipos `CajaTurnoRow`/`LoteInventarioRow` para `$queryRaw`, helper `acquireAdvisoryLock`).
-- **Decisión de diseño:** bloqueo pesimista (`FOR UPDATE` / advisory lock) elegido sobre `Serializable`+reintento y sobre actualización optimista. Detalle completo y alternativas descartadas en [`../decisions/0001-concurrencia-for-update.md`](../decisions/0001-concurrencia-for-update.md).
-
-### Bloque B — Credenciales
-Commit: `d932e29 fix(backend): eliminar credencial admin hardcodeada del seed inicial`
-
-- `usuarios.service.ts onModuleInit()`: la contraseña del admin semilla ya no es `admin123` hardcodeada. Ahora viene de `INITIAL_ADMIN_PASSWORD` (env). Si la variable falta y la tabla está vacía, no se crea ningún usuario (con warning claro, sin credenciales en el log).
-- Detalle en [`../decisions/0003-admin-seed-por-env.md`](../decisions/0003-admin-seed-por-env.md).
-
-### Bloque C — Hardening HTTP
-Commit: `2508f39 feat(backend): rate-limiting, Helmet, CORS por allowlist y Swagger gated`
-
-- `@nestjs/throttler`: límite global 60 req/min/IP (`APP_GUARD`, corre incluso sobre rutas `@Public`); límite estricto de 5/min en `POST /auth/login` vía `@Throttle`.
-- `helmet` global en `main.ts` (con CSP relajada solo cuando Swagger está activo).
-- CORS: `origin` desde `CORS_ORIGINS` (env, allowlist) en vez de `origin: true`; `credentials: false` (el JWT viaja por header, no por cookie cross-origin).
-- Swagger: montado solo si `NODE_ENV !== 'production'` o `ENABLE_SWAGGER=true`.
-- `.env.example` creado en backend y frontend, documentando todas las variables.
-- Detalle y alternativas descartadas en [`../decisions/0004-hardening-http.md`](../decisions/0004-hardening-http.md).
-
-### Bloque D — Documentación (`docs/`)
-Commit: `191d90f docs: crear carpeta docs/ con arquitectura, dominio, seguridad y ADRs`
-
-Se creó la carpeta `docs/` completa desde cero: `README.md` (índice), `architecture/overview.md`, `architecture/data-model.md`, `domain/caja-y-ventas.md`, `security.md`, `operations/configuration.md`, `decisions/0001-0004` (ADRs), `roadmap/hardening-backlog.md`.
-
-### Verificación real (no solo revisión de código)
-Se levantó un PostgreSQL 16 desechable vía Docker, se sembraron datos mínimos, se arrancó el backend compilado, y se ejercitaron los 4 escenarios de concurrencia con `curl` en paralelo:
-
-| Escenario | Resultado |
-|---|---|
-| FIFO (ventas concurrentes) | 7/8 ventas aceptadas = exactamente el stock disponible (21/21), 0 sobreventa |
-| Egresos concurrentes | 2/8 aceptados dentro del saldo, resto con 400 limpio, 0 sobregiro |
-| Apertura de turno concurrente | 1/5 aceptado, resto 409 |
-| Cierre de turno concurrente | 1/3 aceptado, resto 409, un solo ajuste financiero (no triplicado) |
-
-**Hallazgo importante durante la verificación:** se encontró un **deadlock real de PostgreSQL (`40P01`)** en `movimientos_financieros.service.ts`, no anticipado por la revisión de código. Causa: adquirir `FOR UPDATE` *después* de un `INSERT` con FK a la misma fila (el `INSERT` toma un lock `FOR KEY SHARE` implícito que compite con el `FOR UPDATE` posterior — dos transacciones pueden terminar esperándose circularmente). Corregido en el mismo bloque de trabajo:
-
-Commit: `832e3e0 fix(backend): evitar deadlock por orden de bloqueo vs INSERT con FK`
-
-- Regla aplicada: **siempre bloquear (`FOR UPDATE`/advisory lock) ANTES de insertar cualquier fila que referencie esa fila por FK**, nunca después.
-- Corregido en `movimientos_financieros.service.ts` (donde se detectó) y preventivamente en `ventas.service.ts create()` (mismo patrón de riesgo, no confirmado empíricamente pero estructuralmente idéntico).
-- `compras.service.ts`, `cajas_turnos.service.ts` y `ventas.service.ts anular()` ya tenían el orden correcto — no requirieron cambios.
-- Documentado en detalle en [`../decisions/0001-concurrencia-for-update.md`](../decisions/0001-concurrencia-for-update.md), sección "Gotcha descubierto en pruebas".
-- Re-verificado tras el fix: mismos 4 escenarios, cero deadlocks en el log del servidor.
-
-### Pendiente de Fase 0
-
-- Nada. Todos los hallazgos H1-H4, H7, H15, H16 de la auditoría están resueltos, verificados y mergeados a `master`. Fase 0 cerrada.
-
----
-
-## Fase 1 — Base de Datos y Operaciones — ✅ COMPLETADA (2026-07-03)
-
-**Rama:** `feature/fase1-indices-excepciones` — mergeada a `master` con `--no-ff` y pusheada a `origin/master` el 2026-07-03.
-
-**Hallazgos que resuelve:** H5 (índices). El filtro de excepciones no era un
-hallazgo numerado de la auditoría, pero estaba en `hardening-backlog.md`
-como ítem "Menores" y se resolvió en el mismo bloque de trabajo por tocar el
-mismo tipo de riesgo (respuestas HTTP incorrectas).
-
-### Decisión de alcance tomada antes de empezar
-
-El plan original agrupaba tentativamente 5 puntos en Fase 1. Antes de
-ejecutar, se re-evaluó con el usuario:
-
-- **Migraciones baseline y constraints de BD** (puntos 2 y 3 originales):
-  quedan explícitamente pospuestos hasta producción — decisión ya tomada en
-  Fase 0 ([`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md)),
-  documentados con el SQL exacto en [`hardening-backlog.md`](hardening-backlog.md) ítems 1-2.
-- **`usuario_id` / trazabilidad de autor** (punto 4 original, hallazgo H8):
-  se decidió **diferir** — es un cambio más invasivo (schema + 5 services +
-  un decorator `@CurrentUser()` nuevo) que no se justifica mientras el
-  negocio opere con un solo cajero activo. Queda en
-  [`hardening-backlog.md`](hardening-backlog.md) ítem 4.
-- **Alcance final de Fase 1:** solo índices (punto 1) + filtro global de
-  excepciones (punto 5) — ambos de bajo riesgo y alto valor.
-
-### Qué se hizo
-
-1. **16 índices añadidos a `schema.prisma`** (`@@index`), cada uno
-   justificado por un patrón de consulta real verificado en el código (no
-   especulativo) — incluye 4 índices compuestos donde la evidencia mostraba
-   dos columnas siempre filtradas juntas (`lotes_inventario(producto_id,
-   fecha_ingreso)` para el motor FIFO, `cajas_turnos(estado, fecha_cierre)`,
-   `ventas(estado, fecha)`, `movimientos_financieros(tipo_movimiento,
-   fecha)`). Detalle completo por índice en
-   [`../decisions/0005-indices-bd.md`](../decisions/0005-indices-bd.md).
-2. **`PrismaExceptionFilter` global** (`src/common/filters/prisma-exception.filter.ts`,
-   registrado vía `APP_FILTER`): traduce `P2002`→409, `P2003`→400, `P2025`→404
-   en vez del 500 genérico, para los servicios que no tenían manejo local
-   propio. Detalle en [`../decisions/0006-filtro-excepciones-prisma.md`](../decisions/0006-filtro-excepciones-prisma.md).
-
-### Verificación real
-
-Contra un PostgreSQL 16 desechable (Docker), igual que en Fase 0:
-
-- `npx prisma validate` / `format`: schema válido.
-- `npx prisma db push`: sincroniza sin errores.
-- `pg_indexes`: los 16 índices existen con las columnas correctas.
-- `EXPLAIN` sobre la consulta exacta del motor FIFO: el planner usa
-  `Bitmap Index Scan` sobre el nuevo índice compuesto (no *sequential scan*).
-- HTTP end-to-end: `POST /usuarios` con `nombre` duplicado → `409` limpio
-  (antes `500`); `DELETE /productos/:id` con una presentación asociada →
-  `400` limpio (antes `500`). Log del servidor sin excepciones sin manejar.
-
-### ⚠️ Paso manual pendiente: aplicar contra Supabase real
-
-Este entorno de desarrollo **no tiene las credenciales de la Supabase real**
-(no hay `.env`), así que el cambio de schema se verificó en una base
-desechable pero **no se aplicó a la base de datos real del proyecto**.
-Ejecutar manualmente cuando se retome el trabajo:
-
-```bash
-cd erp-tienda-backend
-npx prisma db push
-```
-
-Es una operación aditiva seguro (`CREATE INDEX`), sin pérdida de datos.
-
-### Pendiente de Fase 1
-
-- [ ] Correr `npx prisma db push` contra la Supabase real (paso manual, ver arriba — no depende de mergear la rama).
-- Índices y filtro de excepciones están completos, verificados y mergeados a `master`. Fase 1 cerrada salvo el paso manual de arriba.
-
----
-
-## Fase 2 — Frontend y Robustez — ✅ COMPLETADA (2026-07-03)
-
-**Rama:** `feature/fase2-frontend-robustez` — mergeada a `master` con `--no-ff`.
-
-**Hallazgos que resuelve:** H10 (middleware.ts), H11 (cookie JWT), H14 (reset
-de Zustand), H27 (error/loading boundaries), H29 (Toaster no montado), H32
-(selectores de Zustand). H13 (Server Components) y H30 (accesibilidad)
-habían quedado listados en el plan original pero **nunca tuvieron un ítem
-correspondiente en el alcance numerado** — inconsistencia del plan original,
-no un recorte silencioso de esta fase. Ambos quedan documentados como
-pendientes en [`hardening-backlog.md`](hardening-backlog.md).
-
-### Hallazgo durante la investigación: Next.js 16 renombró `middleware.ts` a `proxy.ts`
-
-Antes de escribir código se leyó la documentación empaquetada en
-`node_modules/next/dist/docs/` (como indica `AGENTS.md` del frontend) y se
-confirmó que Next 16 **deprecó `middleware.ts` en favor de `proxy.ts`**
-(función exportada `proxy`, no `middleware`). Se implementó con la
-convención nueva. También se detectó que `error.tsx` en Next 16.2+ agregó el
-prop `unstable_retry` (reemplazando el uso recomendado de `reset`), usado en
-la implementación.
-
-### Qué se hizo (los 6 ítems del alcance original)
-
-1. **`proxy.ts`** (raíz del frontend): protege `/dashboard/*` verificando
-   presencia y expiración (no firma) del JWT — decisión de diseño explicada
-   en [`../decisions/0007-proxy-verificacion-liviana.md`](../decisions/0007-proxy-verificacion-liviana.md).
-2. **`reset()` en `inventoryStore`** (acción nueva) y reutilización del
-   `clearCart()` ya existente en `cartStore`, ambos invocados en
-   `handleLogout()` de `dashboard/layout.tsx`.
-3. **Cookies del JWT** con `Secure` + `SameSite=Lax` y expiración alineada a
-   12h (antes 24h, desalineada del JWT real) — ver
-   [`../decisions/0008-cookie-flags.md`](../decisions/0008-cookie-flags.md).
-4. **`<Toaster>` montado** en `app/layout.tsx`; los 6 `alert()` nativos (5 en
-   `pos/page.tsx`, 1 en `CompraForm.tsx`) y el `console.warn` de código de
-   barras no encontrado (citado explícitamente en el hallazgo H29) se
-   reemplazaron por `toast.error`/`toast.warning` de `sonner`.
-5. **`app/error.tsx`, `app/loading.tsx`, `app/not-found.tsx`** creados a
-   nivel raíz (cubren todo el árbol de `app/` por herencia; no se
-   duplicaron por segmento, siguiendo "no sobreingeniería").
-6. **Selectores `useShallow`** en `pos/page.tsx` (ambos stores) e
-   `inventario/page.tsx` (`inventoryStore`); `EditProductDialog.tsx` se
-   cambió a un selector de un solo campo (no necesita `useShallow`).
-
-### Verificación real
-
-- `npm run build` (producción, con Turbopack): compiló limpio, TypeScript
-  sin errores, y el log de build confirmó `ƒ Proxy (Middleware)` — Next.js
-  reconoció `proxy.ts` correctamente — y la ruta `/_not-found` generada.
-- `npm run lint`: cero problemas nuevos introducidos (se verificó contra
-  `git diff` que los warnings/errores preexistentes reportados por eslint no
-  tocan ninguna línea modificada en esta fase).
-- `proxy.ts` probado con `curl` contra el build de producción, con tokens
-  JWT construidos a mano (mismo formato, sin necesitar el secreto real ya
-  que el proxy no valida firma):
-  - Sin cookie `token` → `307` a `/auth/login`.
-  - Token con `exp` vencido → `307` a `/auth/login`.
-  - Token con `exp` vigente → `200` (pasa).
-- `not-found.tsx` probado con `curl` sobre una ruta inexistente bajo
-  `/dashboard`: `404` con el contenido esperado en el HTML.
-- Prueba de circuito completo: login real contra el backend (Postgres
-  desechable vía Docker, mismo método que Fase 0/1) → JWT real → ese token
-  usado como cookie contra el `proxy.ts` del frontend → `200`, confirmando
-  que Fase 0/1 (backend) y Fase 2 (frontend) son compatibles de punta a
-  punta.
-
-### Pendiente de Fase 2
-
-- Nada de los 6 ítems del alcance. H13 (Server Components) y H30
-  (accesibilidad: logout como `<div onClick>`, nav con `<span>` dentro de
-  `<Link>`) quedan en [`hardening-backlog.md`](hardening-backlog.md) como
-  ítems nuevos, no cubiertos por esta fase.
-
----
-
-## Fase 3 — Higiene del Proyecto — ✅ COMPLETADA (2026-07-04)
-
-**Rama:** `feature/fase3-testing-docker-ci` — mergeada a `master` con `--no-ff` y pusheada a `origin/master` el 2026-07-04.
-
-### Alcance original y qué pasó con cada ítem
-
-1. **Documentación obsoleta de la raíz** — ya se había resuelto durante
-   Fase 0 (eliminación de `BUGS-REPORT.md`/`CONTEXT-AGENTS.md`, actualización
-   de `README.md`). Este ítem del plan quedó desactualizado por escribirse
-   antes de que ese trabajo ocurriera — no había nada pendiente al llegar a
-   Fase 3.
-2. **Testing real** — hecho. 7 tests e2e (`test/*.e2e-spec.ts`) cubriendo el
-   motor FIFO (H1) y las invariantes de turnos de caja (H7), no cobertura
-   exhaustiva del CRUD. Decisión de alcance documentada en
-   [`../decisions/0009-testing-docker-ci.md`](../decisions/0009-testing-docker-ci.md).
-3. **Docker + CI/CD** — hecho, con una decisión explícita de minimizar
-   alcance: `docker-compose.yml` solo levanta Postgres (no todo el stack);
-   backend y frontend siguen corriendo nativos. CI en
-   `.github/workflows/ci.yml` (dos jobs: backend con Postgres de servicio,
-   frontend). Detalle en el ADR 0009.
-4. **Medios de pago no-efectivo** — **resuelto por el usuario: NO.** El
-   sistema es solo efectivo, a propósito, sin planes de agregar tarjeta o
-   transferencia. Documentado como decisión de producto (no supuesto
-   temporal) en [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md).
-
-### Hallazgo colateral: `.prettierrc` faltaba en el disco (no en el repo)
-
-Al escribir los tests e2e, correr lint reveló que Prettier usaba comillas
-dobles por defecto mientras que **todo el código ya escrito** usa comillas
-simples. La causa no era que el proyecto nunca tuviera un `.prettierrc`
-— sí lo tiene, comiteado desde el primer commit — sino que faltaba **en el
-disco de este entorno de trabajo** (una eliminación local nunca comiteada,
-previa a esta sesión). Esto habría hecho fallar el gate de `lint` en CI
-desde el primer commit, sin relación con el trabajo de esta fase. Se
-restauró con `git restore` (no se creó un archivo nuevo) y se corrió
-`eslint --fix` una vez sobre `src/` para limpiar la deuda de formato
-preexistente (puro whitespace, verificado con `git diff -w`). Detalle en
-el ADR 0009.
-
-### Verificación real
-
-- Los 7 tests e2e corridos contra un Postgres real (`docker-compose`):
-  todos en verde.
-- **Prueba de que los tests tienen dientes:** se revirtió deliberadamente
-  el `FOR UPDATE` del motor FIFO (fix de Fase 0) y se confirmó que el test
-  de concurrencia lo detecta (sobreventa real: 0 rechazos donde debía haber
-  al menos 1) antes de restaurar el fix y re-verificar que todo vuelve a
-  pasar.
-- `npm run build` y `npm run lint:check` (sin `--fix`, tal como corre en
-  CI) limpios en backend; build/lint limpios en frontend (sin cambios en
-  esta fase).
-- **Permiso explícito del usuario:** Prisma bloqueó automáticamente el
-  primer intento de `db push --force-reset` por detectar que lo invocaba un
-  agente de IA, exigiendo confirmación humana explícita antes de proceder
-  (mecanismo de seguridad correcto — nunca se intentó sortear). El usuario
-  confirmó y se procedió. Ver ADR 0009 para el detalle completo.
-
-### Hallazgo colateral #2 (post-merge): 3 errores de lint preexistentes en el frontend
-
-Al verificar `master` después del merge, `npm run lint` del frontend falló
-con 3 errores (`catch (err: any)` en dos archivos, y una violación de
-pureza de React por llamar `Date.now()` durante el render en
-`useBarcodeScanner.ts`) — los tres presentes **desde el primer commit del
-repo** (`git blame` → `d22e4d5`), nunca antes visibles porque el frontend
-no tenía ningún gate de CI. Como `.github/workflows/ci.yml` (agregado en
-esta misma fase) sí corre `npm run lint` en cada push, estos habrían hecho
-fallar CI desde el primer push por deuda ajena a esta fase. Se corrigieron
-con cambios mínimos (manejo de `unknown`/`instanceof Error`; sembrar el ref
-de tiempo en `0` en vez de `Date.now()`, mismo comportamiento) directo en
-`master` (commit `6a2b1d2`), y se re-verificó build + lint + los 7 tests
-e2e completos contra Postgres real, todos en verde.
-
-### Pendiente de Fase 3
-
-Nada. Los 4 ítems del alcance original están resueltos (uno de ellos,
-"no" como decisión explícita de producto, no como código).
-
----
-
-## Ciclo 2026-11 — Bugs, auditorías y revisión de UX — ✅ IMPLEMENTADO · ⏸ EN PAUSA PARA LA PRUEBA REAL
-
-**Principio rector (fijado por el usuario el 2026-11-24):** el sistema debe **apoyar, no
-imponer**. La prioridad es la flexibilidad y la rapidez de uso para que la tienda no lo
-abandone por frustración. Toda regla nueva pasa por el filtro: *¿bloquea a la cajera? ¿hay
-pérdida real de dinero si no se bloquea?* — si no hay pérdida, se registra y se avisa, no se
-bloquea.
-
-**Forma de trabajo:** un líder planea, delega en subagentes (modelo económico, Sonnet) y
-revisa; cada cambio va en su rama `feature/*`, con test que reproduce primero, docs del área
-actualizados en el mismo cambio, revisión del diff + lint/build/unit/e2e (+ navegador si toca
-UI) y merge `--no-ff` a `master`. Las auditorías son de solo lectura y dejan su informe
-congelado en `../auditorias/`.
-
-| Fase | Contenido | Estado |
-|---|---|---|
-| 0 | Banco de pruebas: dependencias, Postgres local, línea base verde (29 e2e) | ✅ 2026-11-24 |
-| 1 | Bugs mayores: **1A** devolver→anular revierte dos veces (stock, efectivo, P&L); **1B** reportes cortan el día en UTC (El Salvador es UTC-6: ventas después de las 6 pm caen en el día siguiente). Ramas `feature/1a-anulacion-con-devoluciones` y `feature/1b-reportes-zona-horaria`; master con 38 e2e en verde y 1A verificado en navegador | ✅ 2026-11-24 |
-| 2 | Auditorías en paralelo (solo lectura): arquitectura (20 hallazgos), código (25), reglas de negocio (33 + 16 decisiones), interfaz (30) + recorrido en vivo del líder (14). Informes en `../auditorias/2026-11-24-*.md` | ✅ 2026-11-24 |
-| 3 | Consolidación: hallazgos 🔴 verificados (COD-02 reproducido), deduplicados en el **[backlog consolidado](backlog-ciclo-2026-11.md)** con lotes, olas y decisiones del negocio | ✅ 2026-11-24 — decisiones del negocio pendientes |
-| 4 | Implementación por lotes y olas según el [backlog consolidado](backlog-ciclo-2026-11.md) (máx. 2 subagentes a la vez, áreas sin archivos en común). Nueve olas: **L1a+L2** (POS e integridad de dinero y stock), **L1b+L3a** (inventario/estadísticas y despliegue seguro), **L4+L5a** (paginación, mostrador flexible en backend), **L5b+L6** (mostrador en pantalla, fondos y apertura), **L7+L8+L3b** (permisos y trazabilidad, compras a crédito y deudas, respaldo nocturno), **L9 + Fase 5** (fricción del mostrador y documentación), **L10+L11** (números de la dueña, inventario cómodo), **L12+L13** (anular sin borrar, tests y gaveta única), **L14** (accesibilidad y celular). Cierre: 284 e2e y 41 unitarios en verde; cada ola verificada en el navegador | ✅ 2026-11-24 |
-| 5 | Documentación: reorganizar `docs/` (reglas vigentes por tema en `domain/`, proyectos cerrados a `historial/`), arquitectura al día, SRS v3.1, README | ✅ 2026-11-24 |
-
-**Decisión tomada para 1A:** una venta que ya tiene devoluciones **no se puede anular**; la
-UI ofrece "Devolver el resto". El botón *Anular* solo aparece en ventas del turno abierto.
-
-**Decisiones del negocio (todas tomadas el 2026-11-24):** vender y avisar sin stock (D-01), alta
-rápida "por revisar" (D-02), venta por peso y por monto (D-03), registrar y avisar en los fondos
-(D-04), preguntar el origen de la diferencia de apertura (D-15), una sola gaveta (ARQ-03), la cajera
-opera y la dueña controla (D-06), compras fiadas con abonos (D-05) y respaldo nocturno propio. Cómo
-quedó cada una: [`../domain/`](../domain/caja-y-ventas.md). Siguen sin decidir las D-07…D-14
-(primer mes de uso), ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
-
-### Antes de la primera venta real
-
-Todo el código y los tests están listos; lo que falta son **pasos manuales** que este repo no puede hacer por ti (no
-tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
-
-1. ✅ **Hecho el 2026-11-26 con el MCP de Supabase** (permiso del usuario). La base tenía el esquema de marzo y un
-   catálogo real cargado (31 productos, 40 presentaciones con código de barras, 9 categorías) sin lotes, ventas ni
-   movimientos. Se movieron las 16 tablas viejas, con sus datos, al esquema `respaldo_2026_11_26` (no se borró nada);
-   se creó el esquema actual completo (`prisma migrate diff --from-empty`), se copiaron catálogo y categoría de gastos
-   (decisión del usuario: sin el usuario viejo; `admin` lo crea el backend con `INITIAL_ADMIN_PASSWORD`) y se activó RLS
-   sin políticas en las 22 tablas (la API de datos de Supabase no las expone; el backend entra como dueño). Ensayado
-   antes en una base local: estructura idéntica a Prisma (`migrate diff` vacío) y huella de columnas, índices y
-   restricciones igual en Supabase. Pendiente: la dueña valida los precios del catálogo; el esquema `respaldo_2026_11_26`
-   se puede borrar cuando el sistema ya esté en uso. Para cambios futuros: anotar aquí, ensayar en local y aplicar con
-   el MCP. Procedimiento anterior, por referencia — desde tu máquina, con la URL **directa** de Supabase (no la del
-   pooler, que no soporta DDL; ver [`../operations/deployment.md`](../operations/deployment.md)):
-
-   ```bash
-   cd erp-tienda-backend
-   DATABASE_URL="<url-directa>" npx prisma db push
-   ```
-
-   Si la BD tiene datos que quieras conservar, haz antes un respaldo manual con `pg_dump`, y acepta la confirmación de
-   pérdida de datos solo si es esperada: el schema ya **no** tiene la tabla `caja_general`, así que, si todavía existe en
-   esa base, `db push` pedirá confirmación para eliminarla. Cambios de schema del ciclo 2026-11 (todos aditivos):
-
-   | Lote | Cambio |
-   |---|---|
-   | L2 | `ventas.clave_idempotencia` (texto ≤ 64, **único**, nullable) |
-   | L5a | Tabla `pendientes_stock` (+ índices); `productos.por_revisar` (boolean, default `false`) |
-   | L7 | `usuarios.activo` (default `true`); `ventas.anulada_por_id` y `cajas_turnos.cerrado_por_id` (FK a `usuarios`, con índice) |
-   | L8 | `compras_inventario.usuario_id` (FK, con índice); tabla `abonos_cuentas_por_pagar` (+ índices) |
-   | L11 | `productos.activo` (boolean, default `true`) |
-   | L12 | En `movimientos_financieros`, `compras_inventario` y `ajustes_inventario`: `anulado` (default `false`), `anulado_en`, `anulado_por_id` (FK a `usuarios`), `motivo_anulacion`; en `movimientos_financieros` además `compra_id`, `ajuste_id` (FK) y `es_apertura` (default `false`) |
-   | Bot de compras (Telegram) | Tablas nuevas `bot_conversaciones` (`chat_id` único, borrador `Json`, estado) y `bot_alias` (texto normalizado → presentación, con índices); ver [`../domain/bot.md`](../domain/bot.md) |
-   | Bot: compras por caja (2026-11-26) | En `bot_alias`: `paquete` (texto ≤ 50, nullable) y `unidades_paquete` (`Decimal(12,3)`, nullable) |
-
-2. **Activar el respaldo nocturno.** Cargar en GitHub los secretos `BACKUP_DATABASE_URL` (conexión directa) y
-   `BACKUP_PASSPHRASE` (clave de cifrado, **guardada también fuera de GitHub**), lanzar *Respaldo nocturno* a mano y
-   confirmar que queda verde y **sin** el aviso "no configurado". Guía: [`../operations/respaldos.md`](../operations/respaldos.md).
-3. **Ensayo de restauración.** Descargar ese primer respaldo y restaurarlo en una base local vacía; comparar conteos de
+> **Última actualización:** 2026-11-26.
+
+## Dónde estamos
+
+- **Desplegado** desde el 2026-11-26: backend en Render (`https://proyecto-tienda-nbi6.onrender.com`), frontend en
+  Vercel (`https://proyecto-tienda-sand.vercel.app`) y base de datos en Supabase. Los dos se despliegan solos con cada
+  push a `master`. Detalle: [`../operations/deployment.md`](../operations/deployment.md).
+- **Desarrollo en pausa a propósito** para que la tienda use el sistema de verdad. Lo que reporte la tienda pesa más que
+  las auditorías para decidir qué sigue.
+- **Hecho:** el ciclo 2026-11 completo (lotes L1–L14 del backlog), las seis olas de la auditoría de UX/UI, el bot de
+  Telegram para registrar compras y la guía e instalador de la laptop del punto de venta.
+- **Falta antes de la primera venta real:** los pasos ⏳ de la lista de abajo.
+
+Desde la ola 6, la dueña entra a "Mi negocio" y su menú dice Mi negocio · Vender · Inventario · Gastos y deudas ·
+Ventas y turnos · Usuarios; la cajera entra a Vender.
+
+## Antes de la primera venta real
+
+1. ✅ **Esquema actual en Supabase** (2026-11-26, con el MCP de Supabase y permiso del usuario). Las tablas de marzo,
+   con sus datos, se movieron al esquema `respaldo_2026_11_26` (no se borró nada); se creó el esquema completo con
+   `prisma migrate diff --from-empty`, se copió el catálogo real (31 productos, 40 presentaciones con código de barras,
+   9 categorías) y se activó RLS sin políticas en todas las tablas (la API de datos de Supabase no las expone; el
+   backend entra como dueño). Ensayado antes en una base local. Pendiente: que la dueña valide los precios del
+   catálogo; borrar `respaldo_2026_11_26` cuando el sistema ya esté en uso.
+2. ✅ **Despliegue** en Render + Vercel (2026-11-26). `GET /salud` → 200 y CORS acepta el frontend. Render (plan
+   gratis) se duerme sin tráfico; la laptop del punto de venta lo mantiene despierto en horario de tienda.
+3. ⏳ **Activar el respaldo nocturno:** cargar en GitHub los secretos `BACKUP_DATABASE_URL` (conexión directa) y
+   `BACKUP_PASSPHRASE` (guardada también fuera de GitHub), lanzar *Respaldo nocturno* a mano y confirmar que queda
+   verde y **sin** el aviso "no configurado". Guía: [`../operations/respaldos.md`](../operations/respaldos.md).
+4. ⏳ **Ensayar una restauración:** restaurar ese primer respaldo en una base local vacía y comparar los conteos de
    `ventas`, `productos` y `usuarios`. Un respaldo que nunca se restauró no es un respaldo.
-4. ✅ **Desplegado el 2026-11-26** (Render + Vercel + Supabase). Todos los despliegues de Render fallaban desde el
-   2026-11-24 porque faltaba `CORS_ORIGINS`; con el MCP de Render se agregaron `CORS_ORIGINS`
-   (`https://proyecto-tienda-sand.vercel.app`), `TRUST_PROXY=1` y `ZONA_HORARIA_NEGOCIO` sin tocar los secretos. El
-   backend (`https://proyecto-tienda-nbi6.onrender.com`) arrancó, creó `admin` y responde `GET /salud` → 200; CORS
-   acepta el frontend; el frontend de Vercel ya es la versión actual y apunta a ese backend. Render (plan gratis) se
-   despliega solo con cada push a `master` y se duerme sin tráfico. **Laptop del POS** (2026-11-26): guía
-   [`../operations/laptop-pos.md`](../operations/laptop-pos.md) e instalador `scripts/pos/instalar.sh` (Linux Mint 22
-   Xfce: inicio automático, Chromium en kiosco que se reabre solo, tapa que enchufada no suspende, sin bloqueos, y ping a
-   `/salud` cada 10 min de 05:30 a 21:30 más al arrancar y al despertar, para no gastar las 750 h gratis de Render).
-   Escrito sin una laptop Linux para probar: la guía trae la lista de verificación. Pendiente: que el usuario lo
-   instale y lo verifique, y el bot en modo `webhook` cuando se pruebe.
-5. **Primer ingreso:** entrar como `admin`, **cambiar la contraseña inicial** y retirar `INITIAL_ADMIN_PASSWORD`; crear el
-   usuario de la cajera (rol `CAJERO`).
-6. **Carga inicial:** inventario inicial como compra con origen `CAPITAL_DUEÑOS`; en Estadísticas, declarar el efectivo
-   guardado en la bóveda (asistente "efectivo guardado hoy") y, si hay que ordenar la bóveda, hacer un arqueo; abrir el
-   primer turno (el primer fondo se registra como aporte de la dueña).
+5. ⏳ **Laptop del punto de venta:** instalar con `scripts/pos/instalar.sh` y recorrer la lista de verificación de
+   [`../operations/laptop-pos.md`](../operations/laptop-pos.md) (se escribió sin una laptop Linux para probarlo).
+6. ⏳ **Primer ingreso:** entrar como `admin`, cambiar la contraseña inicial, quitar `INITIAL_ADMIN_PASSWORD` de
+   Render y crear el usuario de la cajera (rol `CAJERO`).
+7. ⏳ **Carga inicial:** el inventario inicial como una compra pagada con capital de la dueña (origen
+   `CAPITAL_DUEÑOS`); en "Mi negocio",
+   declarar el efectivo guardado en la bóveda (y hacer un arqueo si hay que ordenarla); abrir el primer turno (el
+   primer fondo se registra como aporte de la dueña).
+8. ⏳ **Bot de Telegram (opcional):** crear el bot con @BotFather y la clave de OpenRouter; en Render,
+   `TELEGRAM_MODO=webhook`. Ver [`../domain/bot.md`](../domain/bot.md).
 
-### Pausa para la prueba real
+## Cambios de esquema pendientes en Supabase
 
-**Desde el 2026-11-24 el desarrollo está en pausa a propósito.** Los Niveles 1 y 2 del backlog están implementados y
-verificados; antes de pulir más, la tienda tiene que usar el sistema de verdad. Lo que reporte la tienda pesa más que las
-auditorías para decidir qué viene después.
+No hay migraciones ([ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md)). Cada tabla o columna nueva se
+anota aquí en el mismo cambio que la agrega; se ensaya en una base local desechable, se compara con
+`prisma migrate diff` y se aplica en Supabase con el MCP, con permiso del usuario para cada paso.
 
-1. **Antes de probar:** los pasos manuales de [Antes de la primera venta real](#antes-de-la-primera-venta-real). Sin
-   el `db push` la app no funciona contra Supabase, y sin respaldo activo no conviene meter datos reales.
-2. **Durante la prueba (sugerido: la primera semana o el primer mes):** anotar dónde la cajera se traba, duda o deja de
-   registrar algo, qué avisos ("registrar y avisar") aparecen seguido y si se entienden, qué descuadres salen al cerrar y
-   arquear, y qué le falta a la dueña para entender sus números.
-3. **Al retomar**, en este orden:
-   - Primero los **problemas reportados en la prueba** (bugs y fricción real).
-   - Después, las **decisiones del primer mes** D-07…D-14, ya con datos de uso: resumen diario, nota obligatoria en
-     descuadre, vencimientos, stock bajo, conteo físico, recargas, fiado a clientes, margen mínimo. También el conteo "a
-     ciegas" al cerrar (VIVO-09). Ver §1 del [backlog consolidado](backlog-ciclo-2026-11.md).
-   - Por último, lo que queda del **Nivel 3**, que la tienda no ve: código muerto, migraciones e imagen de Docker de
-     521 MB; y la pantalla de activos fijos (NEG-05) solo si hace falta. Lo visible del Nivel 3 se hizo **antes** de
-     entregar, el 2026-11-25 (login, esqueletos, Estadísticas, avisos en el celular), y sus errores de números también
-     (NEG-09 en la pausa; "Semana" en L1b y el ticket en L9).
-   - El Nivel 2 está completo: el login desde el celular por la red local (UX-01) quedó resuelto el 2026-11-25. Cómo
-     probar desde el celular: sección "Probar desde el celular" del [README](../../README.md).
-4. **Al entrar a producción con datos reales:** adoptar migraciones, constraints y `REVOKE` sobre las tablas de libro,
-   cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia ([`hardening-backlog.md`](hardening-backlog.md)).
+| Cambio | Lote | Estado |
+|---|---|---|
+| — | — | Supabase tiene el esquema completo al 2026-11-26 (incluye el bot y sus compras por caja). Nada pendiente. |
 
-La forma de trabajo para retomar no cambia: un líder planea y revisa, los subagentes implementan en ramas `feature/*`, y
-cada ola se aprueba explícitamente.
+## Qué sigue después de la prueba
 
----
+1. **Lo que reporte la tienda:** bugs y fricción real. Durante la prueba conviene anotar dónde la cajera se traba o
+   deja de registrar algo, qué avisos salen seguido y si se entienden, qué descuadres aparecen al cerrar y qué le
+   falta a la dueña para entender sus números.
+2. **Decisiones del primer mes**, ya con datos de uso: D-07…D-14, el conteo "a ciegas" al cerrar (VIVO-09) y las
+   mejoras de la dueña que esperan al uso real. Lista en el §1 del [backlog](backlog-ciclo-2026-11.md#1-pendiente).
+3. **Higiene que la tienda no ve:** código muerto y archivos sueltos, imagen de Docker del backend de 521 MB.
+4. **Al pasar a migraciones** (decisión abierta 1): migración base, constraints, `REVOKE` sobre las tablas de libro y
+   enums en el esquema; cookie `httpOnly` y Redis para el rate-limit si hay más de una instancia. Detalle en
+   [`hardening-backlog.md`](hardening-backlog.md).
 
-## Decisiones abiertas con el usuario (no bloquean el progreso, pero deben resolverse en algún momento)
+## Decisiones abiertas
 
-| # | Decisión | Contexto | Urgencia |
+| # | Decisión | Contexto |
+|---|---|---|
+| 1 | ¿Cuándo adoptar migraciones de Prisma? | Hoy: `db push` en local + ensayo + MCP en Supabase. Adoptarlas reactiva las constraints y el `REVOKE` diferidos ([`hardening-backlog.md`](hardening-backlog.md)). |
+| 2 | Decisiones del primer mes (D-07…D-14) | Se toman con la dueña y con datos de uso ([backlog §1](backlog-ciclo-2026-11.md#1-pendiente)). |
+
+## Reglas del proyecto (fijadas por el usuario)
+
+1. **Apoyar, no imponer:** ante la duda, registrar y avisar en vez de bloquear ([ADR 0011](../decisions/0011-registrar-y-avisar.md)).
+2. **No sobreingeniería:** la usuaria es la dueña de una tienda de colonia que quiere llevar su negocio más fácil y
+   saber si es rentable. Las soluciones se miden contra ese contexto, no contra uno empresarial.
+3. **Soluciones que escalen** antes que parches momentáneos, sin construir lo que todavía no se usa.
+4. **Todo se documenta en `docs/`**, en el mismo cambio, para que cualquiera pueda darle mantenimiento.
+5. **Nada atado a un proveedor:** la configuración va por variables de entorno
+   ([`../operations/configuration.md`](../operations/configuration.md)).
+
+La forma de trabajo (líder que planea y revisa, subagentes en ramas `feature/*`, aprobación ola por ola) está en el
+[`CLAUDE.md`](../../CLAUDE.md) de la raíz.
+
+## Historia resumida
+
+| Etapa | Fecha | Qué dejó | Detalle |
 |---|---|---|---|
-| 1 | Dónde corre cada parte | **✅ Decidido (2026-11-25): backend en Render (plan gratis, se duerme; keep-alive desde la laptop del POS), frontend en Vercel, BD en Supabase.** Variables de Render: [`../operations/render.env.example`](../operations/render.env.example). Pendiente: adaptar `deployment.md` (hoy habla de Cloud Run) y apuntar el keep-alive a `/salud` | — |
-| 2 | ¿Cuándo entra el proyecto a "producción"? | Dispara la adopción de migraciones (ADR 0002) y las constraints de BD diferidas | Baja por ahora, pero es la señal que reactiva varios ítems del backlog |
+| Fase 0 · Concurrencia y seguridad | 2026-07-02 | Bloqueo pesimista (`FOR UPDATE`, advisory locks) sin sobreventa ni sobregiro; admin inicial por variable de entorno; rate-limit, Helmet, CORS por lista y Swagger opcional | ADRs [0001](../decisions/0001-concurrencia-for-update.md), [0003](../decisions/0003-admin-seed-por-env.md), [0004](../decisions/0004-hardening-http.md) |
+| Fase 1 · Base de datos | 2026-07-03 | 16 índices; errores de Prisma traducidos a 409/400/404 | ADRs [0005](../decisions/0005-indices-bd.md), [0006](../decisions/0006-filtro-excepciones-prisma.md) |
+| Fase 2 · Frontend | 2026-07-03 | `proxy.ts` que protege el panel, cookie `Secure` + `SameSite=Lax`, avisos en vez de `alert()`, páginas de error | ADRs [0007](../decisions/0007-proxy-verificacion-liviana.md), [0008](../decisions/0008-cookie-flags.md) |
+| Fase 3 · Tests, Docker y CI | 2026-07-04 | e2e contra Postgres real, Postgres en Docker, CI en cada push; solo efectivo como decisión de producto | ADR [0009](../decisions/0009-testing-docker-ci.md) |
+| Modelo contable (Bloques 1–3) | 2026-07 | Movimientos origen→destino, autor en cada operación, arqueo, devoluciones, historial de precios, modo contingencia | [`../historial/modelo-contable/`](../historial/modelo-contable/README.md) |
+| Rediseño UX/UI | 2026-07 | Tokens de diseño, tema claro/oscuro, menú inferior en el celular | [`../historial/rediseno/`](../historial/rediseno/README.md) |
+| Ciclo 2026-11 | 2026-11-24 | Bugs mayores (anular con devoluciones, reportes en UTC), cuatro auditorías, lotes L1–L14 | [backlog §2–3](backlog-ciclo-2026-11.md) |
+| Auditoría UX/UI y seis olas | 2026-11-25/26 | Cobro seguro, mostrador en el celular, números confiables, sistema visual, accesibilidad, "Mi negocio" | [backlog §4](backlog-ciclo-2026-11.md#4-auditoría-integral-de-uxui-2026-11-25) |
+| Bot de Telegram | 2026-11-26 | Compras por mensaje o foto de la factura, con confirmación de la dueña | [`../domain/bot.md`](../domain/bot.md) |
+| Despliegue | 2026-11-26 | Supabase con el esquema actual, Render + Vercel, laptop del punto de venta en modo kiosco | [`../operations/deployment.md`](../operations/deployment.md), [`../operations/laptop-pos.md`](../operations/laptop-pos.md) |
 
-**Resueltas:**
-
-- ¿Cuándo mergear `feature/fase0-hardening` a `master`? → Resuelto el 2026-07-02, mergeado con `--no-ff` (commit `9a563a1`).
-- Método de aplicar índices en Fase 1 → Resuelto el 2026-07-03: se preparan y verifican en este entorno (Postgres desechable), pero el `db push` final contra Supabase real lo corre el usuario manualmente (sin credenciales en este entorno). Ver sección de Fase 1 arriba.
-- ¿Incluir `usuario_id` en Fase 1? → Resuelto el 2026-07-03: diferido, queda en `hardening-backlog.md` ítem 4.
-- ¿Medios de pago no-efectivo (tarjeta, transferencia)? → Resuelto el 2026-07-04: **no**, decisión explícita del usuario. El sistema es solo efectivo a propósito — ver `../domain/caja-y-ventas.md`.
-- Alcance de Docker en Fase 3 (¿todo el stack o solo Postgres?) → Resuelto el 2026-07-04: solo Postgres, siguiendo la regla explícita del usuario de no agregar complejidad innecesaria. Ver ADR 0009.
-
-**Todas las fases del plan original (0-3) están completas.** Si se retoma este proyecto y no hay una fase nueva explícita en mente, este documento ya no tiene "siguiente paso" obvio — revisar `hardening-backlog.md` para deuda técnica diferida, o preguntar al usuario qué sigue.
-
----
-
-## Referencias
-
-- [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md) — informe original de auditoría (congelado, no editar retroactivamente).
-- [`../decisions/`](../decisions/) — ADRs 0001-0004, el porqué de cada decisión de Fase 0.
-- [`hardening-backlog.md`](hardening-backlog.md) — lista granular de deuda técnica diferida con el SQL/código exacto a aplicar.
-- [`../architecture/security.md`](../architecture/security.md), [`../operations/configuration.md`](../operations/configuration.md), [`../architecture/`](../architecture/), [`../domain/`](../domain/) — estado actual del sistema (se actualizan a medida que avanzan las fases).
+El relato detallado de cada fase (commits, verificaciones, hallazgos colaterales) quedó en el historial de git.

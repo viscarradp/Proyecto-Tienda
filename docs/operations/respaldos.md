@@ -9,7 +9,9 @@ perdida significa perder todo el negocio.
 
 - **Qué:** `pg_dump` (formato custom) del esquema `public` — todos los datos de
   la app —, **cifrado** con AES-256 (`openssl`). Sin dueños ni privilegios, así
-  que se puede restaurar en otra base.
+  que se puede restaurar en otra base. No incluye el esquema `respaldo_2026_11_26`
+  (las tablas viejas de marzo, que la app no usa); se puede borrar de Supabase
+  cuando el sistema esté en uso.
 - **Cuándo:** cada noche a las 08:00 UTC (2:00 a. m. en El Salvador), y a mano
   cuando quieras (workflow `Respaldo nocturno`, botón *Run workflow*).
 - **Dónde queda:** como *artifact* del run en GitHub Actions
@@ -27,12 +29,12 @@ Piezas: `scripts/respaldo/respaldar.sh`, `scripts/respaldo/restaurar.sh`,
 
 ## Activarlo (una sola vez)
 
-1. **Cadena de conexión directa de Supabase.** Panel de Supabase → *Connect* →
-   *Direct connection* (host `db.<proyecto>.supabase.co`, **puerto 5432**).
-   **No uses el pooler** (puerto 6543 / `pooler.supabase.com`): no sirve para
-   `pg_dump`. Si tu red solo tiene IPv6 en esa conexión y GitHub no la alcanza,
-   usa el *Session pooler* (puerto 5432 del pooler), que sí soporta `pg_dump`.
-   Añade `?sslmode=require` al final.
+1. **Cadena del Session pooler de Supabase.** Panel de Supabase → *Connect* →
+   *Session pooler* (host `*.pooler.supabase.com`, **puerto 5432**), que soporta
+   `pg_dump`. **No uses el modo transacción** (puerto 6543): no sirve para
+   `pg_dump`. La *Direct connection* (`db.<proyecto>.supabase.co`) es solo
+   IPv6 y los runners de GitHub Actions no tienen IPv6, así que ahí falla; solo
+   sirve desde una red con IPv6. Añade `?sslmode=require` al final.
 2. **Clave de cifrado.** Genera una y guárdala **fuera de GitHub** (gestor de
    contraseñas y una copia impresa o en otro lugar seguro):
 
@@ -71,10 +73,10 @@ Necesitas `openssl` y el cliente de Postgres (`pg_restore`) de versión mayor
    es local.
 3. **Emergencia, en una base nueva de Supabase:** crea un proyecto nuevo
    (vacío: el respaldo ya trae las tablas, no apliques `db push`), toma su
-   cadena de **conexión directa** y ejecuta lo mismo agregando el flag explícito:
+   cadena del **Session pooler** (puerto 5432; la directa solo sirve desde una red con IPv6) y ejecuta lo mismo agregando el flag explícito:
 
    ```bash
-   RESTORE_DATABASE_URL='<conexion-directa-del-proyecto-nuevo>' \
+   RESTORE_DATABASE_URL='<session-pooler-del-proyecto-nuevo>' \
      bash scripts/respaldo/restaurar.sh --confirmo-destino-remoto respaldo-AAAAMMDD-HHMM.dump.enc
    ```
 
@@ -101,18 +103,21 @@ Un respaldo que nunca se restauró no es un respaldo. Una vez al mes:
 
 - **Respaldo diario:** si la base se pierde, se pueden perder hasta ~24 horas
   de ventas. Mitigación manual: lanzar un respaldo a mano antes de cambios
-  riesgosos (por ejemplo `db push`).
+  riesgosos (por ejemplo un cambio de esquema).
 - **Retención de 30 días:** no hay respaldos más viejos. Si necesitas
   archivar un cierre de año, guarda aparte uno descargado.
 - **Supabase gratis pausa proyectos inactivos** (hoy, tras ~1 semana sin
   actividad; verifica la política vigente en su sitio). Un proyecto pausado
-  hace fallar el respaldo; el backend con tráfico normal lo mantiene activo.
+  hace fallar el respaldo. El uso diario de la tienda lo mantiene activo; ojo
+  con que el backend duerma de noche en Render: eso no pausa Supabase por sí
+  solo, pero varios días sin uso (vacaciones, cierre) sí.
 - **GitHub desactiva los workflows programados** tras 60 días sin actividad en
   el repositorio; GitHub avisa por correo. Un commit o lanzar el workflow a mano lo reactiva.
 - Los fallos del job te llegan por el correo de notificaciones de GitHub;
   revisa que estén activadas.
-- Los usuarios de Supabase Auth, Storage y otros esquemas propios de Supabase
-  **no** se respaldan (la app solo usa `public`).
+- Solo se respalda el esquema `public`. Supabase Auth, Storage, otros esquemas
+  propios de Supabase y `respaldo_2026_11_26` **no** se respaldan (la app solo
+  usa `public`).
 - **Cambiar la versión del cliente:** si Supabase sube de versión mayor de
   Postgres, edita `PG_CLIENT_VERSION` en `.github/workflows/respaldo.yml`
   (y usa un `pg_restore` de esa versión o superior al restaurar). Si el

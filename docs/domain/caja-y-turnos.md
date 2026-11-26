@@ -1,6 +1,6 @@
 # Caja y turnos
 
-> Reglas vigentes (ciclo 2026-11). Verificadas contra `cajas_turnos.service.ts`.
+> Reglas vigentes. Verificadas contra `cajas_turnos.service.ts`.
 > Principio rector: **apoyar, no imponer** — una diferencia se registra y se avisa, no bloquea.
 > Dinero entre cuentas: [`dinero-y-cuentas.md`](dinero-y-cuentas.md). Quién puede qué: [`roles-y-permisos.md`](roles-y-permisos.md).
 
@@ -59,10 +59,14 @@ está bloqueado, y una devolución se reembolsa siempre desde el turno **actual*
 [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md)). El cierre toma lock `FOR UPDATE` del turno: un doble clic
 no duplica el ajuste (el segundo recibe 409).
 
-El POS ofrece **"Reabrir automáticamente"** al cerrar (desmarcado por defecto): tras un cierre exitoso abre el turno siguiente con
-`fondo_inicial = declarado − traslado a bóveda` (solo si ese fondo es mayor que 0). Es una llamada normal a
-`/abrir` desde el frontend, no una regla del servidor; si falla, la pantalla avisa que la caja ya se cerró y
-consulta el estado real.
+**Reabrir al cerrar.** Vender ofrece la casilla "Abrir la caja de nuevo con ese dinero", **desmarcada por defecto**
+(decisión de la dueña): cada mañana empieza con "Abrir caja" y se cuenta el fondo, y la caja abierta de anoche no aparece
+como "vieja" con la opción de cierre forzado. Si se marca, tras un cierre exitoso el frontend llama a `/abrir` con
+`fondo_inicial = declarado − traslado a bóveda` (solo si ese fondo es mayor que 0); no es una regla del servidor. Si
+falla, la pantalla avisa que la caja ya se cerró y consulta el estado real.
+
+Al cerrar, la pantalla muestra el resultado hasta que la cajera lo toca: "Caja cerrada · Cuadró · Para empezar mañana: $X"
+(o "Faltó $X" / "Sobró $X").
 
 > Pendiente (no construido): conteo "a ciegas" al cerrar — hoy se muestra el efectivo esperado antes de contar
 > (VIVO-09, [backlog](../roadmap/backlog-ciclo-2026-11.md)).
@@ -71,26 +75,20 @@ consulta el estado real.
 
 Para un turno que la cajera dejó abierto. La dueña declara el efectivo contado y **debe** dar una justificación
 (siempre, sin importar el monto). El turno queda `CERRADA_FORZADA`; se registra el ajuste y el traslado igual
-que en un cierre normal, y el turno se ve como tal en Movimientos.
+que en un cierre normal, y el turno se ve como tal en Ventas y turnos.
 
-En pantalla (desde el 2026-11-25), Ventas y turnos (antes Movimientos) ofrece "Cerrar forzado" **solo en turnos viejos**: abiertos antes del día
+En pantalla, Ventas y turnos (`/dashboard/movimientos`) ofrece "Cerrar forzado" **solo en turnos viejos**: abiertos antes del día
 de hoy en la zona del negocio, o con más de 14 h abiertos. Así la dueña no cierra por error el turno que la cajera tiene
 en curso. El endpoint no cambia: la regla es de pantalla.
 
-### Cómo se ve un turno cerrado en Movimientos (ola 3, DUE-21 y DUE-23)
+### Cómo se ve un turno cerrado en Ventas y turnos
 
-- Encabezado: "Empezó con", "Vendido · N ventas" (solo completadas, sin anuladas), "Debía haber", "Contó" y "Faltó $X" /
-  "Sobró $X" / "Cuadró" (neutro). `GET /cajas-turnos` ya devuelve `efectivo_esperado`, `efectivo_declarado` y
-  `observaciones`; no hizo falta agregar campos.
+- Encabezado: "Empezó con", "Vendido · N ventas" (solo completadas, sin anuladas), "Debía haber", "Lo que contó" y "Faltó" /
+  "Sobró" (o "Cuadró", en neutro). `GET /cajas-turnos` devuelve `efectivo_esperado`, `efectivo_declarado` y `observaciones`.
 - Detalle: recuadro "Lo que escribió {quien cerró} al cerrar: «…»" con las `observaciones` (en el cierre forzado, "Por qué se
   cerró a la fuerza").
-- Tarjetas de arriba: "Vendido (últimos N turnos)" con fechas del primero y del último, y "Faltó/Sobró en los cierres"
-  (con 0, "Cuadraron", en neutro). Se quitó "Turnos visibles". En celular son 2 columnas compactas.
-
-Al cerrar caja (normal), la pantalla muestra el resultado hasta que la cajera lo toca: "Caja cerrada · Cuadró · Fondo
-para mañana: $X" (o "Faltaron $X" / "Sobraron $X"). "Reabrir automáticamente" viene **desmarcado por defecto desde el
-2026-11-26** (decisión de la dueña): cada mañana empieza con "Abrir caja" y se cuenta el fondo, y la caja abierta de
-anoche no aparece como "vieja" con la opción de cierre forzado. Quien quiera reabrir al instante marca la casilla.
+- Tarjetas de arriba: "Caja de hoy" (Abierta / Cerrada), "Vendido (últimas N cajas)" con fechas del primero y del último, y
+  "Faltó o sobró al cerrar" (con 0, "Cuadraron", en neutro; sin cierres, "Aún sin cierres").
 
 ## Lectura
 

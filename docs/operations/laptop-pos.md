@@ -34,6 +34,10 @@ esta laptop **desde otra computadora**. Tú no tocas la laptop: el usuario escri
 | Sin bloqueos | Sin salvapantallas, sin bloqueo de pantalla, sin bienvenida de Mint. | Al abrir la tapa no debe pedir contraseña. |
 | Ping al backend | Un `GET /salud` cada 10 min, **solo de 05:30 a 21:30** (hora de El Salvador); además uno al arrancar y otro al despertar de una suspensión. | Render gratis duerme el backend tras 15 min sin tráfico (el primer pedido tarda ~1 min). |
 
+Las direcciones de producción (tienda y backend) salen de `scripts/pos/instalar.sh`, que las escribe en
+`/etc/tienda-pos.conf` de la laptop la primera vez (no pisa el archivo si ya existe). Contexto del despliegue y de por
+qué se mantiene despierto el backend: [`deployment.md`](deployment.md).
+
 **El horario y las 750 horas.** Render gratis regala 750 horas de instancia al mes (un mes de 31 días tiene 744 h,
 así que mantenerlo despierto 24/7 casi gasta todo y no deja margen). Con el ping de 16 h al día se usan unas ~500 h;
 de noche el backend se duerme solo. Si alguien usa el sistema fuera de horario, el primer pedido tarda ~1 min en

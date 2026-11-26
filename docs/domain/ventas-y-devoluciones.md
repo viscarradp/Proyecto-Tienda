@@ -1,8 +1,11 @@
 # Ventas y devoluciones
 
-> Reglas vigentes (ciclo 2026-11). Verificadas contra `ventas.service.ts` y `common/pendientes-stock.ts`.
-> Solo **efectivo**, a propósito: no existe método de pago (tarjeta, transferencia) ni fiado a clientes — decisión de
-> producto (Fase 3), no una limitación temporal. Toda venta suma su total completo a `efectivo_esperado`.
+> Reglas vigentes. Verificadas contra `ventas.service.ts` y `common/pendientes-stock.ts`.
+
+## Solo efectivo, a propósito
+
+No existe método de pago (tarjeta, transferencia) ni fiado a clientes, y no se planea agregarlos: es una decisión de
+producto, no una limitación temporal. Toda venta suma su total completo a `efectivo_esperado`.
 
 ## Crear una venta (`POST /ventas`)
 
@@ -31,12 +34,11 @@ suma exacta de lo guardado). En compras se aplica el mismo criterio por lote.
 `POST /ventas` acepta el header opcional `Idempotency-Key` (8 a 64 caracteres, p. ej. un UUID; si el largo es otro,
 400). Con la misma clave, un reintento (típico tras un corte de red) **devuelve la venta ya creada** sin tocar stock
 ni efectivo, incluso si su turno ya se cerró. Está respaldado por la columna única `ventas.clave_idempotencia`; la
-verificación real contra carreras ocurre dentro de la transacción, bajo el lock del turno. Sin el header todo
-funciona igual que antes. El POS genera una clave por ticket y la guarda en `sessionStorage` junto con la "firma" del
+verificación real contra carreras ocurre dentro de la transacción, bajo el lock del turno. Sin el header, la venta se crea normal. Vender genera una clave por ticket y la guarda en `sessionStorage` junto con la "firma" del
 ticket (productos y cantidades): si la respuesta del cobro se pierde y la cajera **recarga la página**, el ticket guardado
 se cobra con la **misma** clave y el servidor devuelve la venta ya creada en vez de registrar otra. La clave se descarta
 al cobrar con éxito o cuando cambia el ticket. Si el cobro falla por red o por el servidor, el mensaje pide revisar en
-Movimientos antes de cobrar otra vez.
+Ventas y turnos antes de cobrar otra vez.
 
 ### Venta sin stock registrado ("deuda de stock", D-01)
 
@@ -55,17 +57,21 @@ Descarga de los lotes del producto por `fecha_ingreso ASC, id ASC` bajo `FOR UPD
 - Exige `justificacion_nula` (motivo escrito, máx. 500). Guarda `anulada_por_id` y `fecha_anulacion`: la cajera
   anula, con su nombre ([`roles-y-permisos.md`](roles-y-permisos.md)).
 - **Solo si el turno de la venta sigue `ABIERTA`**; anular en un turno cerrado corrompería su cuadre histórico
-  (400). La UI solo ofrece "Anular" en ventas del turno abierto.
+  (400). La pantalla solo ofrece "Anular" en ventas del turno abierto.
 - **Una venta con alguna devolución no se puede anular** (409): revertirla completa duplicaría el stock y el
-  efectivo ya devueltos. Para el resto de los productos se usa "Devolver el resto".
+  efectivo ya devueltos. Para el resto de los productos se usa "Devolver".
 - Devuelve el stock exactamente a los lotes de donde salió y baja `efectivo_esperado` por el total. La deuda de stock
   de la venta se cancela (lo no cubierto) o vuelve al lote que la cubrió.
 - Orden de locks turno → venta → lotes → pendientes: un doble clic no revierte dos veces.
+- Compras, movimientos financieros y mermas se anulan aparte, solo la dueña: ver
+  [`dinero-y-cuentas.md`](dinero-y-cuentas.md#corregir-errores-anular).
 
 ## Devolver (`POST /ventas/:id/devolucion`)
 
 Devolución de cliente, posterior al turno o dentro de él. Ligada a la venta original, que **permanece
-`COMPLETADA`** (fue una venta real); la devolución vive en `devoluciones` / `detalle_devoluciones`.
+`COMPLETADA`** (fue una venta real); la devolución vive en `devoluciones` / `detalle_devoluciones`. Lleva una
+`justificacion` **opcional** (máx. 500); solo anular exige motivo. Si la venta ya tiene devoluciones, la pantalla avisa
+"Ya tiene devoluciones — puedes devolver el resto".
 
 - Solo ventas `COMPLETADA`. Cada línea indica `detalle_venta_id`, `cantidad` (en unidades de la presentación,
   fraccionable) y `destino`: **`REINGRESO`** (vuelve al lote, revendible) o **`MERMA`** (se descarta).
@@ -83,7 +89,7 @@ Devolución de cliente, posterior al turno o dentro de él. Ligada a la venta or
 
 ## Contingencia (se cae el internet)
 
-La venta se anota en papel durante el apagón y se captura después activando "Venta durante un apagón" con su fecha
+La venta se anota en papel durante el apagón y se captura después activando "Venta del cuaderno" con su fecha
 y hora real; entra al **turno abierto actual** pero con `fecha` real, así el estado de resultados la ubica en el
 día correcto. El backend rechaza fechas **futuras** y de **más de 30 días** atrás (400). Proceso completo y por qué
 no hay offline-first: [`modo-contingencia.md`](modo-contingencia.md).
@@ -99,4 +105,4 @@ recalcula los mismos avisos.
 - `GET /ventas`: más recientes primero, cursor `antes_de=<id>`, `limit` (por defecto 50, máx. 200); con
   `caja_turno_id=3,4,5` (hasta 50 turnos) no hay límite por defecto. Trae nombre del cajero y de quien anuló,
   cantidad de devoluciones y líneas con nombre de producto.
-- `GET /ventas/:id`: además lotes descargados y pendientes de stock (Movimientos busca una venta por su número).
+- `GET /ventas/:id`: además lotes descargados y pendientes de stock (Ventas y turnos busca una venta por su número).

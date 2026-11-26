@@ -1,5 +1,9 @@
 # 0002 — Sin migraciones de Prisma hasta entrar a producción
 
+> **Complementado por [ADR 0013](0013-produccion-render-vercel-supabase.md):** desde el 2026-11-26 hay producción y se
+> sigue sin migraciones: los cambios de esquema se hacen en Prisma, se ensayan en una base local y se aplican en Supabase
+> con el MCP (ya no con `db pull`). Cuándo adoptar migraciones es una decisión abierta.
+
 **Estado:** Aceptado · **Fecha:** 2026-07 (Fase 0 de endurecimiento)
 
 ## Contexto

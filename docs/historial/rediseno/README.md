@@ -1,22 +1,10 @@
-# Rediseño UX/UI — ERP/POS Tienda Karlita
+# Rediseño UX/UI (2026-07)
 
-> **Proyecto terminado (2026-07), archivado en [`historial/`](../README.md).** Es contexto histórico del diseño visual; los
-> pendientes de interfaz actuales están en el [backlog del ciclo 2026-11](../../roadmap/backlog-ciclo-2026-11.md).
-
-Documentación viva del rediseño de la interfaz del frontend. Es la **fuente de
-verdad** del proyecto de rediseño (no se confía en la memoria de la conversación).
-
-## Índice
+> **Proyecto terminado, archivado.** La interfaz actual es la que dejaron la auditoría de UX/UI y sus seis olas
+> (2026-11); ver el [backlog del ciclo](../../roadmap/backlog-ciclo-2026-11.md#4-auditoría-integral-de-uxui-2026-11-25).
 
 | Documento | Para qué |
 |---|---|
-| [`00-especificaciones.md`](00-especificaciones.md) | **Specs.** Qué y por qué: diagnóstico, principios, sistema de diseño y spec por pantalla. ⭐ empieza aquí. |
-| [`01-plan-implementacion.md`](01-plan-implementacion.md) | **Plan.** Cómo y cuándo: fases, tareas y criterios de aceptación. |
-| [`02-bitacora.md`](02-bitacora.md) | **Bitácora.** Estado y avance real, entrada por entrada. |
+| [`00-especificaciones.md`](00-especificaciones.md) | Diagnóstico, principios y sistema de diseño (tokens, tema claro/oscuro, menú inferior). `app/globals.css` cita su §5.1. |
 
-## Contexto rápido
-
-- **Estética objetivo:** Funcional / Estación de trabajo (esquinas rectas, retícula, cifras en mono).
-- **Tema:** claro + oscuro con toggle, reconstruyendo los design tokens.
-- **Rama de trabajo:** `feature/rediseno-ux` (merge a `master` por fase).
-- **Alcance:** solo capa visual del frontend. No toca backend ni lógica de negocio.
+El plan y la bitácora de implementación se retiraron el 2026-11-26; están en el historial de git.

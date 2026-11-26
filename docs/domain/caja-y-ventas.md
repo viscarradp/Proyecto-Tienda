@@ -12,9 +12,9 @@ comentarios del código que lo referencian.
 | Estado de resultados (fórmula), patrimonio, flujo de efectivo, top y margen, zona horaria | [`reportes.md`](reportes.md) |
 | Matriz de permisos, usuarios desactivables, validación por request | [`roles-y-permisos.md`](roles-y-permisos.md) |
 | Qué hacer cuando se cae el internet | [`modo-contingencia.md`](modo-contingencia.md) |
+| Bot de Telegram para registrar compras (foto de factura o texto) | [`bot.md`](bot.md) |
 
-Decisión de producto que cruza todos los temas (Fase 3, 2026-07): el sistema es **solo efectivo**, a propósito. No existe
-método de pago (tarjeta, transferencia) ni fiado a clientes, y no se planea agregarlos.
+El sistema es **solo efectivo**, a propósito: ver [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md#solo-efectivo-a-propósito).
 
-Principio rector del ciclo 2026-11: **apoyar, no imponer** — ante la duda, registrar y avisar en vez de bloquear
+Principio rector: **apoyar, no imponer** — ante la duda, registrar y avisar en vez de bloquear
 ([ADR 0011](../decisions/0011-registrar-y-avisar.md)).

@@ -8,36 +8,19 @@ proveedores, gastos, y turnos de caja. El objetivo es que el dueño del negocio
 sepa, sin ambigüedad, cuánto vendió, cuánto gastó y si es rentable — sin ser
 una persona técnica.
 
-## Motivación y alcance
+## Alcance
 
-El proyecto nació para resolver un problema concreto de un negocio familiar:
-la gestión manual de una tienda de colonia propicia pérdida de trazabilidad
-en el inventario (mermas no registradas), descuadres en el flujo de efectivo
-(gaveta física) y falta de visibilidad sobre los márgenes de ganancia reales
-por la fluctuación de costos de adquisición. El usuario final típico **no es
-una persona técnica ni una empresaria** — es alguien que solo quiere llevar
-su negocio de forma más fácil y saber si es rentable. Esto es la razón de la
-regla de diseño "no sobreingeniería" que aparece en
-[`../roadmap/plan-fases.md`](../roadmap/plan-fases.md): las soluciones deben
-ser proporcionales a una tienda con 1-2 cajas, no a un escenario enterprise
-o multi-tenant.
-
-Alcance definido: catálogo de productos, control de caja (apertura/cierre,
-ingresos/egresos, bóveda y arqueo), compras e inventario por lotes (incluida la
-compra a crédito y el pago de deudas a proveedores), ventas por cantidad o por
-monto con descarga FIFO (y venta sin stock con "deuda de stock"), devoluciones,
-control de mermas, reportes (estado de resultados, patrimonio, flujo de efectivo)
-y autenticación con roles `ADMIN`/`CAJERO` (la cajera opera, la dueña controla).
-
-**Fuera de alcance a propósito** (no son omisiones, son decisiones de
-producto): módulos de Recursos Humanos, CRM complejo de clientes, fiado a
-clientes (cuentas por cobrar), e integración con pasarelas de pago electrónico —
-el enfoque actual es transaccional físico/efectivo (ver
-[`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md), que indexa las reglas
-de negocio, sobre el supuesto de que toda venta es en efectivo). Sí existen las
-**cuentas por pagar** (deudas con proveedores). Principio rector del ciclo
-2026-11: **apoyar, no imponer** — ante la duda se registra y se avisa, no se bloquea
+La usuaria final no es técnica ni empresaria: las soluciones deben ser proporcionales a una tienda con 1-2 cajas, no a
+un escenario enterprise o multi-tenant (ver [`../roadmap/plan-fases.md`](../roadmap/plan-fases.md)). Principio rector:
+**apoyar, no imponer** — ante la duda se registra y se avisa, no se bloquea
 ([ADR 0011](../decisions/0011-registrar-y-avisar.md)).
+
+- **Incluye:** catálogo de productos, caja (turnos, ingresos/egresos, bóveda y arqueo), compras e inventario por lotes
+  (con compra a crédito y pago de deudas a proveedores), ventas por cantidad o por monto con descarga FIFO (y venta sin
+  stock con "deuda de stock"), devoluciones, mermas, reportes (estado de resultados, patrimonio, flujo de efectivo),
+  bot de Telegram para registrar compras y autenticación con roles `ADMIN`/`CAJERO`.
+- **Fuera de alcance a propósito:** recursos humanos, CRM, fiado a clientes (cuentas por cobrar) y pasarelas de pago
+  electrónico: toda venta es en efectivo (ver [`../domain/caja-y-ventas.md`](../domain/caja-y-ventas.md)).
 
 ## Las dos aplicaciones
 
@@ -46,7 +29,8 @@ erp-tienda-backend/    API REST — NestJS 11 + Prisma 7 + PostgreSQL (Supabase)
 erp-tienda-frontend/   UI — Next.js 16 (App Router) + React 19 + Zustand
 ```
 
-Se despliegan por separado (frontend y backend en distintos servicios/hosts).
+Se despliegan por separado: el backend en Render, el frontend en Vercel y la base en Supabase
+([`../operations/deployment.md`](../operations/deployment.md)).
 La comunicación es HTTP con JWT en el header `Authorization: Bearer`.
 
 ## Flujo de una petición (backend)
@@ -89,11 +73,16 @@ Prisma) y `dto/` (validación de entrada con `class-validator`):
 `cuentas_por_pagar` (deudas con proveedores y abonos), `ajustes_inventario`,
 `ventas` (incluye devoluciones), `cajas_turnos`, `caja_general` (la bóveda:
 saldo derivado, inyección y arqueo — ya no es una tabla), `movimientos_financieros`,
-`categorias_gastos`, `reportes`, `salud`.
+`categorias_gastos`, `reportes`, `salud`, `bot`.
 
 `salud` expone `GET /salud` (público, `SELECT 1`, sin rate-limit) como health
 check del proveedor de despliegue — ver
 [`../operations/deployment.md`](../operations/deployment.md).
+
+`bot` es el chat para registrar compras: un núcleo (`bot/nucleo`: interpretación con un modelo de OpenRouter y
+borradores de compra) y el canal de Telegram (`bot/telegram`: modo `polling` o `webhook`). Expone la ruta pública
+`POST /telegram/webhook`, protegida por un secreto en el encabezado (ver [`security.md`](security.md)). Reglas y
+funcionamiento: [`../domain/bot.md`](../domain/bot.md).
 
 `prisma/` no es un módulo de negocio: expone `PrismaService`, un wrapper de
 `PrismaClient` inyectable en cualquier servicio (es `@Global()`, no hace falta

@@ -1,121 +1,74 @@
-# Backlog de Endurecimiento (diferido a propósito)
+# Deuda técnica diferida a propósito
 
-Este documento existe para que lo diferido no se olvide. Cada ítem indica
-**por qué** se dejó fuera de la Fase 0 y **cuándo** retomarlo. Referencias a
-hallazgos: ver [`../auditorias/2026-07-02-auditoria-tecnica.md`](../auditorias/2026-07-02-auditoria-tecnica.md).
+Lo que se dejó fuera a conciencia, para que no se olvide: **por qué** se difirió y **cuándo** retomarlo. Los IDs `H…`
+son de la [auditoría técnica](../auditorias/2026-07-02-auditoria-tecnica.md). El estado general está en
+[`plan-fases.md`](plan-fases.md).
 
-## Antes de entrar a producción (bloqueante)
+## Al adoptar migraciones (decisión abierta)
 
-### 1. Adoptar migraciones de Prisma versionadas
+Hoy hay producción sin migraciones ([ADR 0013](../decisions/0013-produccion-render-vercel-supabase.md)). Estos ítems van
+juntos, en la migración base.
 
-**Por qué se difirió:** el proyecto está en desarrollo activo, sin instancias
-de producción — ver [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md).
-**Cuándo:** antes del primer despliegue a producción.
-**Cómo:** `prisma migrate diff` + `migrate resolve --applied` para
-establecer un baseline desde el estado actual de Supabase; de ahí en
-adelante, todo cambio de schema pasa por `migrate dev`/`migrate deploy`.
+### 1. Migraciones de Prisma versionadas
+
+**Por qué se difirió:** iterar el esquema rápido mientras el sistema no tenía datos reales
+([ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md)).
+**Cómo:** `prisma migrate diff` + `migrate resolve --applied` para fijar la base desde el estado actual de Supabase; de
+ahí en adelante, todo cambio pasa por `migrate dev` / `migrate deploy`.
 
 ### 2. Constraints de base de datos como defensa en profundidad
 
-**Por qué se difirió:** las invariantes ya están garantizadas en la capa de
-aplicación (ADR 0001); aplicar esto ahora, sin migraciones, generaría drift
-entre el schema versionado y la BD real.
-**Cuándo:** como parte de la migración baseline del ítem anterior.
-**Qué aplicar:**
+**Por qué se difirió:** las invariantes ya las garantiza la aplicación ([ADR 0001](../decisions/0001-concurrencia-for-update.md));
+aplicarlas sin migraciones crearía diferencias entre el esquema versionado y la base real.
 
 ```sql
--- Nunca permitir stock negativo, ni siquiera por un bug futuro que se salte el lock de aplicación.
+-- Nunca stock negativo, ni siquiera por un bug futuro que se salte el lock de la aplicación.
 ALTER TABLE lotes_inventario
   ADD CONSTRAINT chk_cantidad_disponible_no_negativa CHECK (cantidad_disponible >= 0);
 
--- Solo un turno de caja ABIERTA a la vez, garantizado por la BD (hoy solo por advisory lock).
+-- Solo un turno ABIERTA a la vez, garantizado por la base (hoy solo por advisory lock).
 CREATE UNIQUE INDEX ux_cajas_turnos_una_abierta
   ON cajas_turnos (estado) WHERE estado = 'ABIERTA';
 ```
 
-### 2b. Inmutabilidad de las tablas de libro a nivel BD (auditoría negocio §10, ítem 16)
+> Antes de aplicar el primer `CHECK`, confirmar que sigue siendo cierto: desde el ciclo 2026-11 se puede vender sin stock
+> registrado, pero eso crea una deuda de stock (`pendientes_stock`), no lotes en negativo.
 
-**Por qué se difirió:** es un `REVOKE` de privilegios sobre el **rol de aplicación**
-de la base de datos, no un cambio de schema — no se puede aplicar con `db push` ni
-probar en este entorno (no hay un rol de app separado ni la Supabase real aquí).
-Coherente con [`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md).
-A nivel de aplicación estas tablas ya son *append-only* (nada las edita tras insertar).
-**Cuándo:** al configurar el rol de app en producción, junto con el baseline del ítem 1.
-**Qué aplicar** (solo sobre las tablas de **libro** verdaderamente inmutables — NO sobre
-`ventas`/`cajas_turnos`/`lotes_inventario`, que el app sí actualiza legítimamente:
-anular, cerrar turno, FIFO — y cuya integridad se cuida en la capa de app, ADR 0001):
+### 3. Tablas de libro inmutables a nivel de base
+
+**Por qué se difirió:** es un `REVOKE` sobre un rol de aplicación propio, que todavía no existe (hoy el backend entra como
+dueño de las tablas). En la aplicación estas tablas ya son de solo inserción. Aplicarlo solo a las tablas de libro de
+verdad inmutables — **no** a `ventas`, `cajas_turnos`, `lotes_inventario`, `movimientos_financieros`,
+`compras_inventario` ni `ajustes_inventario`, que la aplicación actualiza legítimamente (anular, cerrar, FIFO, anular sin
+borrar del [ADR 0012](../decisions/0012-anular-sin-borrar.md)):
 
 ```sql
--- El rol de la aplicación puede INSERT y SELECT, pero nunca UPDATE/DELETE
--- sobre el libro contable: movimientos de efectivo, puentes de costo FIFO,
--- devoluciones e historial de precios son inmutables por construcción.
-REVOKE UPDATE, DELETE ON movimientos_financieros           FROM app_role;
-REVOKE UPDATE, DELETE ON detalle_venta_lotes               FROM app_role;
-REVOKE UPDATE, DELETE ON detalle_devoluciones              FROM app_role;
-REVOKE UPDATE, DELETE ON historial_precios_presentaciones  FROM app_role;
+REVOKE UPDATE, DELETE ON detalle_venta_lotes              FROM app_role;
+REVOKE UPDATE, DELETE ON detalle_devoluciones             FROM app_role;
+REVOKE UPDATE, DELETE ON historial_precios_presentaciones FROM app_role;
 ```
 
-**Nota sobre convención de signos (mismo ítem 16):** ya quedó unificada en el Bloque 1.C
-— se eliminó `caja_general` (que guardaba `monto` con signo) y hoy solo existe
-`movimientos_financieros.monto`, siempre positivo, con `tipo_movimiento` + `cuenta_origen`/
-`cuenta_destino`. No hay dos convenciones que reconciliar.
+### 4. Enums en el esquema para los campos de estado
 
-## Importante, no bloqueante
+`ventas.estado`, `cajas_turnos.estado`, `usuarios.rol`, etc. son `String` validados solo por los DTOs (`@IsIn`).
 
-### 3. Trazabilidad de autor en operaciones financieras (hallazgo H8) — ✅ HECHO
+## Seguridad
 
-> **Resuelto** en los Bloques 1–3 (`usuario_id` en las tablas transaccionales) y completado en el Ciclo 2026-11 (L7/L8:
-> autor de anulación, de cierre y de compras; abonos con autor). Ver [`../domain/roles-y-permisos.md`](../domain/roles-y-permisos.md).
-> Se conserva el texto original como registro de por qué se difirió.
+### 5. Cookie del JWT `httpOnly`
 
-**Por qué se difirió:** requiere agregar `usuario_id` a varias tablas
-(`ventas`, `movimientos_financieros`, `cajas_turnos`, `ajustes_inventario`),
-un decorator `@CurrentUser()` nuevo y tocar 5 services distintos — se evaluó
-explícitamente incluirlo en Fase 1 junto con los índices y se decidió
-diferirlo por ser un cambio más invasivo y de menor urgencia mientras el
-negocio siga operando con un solo cajero activo.
-**Cuándo:** junto con la adopción de migraciones, o antes si el negocio
-empieza a tener más de un cajero y se vuelve necesario saber quién hizo qué.
+**Por qué se difirió:** hoy la cookie la pone el frontend (`js-cookie`), que no puede marcarla `httpOnly`; pasarla al
+backend cambia el contrato de autenticación. Ya lleva `Secure` (con HTTPS) y `SameSite=Lax`
+([ADR 0008](../decisions/0008-cookie-flags.md)). Lo que falta mitiga el robo del token por XSS.
+**Cuándo:** al revisar la autenticación cliente-servidor.
 
-### 4. Cookie JWT httpOnly
+## Escalabilidad (solo si hace falta)
 
-**Por qué se difirió:** requiere que el backend gestione la cookie (hoy la
-pone el frontend vía `js-cookie`, que no puede marcarla `httpOnly`). Es un
-cambio de contrato cliente-servidor, no un fix aislado. Fase 2 sí agregó los
-flags `Secure`/`SameSite=Lax` y alineó la expiración al JWT real (ver ADR
-[`0008-cookie-flags`](../decisions/0008-cookie-flags.md)) — lo que queda
-pendiente aquí es específicamente pasar a una cookie `httpOnly` gestionada
-por el backend, que mitigaría robo del token vía XSS.
-**Cuándo:** cuando se revise el contrato de autenticación cliente-servidor
-de forma más amplia (posiblemente junto con la Fase 3 o al escalar el
-frontend).
+### 6. Store compartido (Redis) para el rate-limit
 
-## Escalabilidad (activar solo si se necesita)
+**Por qué se difirió:** el backend corre en una sola instancia; Redis sería infraestructura sin uso.
+**Cuándo:** si el backend pasa a más de una instancia, porque el conteo en memoria dejaría de ser compartido.
 
-### 5. Store compartido (Redis) para el rate-limiter
+### 7. Server Components (H13)
 
-**Por qué se difirió:** el backend corre en una sola instancia hoy; Redis
-agregaría una dependencia de infraestructura sin beneficio actual —
-"soluciones escalables" no significa "infraestructura que no se usa
-todavía".
-**Cuándo:** si el backend pasa a correr en más de una instancia
-(autoescalado), porque el store en memoria del throttler ya no compartiría
-el conteo entre instancias.
-
-## Menores (cuando se toque el archivo por otra razón)
-
-- Enums en el schema para campos de estado (`ventas.estado`,
-  `cajas_turnos.estado`, `usuarios.rol`, etc.) en vez de `String` libre —
-  hoy validados solo por DTOs (`@IsIn`). Aplicar junto con el ítem 1.
-- ~~Endpoint `POST /caja-general/inyeccion` usa un tipo inline en vez de un DTO~~ — resuelto: ya usa `InyeccionCapitalDto`.
-- **H13 — Server Components:** todas las páginas del dashboard son Client
-  Components con fetch en el navegador. Aprovechar RSC requeriría rediseñar
-  el data-fetching de cada página (POS, inventario, movimientos, gastos,
-  stats) — un proyecto propio, no un ajuste puntual. Quedó fuera de Fase 2
-  a propósito (estaba mal listado en el plan original sin un ítem de alcance
-  correspondiente).
-- **H30 — Accesibilidad:** el logout es un `<div onClick>` (no operable por
-  teclado) en vez de `<button>`; los ítems de navegación son `<Link><span>`
-  con el estilo de botón en el `<span>` en vez del `<a>`. Bajo riesgo (no es
-  un bug funcional), corrección pequeña y aislada a
-  `dashboard/layout.tsx` — buen candidato para cuando se retome el frontend.
+Todas las páginas del panel son Client Components con fetch en el navegador. Aprovechar RSC es rediseñar la carga de
+datos de cada pantalla: un proyecto propio, no un ajuste. Solo si el rendimiento en la tienda lo pide.

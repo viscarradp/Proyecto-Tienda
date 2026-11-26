@@ -1,6 +1,6 @@
 # Dinero y cuentas
 
-> Reglas vigentes (ciclo 2026-11). Verificadas contra `movimientos_financieros`, `caja_general`, `compras`,
+> Reglas vigentes. Verificadas contra `movimientos_financieros`, `caja_general`, `compras`,
 > `cuentas_por_pagar` y `common/cuentas-efectivo.ts`. Turnos: [`caja-y-turnos.md`](caja-y-turnos.md).
 
 ## Modelo origen → destino
@@ -16,21 +16,21 @@ Todo movimiento de efectivo declara `cuenta_origen` y `cuenta_destino` de un **c
 | `PROVEEDOR` | Contraparte: pagos por mercadería (no afecta la utilidad: el costo entra por el FIFO). |
 
 `monto` es siempre positivo; el sentido lo da el par origen→destino. Así el efectivo se conserva por construcción
-(partida doble mínima) y se eliminó la antigua tabla `caja_general`. Las **ventas** y las **devoluciones** no viven en
+(partida doble mínima). Las **ventas** y las **devoluciones** no viven en
 el libro: mueven `efectivo_esperado` directamente (ver [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md)).
 
 ### Tipos de movimiento vigentes (`movimientos_financieros.tipo_movimiento`)
 
 | Tipo | Origen → destino | Nace de | Efecto en `efectivo_esperado` |
 |---|---|---|---|
-| `INGRESO_CAPITAL` | DUEÑOS → GAVETA | Apertura con "aporte de la dueña"; `POST /movimientos-financieros` (solo dueña; no está en "Sacar dinero") | Suma |
+| `INGRESO_CAPITAL` | DUEÑOS → GAVETA | Apertura con "aporte de la dueña"; `POST /movimientos-financieros` (solo dueña) | Suma |
 | `INGRESO_CAPITAL` | DUEÑOS → BOVEDA | `POST /caja-general/inyeccion` (solo dueña, sin turno) | Ninguno |
 | `TRASLADO_DESDE_BOVEDA` | BOVEDA → GAVETA | "Traer de la bóveda" (solo dueña); apertura con "de la bóveda" | Suma |
-| `RETIRO_BOVEDA` | GAVETA → BOVEDA | "Guardar en bóveda" durante el turno | Resta |
+| `RETIRO_BOVEDA` | GAVETA → BOVEDA | "Guardar en la bóveda" durante el turno | Resta |
 | `TRASLADO_A_BOVEDA` | GAVETA → BOVEDA | Cierre de turno (`monto_a_boveda`); apertura con diferencia "en la bóveda" | Ninguno (el cierre ya contó el efectivo; solo baja el remanente) |
 | `EGRESO_OPERATIVO` | GAVETA → GASTO | "Pagar algo"; la cajera solo desde la gaveta | Resta |
 | `EGRESO_OPERATIVO` | BOVEDA → GASTO | Gasto con `origen_fondos=BOVEDA` (solo dueña, sin turno) | Ninguno |
-| `RETIRO_PERSONAL` | GAVETA → DUEÑOS | "Retiro personal" (solo dueña); apertura con "retiro de la dueña" | Resta |
+| `RETIRO_PERSONAL` | GAVETA → DUEÑOS | "Sacar para mí" (solo dueña); apertura con "retiro de la dueña" | Resta |
 | `PAGO_PROVEEDOR` | GAVETA → PROVEEDOR | Compra `CAJA_POS`; abono desde la gaveta | Resta |
 | `PAGO_PROVEEDOR` | BOVEDA → PROVEEDOR | Compra `CAJA_GENERAL`; abono desde la bóveda | Ninguno |
 | `AJUSTE_FALTANTE` | GAVETA → GASTO | Cierre con faltante; apertura sin explicar | Ninguno (ya contado) |
@@ -48,8 +48,8 @@ BÓVEDA = "Pago a proveedor (de la bóveda)". El resto usa `lib/glosario.ts`.
 `RETIRO_PERSONAL` y `TRASLADO_DESDE_BOVEDA`; el resto los generan el cierre, la apertura, el arqueo, las compras, los
 abonos y las mermas. Todo movimiento guarda su autor (`usuario_id`) y un movimiento de gaveta exige turno abierto.
 
-El POS agrupa esto en un solo botón **"Sacar dinero"** con cuatro opciones contablemente distintas: *Guardar en bóveda*,
-*Pagar algo*, *Retiro personal* y *Traer de la bóveda*. Reemplaza el concepto ambiguo de "sangría".
+Vender agrupa esto en un solo botón **"Sacar dinero"** con cuatro opciones: *Guardar en la bóveda*, *Pagar algo*,
+*Sacar para mí* y *Traer de la bóveda*. La cajera solo ve las dos primeras.
 
 ### Gastos
 
@@ -80,7 +80,7 @@ Consecuencias:
 - **Saldo:** `GET /caja-general/saldo` (ambos roles) devuelve el saldo derivado; el libro completo
   (`GET /caja-general`) y las operaciones de aporte y arqueo son solo de la dueña.
 - **Inyección** (`POST /caja-general/inyeccion`, solo dueña): aporte de capital directo a la bóveda. Un asistente en
-  Estadísticas permite declarar "efectivo guardado hoy" al empezar a usar el sistema, mientras la bóveda no tenga
+  Mi negocio (`components/negocio/aviso-boveda-inicial.tsx`) permite declarar "efectivo guardado hoy" al empezar a usar el sistema, mientras la bóveda no tenga
   movimientos.
 - **Arqueo** (`POST /caja-general/arqueo`, solo dueña): la dueña declara el efectivo físico contado; se compara con el
   saldo derivado y, si difiere, se registra `AJUSTE_BOVEDA_FALTANTE` o `AJUSTE_BOVEDA_SOBRANTE` que deja el derivado igual
@@ -107,7 +107,7 @@ Consecuencias:
 - `POST /cuentas-por-pagar/:id/abonos` con `{ monto, origen: GAVETA | BOVEDA, nota? }` registra un `PAGO_PROVEEDOR`
   (`GAVETA→PROVEEDOR` con turno abierto, que baja `efectivo_esperado`; o `BOVEDA→PROVEEDOR`), baja `saldo_pendiente` y guarda
   el abono (`abonos_cuentas_por_pagar`) enlazado a su movimiento, con autor. La descripción del movimiento es
-  "Abono a {proveedor}" (las filas viejas decían "… (deuda ID n)"; la pantalla oculta ese sufijo).
+  "Abono a {proveedor}".
 - **El abono no puede superar el saldo** (regla real, 400; "Esta deuda ya está pagada" si el saldo es 0). Por fondos
   insuficientes no se bloquea: se registra y se avisa.
 - Pagar una deuda de mercadería **no es un gasto**: el estado de resultados no cambia (el costo ya entró por el FIFO). En
@@ -125,15 +125,21 @@ Consecuencias:
 
 **Anular = marcar, nunca borrar** ([ADR 0012](../decisions/0012-anular-sin-borrar.md)): el registro queda con `anulado`,
 `anulado_en`, `anulado_por_id` y `motivo_anulacion`, y su efecto se revierte. Lo anulado **no cuenta** en el estado de
-resultados, el flujo de efectivo ni el saldo de bóveda; los listados lo siguen mostrando, tachado. Solo la dueña
-(ADMIN), siempre con `motivo`. Doble anulación y falta de motivo dan 400; la cajera, 403.
+resultados, el flujo de efectivo ni el saldo de bóveda; los listados lo siguen mostrando, tachado. Compras, movimientos
+financieros y mermas los anula solo la dueña (ADMIN), siempre con `motivo`; la cajera recibe 403 (ella solo anula
+ventas: [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md)). Doble anulación y falta de motivo dan 400.
 
-- `PATCH /movimientos-financieros/:id/anular` `{ motivo }`: solo `EGRESO_OPERATIVO`, `RETIRO_PERSONAL` e
-  `INGRESO_CAPITAL`. Si tocó la **gaveta**, solo mientras su turno siga `ABIERTA` (un turno cerrado es un cuadre
-  inmutable, 400) y `efectivo_esperado` vuelve atrás. Si tocó la **bóveda**, en cualquier momento. No se anulan el
-  aporte/retiro de la apertura de turno (marca `es_apertura`), los traslados, ajustes, pagos a proveedor ni mermas: se corrigen anulando su
-  origen (compra, merma) o con el cierre/arqueo.
-- `PATCH /compras/:id/anular`: ver [`inventario.md`](inventario.md#corregir-errores-anular). Revierte el `PAGO_PROVEEDOR`
-  (a la gaveta solo si su turno sigue abierto; o a la bóveda) y salda la deuda si fue al crédito sin abonos.
+- **Movimiento financiero** (`PATCH /movimientos-financieros/:id/anular` `{ motivo }`): solo `EGRESO_OPERATIVO`,
+  `RETIRO_PERSONAL` e `INGRESO_CAPITAL`. Si tocó la **gaveta**, solo mientras su turno siga `ABIERTA` (un turno cerrado es un
+  cuadre inmutable, 400) y `efectivo_esperado` vuelve atrás. Si tocó la **bóveda**, en cualquier momento. No se anulan el
+  aporte/retiro de la apertura de turno (marca `es_apertura`), los traslados, ajustes ni pagos a proveedor: se corrigen
+  anulando su origen (compra, merma) o con el cierre/arqueo.
+- **Compra** (`PATCH /compras/:id/anular`): solo si **ningún lote se usó**: cada lote con `cantidad_disponible ==
+  cantidad_inicial`, sin filas en `detalle_venta_lotes`, sin ajustes vigentes y sin haber cubierto deuda de stock; si no,
+  400 ("Ya se vendió o se usó mercadería de esta compra; no se puede anular. Registra una merma o un conteo"). Los lotes
+  quedan en 0 y se revierte el `PAGO_PROVEEDOR` (a la gaveta solo si su turno sigue abierto; o a la bóveda). Si fue al
+  crédito sin abonos, la deuda queda en 0; con abonos, 400 ("Esta compra ya tiene pagos; primero corrige esos pagos").
+- **Merma** (`PATCH /ajustes-inventario/:id/anular`): devuelve la cantidad al lote y marca anulada su `MERMA_INVENTARIO`, que
+  deja de contar como pérdida. Los `CONTEO_SOBRANTE` no se anulan: se corrigen con otra merma o conteo.
 - Orden de locks (ADR 0001): turno o bóveda → lotes → cuenta por pagar. Los movimientos de una compra o merma guardan
   `compra_id` / `ajuste_id`.

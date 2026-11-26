@@ -1,7 +1,7 @@
 # Bot de compras (núcleo)
 
-> Estado: núcleo implementado (`erp-tienda-backend/src/bot/nucleo/`). El adaptador de Telegram vive aparte
-> (`src/bot/telegram/`) y solo habla con el núcleo por el contrato de `contrato.ts`.
+> Código: el núcleo vive en `erp-tienda-backend/src/bot/nucleo/` y el adaptador de Telegram aparte, en
+> `src/bot/telegram/`; el adaptador solo habla con el núcleo por el contrato de `contrato.ts`.
 
 La dueña registra **compras de mercadería por chat**: escribe "Compré 2 cajas de coca de lata a 20 cada una y 10 libras
 de frijol en 8 dólares, a La Fuente, lo pagué de la gaveta" o manda la **foto de la factura**. El bot le muestra lo que
@@ -22,6 +22,21 @@ entendió y ella confirma con un botón.
 resolvió quién escribe: `usuarioId` es un usuario real, activo y ADMIN (el núcleo lo vuelve a comprobar). Respuestas en
 texto plano, máximo ~3500 caracteres; `botones` son filas de `{ texto, datos }` con `datos` ≤ 64 bytes.
 Se importa `BotNucleoModule` (exporta `BOT_NUCLEO`).
+
+## Adaptador de Telegram (`src/bot/telegram/`)
+
+- **Modo** (`TELEGRAM_MODO`): `apagado` (por defecto), `polling` (demo local, sin URL pública) o `webhook` (Render). Si el
+  modo está activo y falta `TELEGRAM_BOT_TOKEN`, el bot queda apagado y lo avisa en el log.
+- **Quién puede usarlo:** solo los Telegram ID listados en `TELEGRAM_USUARIOS` (`id:nombreDeUsuario`), y ese usuario del ERP
+  debe existir, estar activo y ser la dueña (ADMIN). A cualquier otro le contesta que no está autorizado (con su ID, para
+  que se lo pase a quien administra el sistema). Solo atiende chats privados.
+- **Webhook:** `POST /telegram/webhook` es público pero compara el encabezado `X-Telegram-Bot-Api-Secret-Token` con
+  `TELEGRAM_WEBHOOK_SECRET`; si no coincide (o falta), 401. Responde 200 de inmediato y procesa aparte. Fuera del modo
+  `webhook` responde 404.
+- **Fotos:** acepta la foto del chat o la imagen enviada como **documento** (JPEG o PNG), de **máximo 5 MB**; si pesa más,
+  le pide mandarla más liviana. El texto de la foto (caption) se manda junto con la imagen.
+- Un mensaje a la vez por chat; cada botón se vuelve a autorizar. Variables y puesta en marcha:
+  [`../operations/configuration.md`](../operations/configuration.md).
 
 ## Flujo
 
@@ -106,7 +121,9 @@ Solo cuenta la memoria con el mismo paquete (o sin paquete si la línea no trae)
 proveedor, luego el de más usos) y no pregunta. Al modelo le llega como
 `"galletas" en caja -> 123 (caja = 12)`.
 
-## Tablas nuevas (sin migración: `db push`; ver `plan-fases.md`)
+## Tablas
+
+Definidas en [`../architecture/data-model.md`](../architecture/data-model.md).
 
 - `bot_conversaciones`: `chat_id` único, `usuario_id`, `borrador` Json, `estado` (`BORRADOR` | `GUARDANDO`),
   `actualizado_en`.
@@ -136,14 +153,6 @@ proveedor, luego el de más usos) y no pregunta. Al modelo le llega como
 | `OPENROUTER_DATA_COLLECTION` | Opcional. `deny` (default) o `allow`. Si un modelo no tiene proveedores que cumplan `deny`, OpenRouter responde error. |
 
 Timeout de 60 s por llamada. Se pide `response_format: json_object`.
-
-## Costos estimados
-
-Una compra por texto son ~3 000 tokens de entrada (prompt + catálogo + memoria) y ~600 de salida; con foto, ~+1 500 de
-entrada. Con 5 compras por semana (~22 al mes, el doble con correcciones y reintentos) son unos 150 000 tokens de
-entrada y 30 000 de salida al mes. Con un modelo como Claude Sonnet (US$ 2–3 entrada / US$ 10–15 salida por millón)
-son ~US$ 1 al mes; con modelos chinos, centavos. Los precios cambian: ver el reporte de la ola y
-`GET https://openrouter.ai/api/v1/models`.
 
 ## Pruebas
 

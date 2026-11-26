@@ -1,318 +1,137 @@
 # Desarrollo con Docker
 
-Este documento describe cómo usar Docker y Docker Compose para el desarrollo de la aplicación.
+Levanta PostgreSQL, backend y frontend con un comando, con hot-reload. Son imágenes **solo de desarrollo**
+(`Dockerfile.dev`); la producción no usa Docker Compose (ver [`deployment.md`](deployment.md)).
 
 ## Requisitos
 
-- Docker Desktop instalado y corriendo
-- Docker Compose (viene incluido con Docker Desktop)
-- Git
+- Docker Desktop (trae Docker Compose) corriendo.
+- Git.
+
+## Inicio rápido
+
+```bash
+# En la raíz del proyecto (la primera vez construye las imágenes)
+./scripts/docker-dev.sh start
+```
+
+O sin el script: `docker compose build` y luego `docker compose up`.
+
+- **Frontend:** http://localhost:3001
+- **Backend:** http://localhost:3000
+- **Swagger (API):** http://localhost:3000/api
+- **PostgreSQL:** localhost:5432 (usuario `postgres`, contraseña `postgres`, base `erp_tienda_dev`)
+
+Entra con el usuario `admin` y la contraseña `INITIAL_ADMIN_PASSWORD`. `docker-compose.yml` trae un valor por defecto
+**solo para desarrollo**; cámbialo en un `.env` en la raíz si quieres (ver más abajo).
+
+Para detener:
+
+```bash
+./scripts/docker-dev.sh stop    # o: docker compose down
+```
 
 ## Estructura
 
 ```
 Proyecto-Tienda/
-├── docker-compose.yml          # Configuración principal (los 3 servicios)
-├── .env.example                # Plantilla de variables SOLO para docker-compose
+├── docker-compose.yml          # Los 3 servicios
+├── .env.example                # Plantilla de variables SOLO para docker compose
 ├── erp-tienda-backend/
-│   ├── Dockerfile.dev           # Imagen de DESARROLLO del backend (NestJS); la de producción es Dockerfile
-│   ├── .dockerignore            # Contexto de build del backend
-│   └── .env.example              # Plantilla para correr el backend SIN Docker
+│   ├── Dockerfile.dev          # Imagen de DESARROLLO del backend; la de producción es Dockerfile
+│   ├── .dockerignore
+│   └── .env.example            # Plantilla para correr el backend SIN Docker
 ├── erp-tienda-frontend/
-│   ├── Dockerfile.dev           # Imagen de DESARROLLO del frontend (Next.js); la de producción es Dockerfile
-│   ├── .dockerignore            # Contexto de build del frontend
-│   └── .env.example              # Plantilla para correr el frontend SIN Docker
+│   ├── Dockerfile.dev          # Imagen de DESARROLLO del frontend; la de producción es Dockerfile
+│   ├── .dockerignore
+│   └── .env.example            # Plantilla para correr el frontend SIN Docker
 └── scripts/
-    └── docker-dev.sh           # Script helper para desarrollo
+    └── docker-dev.sh           # Script helper
 ```
 
-### Sobre los tres `.env.example`
+### Los tres `.env.example` no se mezclan
 
-Hay tres plantillas de entorno en el repo y **no se mezclan entre sí**:
-
-| Archivo | Para qué sirve | Cuándo se usa |
+| Archivo | Variables | Cuándo se usa |
 |---|---|---|
-| `.env.example` (raíz) | Solo `JWT_SECRET` e `INITIAL_ADMIN_PASSWORD`, que docker-compose inyecta dentro del contenedor `backend` | Solo si usas `docker-compose up` |
-| `erp-tienda-backend/.env.example` | Todas las variables del backend (`DATABASE_URL`, `JWT_SECRET`, etc.) | Solo si corres el backend con `npm run start:dev` **sin Docker** |
+| `.env.example` (raíz) | `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD`, `ZONA_HORARIA_NEGOCIO` y `NEXT_PUBLIC_API_URL` (las dos últimas comentadas), que `docker compose` inyecta en los contenedores | Solo con `docker compose` |
+| `erp-tienda-backend/.env.example` | Todas las variables del backend | Solo si corres el backend con `npm run start:dev` **sin Docker** |
 | `erp-tienda-frontend/.env.example` | `NEXT_PUBLIC_API_URL` | Solo si corres el frontend con `npm run dev` **sin Docker** |
 
-Cuando usas docker-compose, `DATABASE_URL`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, etc. ya están fijados directamente en `docker-compose.yml` (apuntan a los nombres de servicio dentro de la red de Docker); no necesitas crear ni copiar los `.env.example` de `erp-tienda-backend/` o `erp-tienda-frontend/` para ese flujo. Solo copia el `.env.example` de la raíz a `.env` si quieres cambiar el JWT secret o la contraseña del admin inicial.
+Con Docker, `DATABASE_URL`, `CORS_ORIGINS`, etc. ya están fijados en `docker-compose.yml` (apuntan a los nombres de
+servicio de la red de Docker); no hace falta copiar los `.env.example` de las subcarpetas. Copia el de la raíz a `.env`
+solo si quieres cambiar alguno de sus valores.
 
-## Inicio Rápido
+## Trabajar con el código
 
-### 1. Primera vez - Construir e iniciar
+Los cambios se reflejan solos dentro de los contenedores:
 
-```bash
-# Construir las imágenes
-docker-compose build
+- **Backend:** se monta `src/` y `prisma/`; `npm run start:dev` recarga al guardar.
+- **Frontend:** se montan solo `app`, `components`, `hooks`, `lib`, `public` y `src`. Un cambio en `proxy.ts`,
+  `next.config.ts` o `package.json` no llega al contenedor: reconstruye con `docker compose build frontend`.
+  Lo mismo aplica a `package.json` del backend.
 
-# Iniciar los servicios
-docker-compose up
-```
-
-O simplemente:
-
-```bash
-./scripts/docker-dev.sh start
-```
-
-### 2. Acceder a la aplicación
-
-- **Frontend**: http://localhost:3001
-- **Backend**: http://localhost:3000
-- **Swagger (API)**: http://localhost:3000/api
-- **PostgreSQL**: localhost:5432 (usuario: postgres, password: postgres)
-
-### 3. Detener
+### Logs y shells
 
 ```bash
-docker-compose down
-```
-
-O:
-
-```bash
-./scripts/docker-dev.sh stop
-```
-
-## Workflow de Desarrollo
-
-### Trabajar con el código
-
-El setup está configurado con **hot-reload**:
-
-- **Backend**: Los cambios en `src/` se reflejan automáticamente (gracias a `npm run start:dev`)
-- **Frontend**: Los cambios en `app/`, `components/`, etc. se reflejan automáticamente
-
-Simplemente edita los archivos en tu editor habitual, y los cambios aparecerán en el contenedor automáticamente.
-
-### Ver logs
-
-```bash
-# Ver todos los logs
-./scripts/docker-dev.sh logs
-
-# Ver logs del backend
-./scripts/docker-dev.sh logs-backend
-
-# Ver logs del frontend
-./scripts/docker-dev.sh logs-frontend
-
-# Ver logs de PostgreSQL
-./scripts/docker-dev.sh logs-db
-```
-
-### Ejecutar comandos en los contenedores
-
-```bash
-# Shell en el backend
-./scripts/docker-dev.sh shell-backend
-
-# Shell en el frontend
-./scripts/docker-dev.sh shell-frontend
-
-# Conectar a PostgreSQL
-./scripts/docker-dev.sh shell-db
-```
-
-Ejemplo dentro del contenedor:
-
-```bash
-# Ver estado del servidor
-curl http://localhost:3000/api
-
-# Instalar un paquete nuevo (si es necesario)
-npm install nuevo-paquete
+./scripts/docker-dev.sh logs             # todos
+./scripts/docker-dev.sh logs-backend     # también logs-frontend y logs-db
+./scripts/docker-dev.sh shell-backend    # también shell-frontend y shell-db (psql)
+./scripts/docker-dev.sh ps               # estado
+./scripts/docker-dev.sh restart
 ```
 
 ## Servicios
 
-### PostgreSQL
+- **PostgreSQL:** puerto 5432, base `erp_tienda_dev`. Los datos viven en el volumen `erp_tienda_pg_data`, así que
+  persisten al parar los contenedores.
+- **Backend (NestJS):** puerto 3000, modo desarrollo. Al iniciar corre `prisma db push --accept-data-loss` contra la base
+  local (aplica el esquema sin migraciones, ADR [0002](../decisions/0002-sin-migraciones-hasta-produccion.md); puede
+  borrar datos si el esquema pierde columnas, por eso solo se usa con esta base desechable), arranca en modo watch y
+  expone Swagger.
+- **Frontend (Next.js):** puerto 3001, `next dev`. Se conecta al backend con `NEXT_PUBLIC_API_URL`
+  (`http://localhost:3000` por defecto).
 
-- **Puerto**: 5432
-- **Usuario**: postgres
-- **Contraseña**: postgres
-- **Base de datos**: erp_tienda_dev
-- **Volumen**: `erp_tienda_pg_data` (persiste los datos entre reinicios)
-
-Los datos de la BD se guardan en un volumen de Docker, así que la información persiste incluso si paras los contenedores.
-
-### Backend (NestJS)
-
-- **Puerto**: 3000
-- **Modo**: Desarrollo (con watch)
-- **Variables de entorno**: Configuradas automáticamente en `docker-compose.yml`
-
-Al iniciar, el backend automáticamente:
-1. Ejecuta las migraciones de Prisma
-2. Inicia el servidor en modo watch
-3. Expone Swagger en http://localhost:3000/api
-
-### Frontend (Next.js)
-
-- **Puerto**: 3001
-- **Modo**: Desarrollo (con hot-reload)
-
-Se conecta al backend a través de `NEXT_PUBLIC_API_URL=http://localhost:3000`
-
-## Gestión de volúmenes y datos
-
-### Ver volúmenes
+Variables que fija `docker-compose.yml` para el backend: `DATABASE_URL`, `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD`,
+`CORS_ORIGINS=http://localhost:3001`, `ZONA_HORARIA_NEGOCIO`, `NODE_ENV=development` y `ENABLE_SWAGGER=true`. Para
+sobrescribir las que lee de la raíz, crea un `.env` ahí:
 
 ```bash
-docker volume ls | grep tienda
-```
-
-### Limpiar todo (¡cuidado!)
-
-```bash
-# Detiene contenedores y elimina volúmenes (BORRA LOS DATOS DE LA BD)
-docker-compose down -v
-
-# O usa el script helper
-./scripts/docker-dev.sh clean
-```
-
-### Backup de la BD
-
-```bash
-docker-compose exec postgres pg_dump -U postgres -d erp_tienda_dev > backup.sql
-```
-
-### Restaurar una BD desde backup
-
-```bash
-docker-compose exec -T postgres psql -U postgres -d erp_tienda_dev < backup.sql
-```
-
-## Troubleshooting
-
-### El backend no se conecta a la BD
-
-Asegúrate de que PostgreSQL está healthy:
-
-```bash
-docker-compose ps
-```
-
-Si `postgres` no muestra `healthy`, espera un momento y verifica de nuevo. El healthcheck puede tardar.
-
-### Puerto ya en uso
-
-Si ves error "port is already allocated":
-
-```bash
-# Ver qué está usando el puerto
-lsof -i :3000  # Backend
-lsof -i :3001  # Frontend
-lsof -i :5432  # PostgreSQL
-
-# Matar el proceso
-kill -9 <PID>
-```
-
-### Reconstruir imágenes
-
-```bash
-# Forzar reconstrucción sin caché
-docker-compose build --no-cache
-
-# Luego iniciar
-docker-compose up
-```
-
-### Logs vacíos o no se ven los cambios
-
-Intenta:
-
-```bash
-# Detener todo
-docker-compose down
-
-# Limpiar volúmenes (¡borrará datos!)
-docker volume prune
-
-# Reconstruir
-docker-compose build --no-cache
-
-# Iniciar de nuevo
-docker-compose up
-```
-
-### Ver estado completo
-
-```bash
-./scripts/docker-dev.sh ps
-```
-
-## Variables de Entorno
-
-El archivo `docker-compose.yml` configura automáticamente las variables necesarias:
-
-**Backend**:
-- `DATABASE_URL`: Conexión a PostgreSQL
-- `JWT_SECRET`: Secreto JWT (cambiar en producción)
-- `CORS_ORIGINS`: http://localhost:3001
-- `NODE_ENV`: development
-- `ENABLE_SWAGGER`: true
-
-**Frontend**:
-- `NEXT_PUBLIC_API_URL`: http://localhost:3000
-
-Puedes sobrescribir estos valores en `.env`:
-
-```bash
-# En la raíz del proyecto, crear o editar .env
 JWT_SECRET=tu-secreto-aqui
 INITIAL_ADMIN_PASSWORD=TuContraseña123!
 ```
 
+## Datos
+
+```bash
+docker volume ls | grep tienda
+./scripts/docker-dev.sh clean     # docker compose down -v: BORRA la base local
+```
+
+Respaldo y restauración (los de producción, que son los que importan): [`respaldos.md`](respaldos.md).
+
 ## Testing
 
+Los unitarios del backend, dentro del contenedor:
+
 ```bash
-# Ejecutar tests del backend
 ./scripts/docker-dev.sh test-backend
-
-# Desde dentro del contenedor
-docker-compose exec backend npm test
-docker-compose exec backend npm run test:e2e
 ```
 
-## Comparación: Local vs Docker
+Los e2e **no** se corren en el contenedor (la imagen no trae la carpeta `test`) y además borrarían la base de
+desarrollo. Se corren desde tu máquina con una base propia: ver [`testing.md`](testing.md).
 
-| Aspecto | Local | Docker |
-|---------|-------|--------|
-| Dependencias | Instaladas en tu máquina | En contenedores, aisladas |
-| Node.js | Versión global | node:22-alpine fija |
-| PostgreSQL | Instalada localmente | Contenedor PostgreSQL |
-| Hot-reload | Funciona según tu setup | Garantizado con volumes |
-| Portabilidad | Puede variar | Consistente en cualquier máquina |
-| Performance | Más rápido (sin virtualización) | Ligero overhead |
+## Problemas comunes
 
-## Próximos Pasos
+- **El backend no se conecta a la base:** `docker compose ps`; `postgres` debe mostrar `healthy` (puede tardar unos
+  segundos). Si no, revisa `./scripts/docker-dev.sh logs-backend`.
+- **Puerto ya en uso** (3000, 3001 o 5432): cierra el proceso que lo usa (en Windows,
+  `netstat -ano | findstr :3000`) o el Postgres local que ocupe el 5432.
+- **No se ven los cambios:** confirma que editas un archivo de una carpeta montada (ver arriba) y recarga el navegador.
+  Si cambiaste dependencias o archivos no montados, reconstruye.
+- **Reconstruir de cero:**
 
-- Leer el [ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md) para entender por qué todavía no hay migraciones
-- Configurar en `docker-compose.yml` si necesitas agregar más servicios
-- Para producción, consultar [deployment.md](./deployment.md)
-
-## Comandos Útiles Rápidos
-
-```bash
-# Iniciar
-./scripts/docker-dev.sh start
-
-# Ver logs en tiempo real
-./scripts/docker-dev.sh logs-backend
-
-# Reiniciar
-./scripts/docker-dev.sh restart
-
-# Detener
-./scripts/docker-dev.sh stop
-
-# Limpiar todo
-./scripts/docker-dev.sh clean
-
-# Shell del backend para debugging
-./scripts/docker-dev.sh shell-backend
-```
+  ```bash
+  docker compose down
+  docker compose build --no-cache
+  docker compose up
+  ```

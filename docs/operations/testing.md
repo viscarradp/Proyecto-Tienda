@@ -4,8 +4,8 @@
 
 - **Tests unitarios** (`erp-tienda-backend/src/**/*.spec.ts`): lógica pura sin base de datos — zona horaria del negocio,
   validación de configuración de producción y `TRUST_PROXY`, filtro de excepciones de Prisma, deuda de
-  stock, entre otros.
-- **Tests e2e** (`erp-tienda-backend/test/*.e2e-spec.ts`, 156 casos en 19 archivos al cierre del Ciclo 2026-11): levantan la app real de Nest contra un
+  stock, bot de Telegram, entre otros.
+- **Tests e2e** (`erp-tienda-backend/test/*.e2e-spec.ts`): levantan la app real de Nest contra un
   Postgres real y cubren las invariantes del negocio — motor FIFO y sobreventa concurrente, turnos de caja, apertura con
   diferencia y origen, política "registrar y avisar", bóveda y arqueo, estado de resultados y patrimonio, devoluciones y
   anulación, venta por monto y sin stock (mostrador flexible), idempotencia, contingencia, permisos y trazabilidad (D-06),
@@ -47,8 +47,9 @@ npm run test:e2e
 Prisma 7 **bloquea `db push --force-reset` cuando detecta que lo orquesta un agente de IA** y exige que el usuario lo
 confirme explícitamente (acepta el consentimiento mediante la variable de entorno que el propio mensaje de Prisma indica,
 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`). Es una barrera correcta: la persona responsable debe revisar primero que
-`DATABASE_URL` apunte a la base desechable de pruebas y dar el consentimiento ella misma; un agente no debe sortearla
-(más contexto en [ADR 0009](../decisions/0009-testing-docker-ci.md)).
+`DATABASE_URL` apunte a la base desechable de pruebas y dar el consentimiento ella misma. Un agente **le pide el
+consentimiento al usuario**; nunca lo inventa ni define `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` por su cuenta (más
+contexto en [ADR 0009](../decisions/0009-testing-docker-ci.md)).
 
 ## Cómo correr los tests unitarios
 

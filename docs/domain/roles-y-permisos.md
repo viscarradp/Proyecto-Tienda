@@ -1,15 +1,14 @@
 # Roles y permisos
 
-> Reglas vigentes (ciclo 2026-11, lote L7). Verificadas contra los `@Roles` de cada controller,
+> Reglas vigentes. Verificadas contra los `@Roles` de cada controller,
 > `common/permisos.ts`, `jwt.strategy.ts` y `usuarios.service.ts`. Mecanismo técnico (guards, JWT, hardening):
 > [`../architecture/security.md`](../architecture/security.md).
 
 ## Principio (D-06): la cajera opera, la dueña controla
 
 Hay dos roles: **`ADMIN`** (la dueña) y **`CAJERO`** (la cajera). La cajera hace todo lo que el mostrador necesita
-—vender, anular, devolver, abrir y cerrar caja, pagar gastos chicos de la gaveta— y **cada cosa queda con su nombre y su
-motivo**. Lo que mueve dinero fuera de la gaveta o cambia las reglas del negocio es de la dueña. El rol `VENDEDOR`
-(muerto) se quitó.
+—vender, anular ventas, devolver, abrir y cerrar caja, pagar gastos chicos de la gaveta— y **cada cosa queda con su
+nombre** (y con su motivo cuando se anula). Lo que mueve dinero fuera de la gaveta o cambia las reglas del negocio es de la dueña.
 
 Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administradora)."**
 
@@ -17,10 +16,11 @@ Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administr
 
 | Acción | CAJERO | ADMIN |
 |---|---|---|
-| Vender, anular (con motivo), devolver (con motivo) | sí | sí |
+| Vender, anular una venta (motivo obligatorio), devolver (justificación opcional) | sí | sí |
+| Anular una compra, un movimiento financiero (gasto, retiro, aporte) o una merma (motivo obligatorio) | 403 | sí |
 | Abrir y cerrar caja (incluye el origen de la diferencia de apertura) | sí | sí |
-| `EGRESO_OPERATIVO` desde la gaveta; `RETIRO_BOVEDA` (guardar en bóveda) | sí | sí |
-| `RETIRO_PERSONAL`, `INGRESO_CAPITAL`, `TRASLADO_DESDE_BOVEDA`, egreso pagado desde la bóveda | 403 | sí |
+| `EGRESO_OPERATIVO` desde la gaveta ("Pagar algo"); `RETIRO_BOVEDA` ("Guardar en la bóveda") | sí | sí |
+| `RETIRO_PERSONAL` ("Sacar para mí"), `INGRESO_CAPITAL`, `TRASLADO_DESDE_BOVEDA`, egreso pagado desde la bóveda | 403 | sí |
 | Inyección a la bóveda, arqueo, libro de la bóveda | 403 | sí |
 | Ver el saldo de la bóveda (`GET /caja-general/saldo`) | sí | sí |
 | Categorías de gasto: leer / crear, editar, borrar | leer / 403 | todo |
@@ -40,10 +40,12 @@ Todo 403 por rol responde el mismo mensaje: **"Esto lo hace la dueña (administr
 `GAVETA` (el default) o un `RETIRO_BOVEDA`.
 
 La interfaz refleja lo mismo (`lib/navigation.ts` es la fuente única): la cajera ve **Vender, Inventario y Ventas y turnos**;
-**Mi negocio, Gastos y deudas y Usuarios** son de la dueña.
+**Mi negocio, Gastos y deudas y Usuarios** son de la dueña. En "Sacar dinero" la cajera solo ve "Guardar en la bóveda" y
+"Pagar algo".
 
-Nombres del menú desde el 2026-11-26 (las rutas no cambian): Estadísticas → **Mi negocio** (`/dashboard/stats`),
-Movimientos → **Ventas y turnos** (`/dashboard/movimientos`), Gastos → **Gastos y deudas** (`/dashboard/gastos`).
+Pantallas y rutas (`lib/glosario.ts`, `MENU`): **Mi negocio** (`/dashboard/stats`), **Vender** (`/dashboard/pos`),
+**Inventario** (`/dashboard/inventario`), **Gastos y deudas** (`/dashboard/gastos`), **Ventas y turnos**
+(`/dashboard/movimientos`) y **Usuarios** (`/dashboard/usuarios`).
 Al iniciar sesión, la **dueña aterriza en Mi negocio** y la **cajera en Vender** (`getHomeRoute`). En el celular, la
 dueña ve 4 pestañas (Mi negocio, Vender, Inventario, Gastos y deudas) y **Más** (Ventas y turnos, Usuarios); la cajera
 ve sus 3 pestañas sin "Más". Ocultar es solo cosmético: la autorización real la hace siempre el
@@ -54,7 +56,7 @@ backend, así que una cajera que llame la API directo sigue recibiendo 403.
 Las operaciones guardan quién las hizo: venta (`usuario_id`), **anulación** (`ventas.anulada_por_id`, con motivo),
 turno abierto (`usuario_id`) y **cerrado** (`cajas_turnos.cerrado_por_id`, también en el cierre forzado), movimientos,
 devoluciones, ajustes de inventario, cambios de precio, **compras** (`compras_inventario.usuario_id`) y abonos a
-deudas. Movimientos muestra quién vendió, anuló, abrió y cerró.
+deudas. Ventas y turnos muestra quién vendió, anuló, abrió y cerró.
 
 ## Usuarios: se desactivan, no se borran
 
