@@ -1,6 +1,6 @@
 # Inventario
 
-> Reglas vigentes (ciclo 2026-11). Verificadas contra `productos`, `presentaciones`, `compras`,
+> Reglas vigentes. Verificadas contra `productos`, `presentaciones`, `compras`,
 > `ajustes_inventario` y `common/pendientes-stock.ts`. Tablas: [`../architecture/data-model.md`](../architecture/data-model.md).
 
 ## Productos, presentaciones y factor
@@ -35,7 +35,7 @@
 
 `productos.activo` (default `true`). `DELETE /productos/:id` (solo ADMIN) **desactiva** el producto si tiene historial
 (lotes, ventas o deuda de stock) y lo borra de verdad —con sus presentaciones— si nunca se usó; responde
-`{ id, nombre, desactivado }`. `GET /productos` devuelve solo los activos (así el POS no ofrece lo desactivado);
+`{ id, nombre, desactivado }`. `GET /productos` devuelve solo los activos (así Vender no ofrece lo desactivado);
 `?incluir_inactivos=true` suma los desactivados y **solo lo respeta para ADMIN**. `PATCH /productos/:id/reactivar` (solo
 ADMIN) lo devuelve al catálogo. En Inventario: "Desactivar" en el producto y el filtro "Ver desactivados" con
 "Reactivar".
@@ -91,7 +91,8 @@ de stock con costo estimado 0 hasta que se registre la compra.
 
 Registran lotes; el `monto_total` lo calcula el backend (suma por lote de `cantidad × costo`, cada lote redondeado a
 2 decimales antes de sumar). Origen del dinero, crédito y abonos: [`dinero-y-cuentas.md`](dinero-y-cuentas.md). Al
-crear los lotes se cubren los pendientes de stock de cada producto. La compra guarda quién la registró.
+crear los lotes se cubren los pendientes de stock de cada producto. La compra guarda quién la registró. Anular una compra:
+[`dinero-y-cuentas.md`](dinero-y-cuentas.md#corregir-errores-anular).
 
 ## Mermas y conteos
 
@@ -114,21 +115,8 @@ crear los lotes se cubren los pendientes de stock de cada producto. La compra gu
   compra falsa. Si el producto nunca tuvo lotes, 400: "Registra una compra o el inventario inicial de este producto".
 - `costo_asumido = cantidad × costo del lote`, redondeado a 2 decimales; es informativo/contable: **una merma no mueve
   efectivo** (es pérdida de inventario ya pagado), pero sí baja la utilidad en el estado de resultados.
+- Anular una merma: [`dinero-y-cuentas.md`](dinero-y-cuentas.md#corregir-errores-anular).
 - La merma se registra **haya o no turno abierto** (`caja_turno_id` nullable): una merma un domingo sin turno también
   llega al período correcto. Un sobrante no genera movimiento: su costo fluirá al venderse.
 - Bloqueo del lote bajo `FOR UPDATE`; si hay turno abierto, se bloquea antes que el lote (orden global de locks). El
   sobrante por producto bloquea el lote más reciente y luego los pendientes (turno → lotes → pendientes).
-
-## Corregir errores (anular)
-
-Anular marca el registro (quién, cuándo, por qué), nunca lo borra; solo ADMIN y con motivo obligatorio
-([ADR 0012](../decisions/0012-anular-sin-borrar.md), dinero: [`dinero-y-cuentas.md`](dinero-y-cuentas.md)).
-
-- **Compra** (`PATCH /compras/:id/anular`): solo si **ningún lote se usó**: cada lote con `cantidad_disponible ==
-  cantidad_inicial`, sin filas en `detalle_venta_lotes`, sin ajustes vigentes y sin haber cubierto deuda de stock; si no,
-  400 ("Ya se vendió o se usó mercadería de esta compra; no se puede anular. Registra una merma o un conteo"). Al anular
-  los lotes quedan en 0, su pago se revierte y, si fue al crédito sin abonos, la deuda queda en 0 (con abonos: 400
-  "Esta compra ya tiene pagos; primero corrige esos pagos").
-- **Merma** (`PATCH /ajustes-inventario/:id/anular`): devuelve la cantidad al lote y marca anulada su
-  `MERMA_INVENTARIO`, que deja de contar como pérdida. Los `CONTEO_SOBRANTE` no se anulan: se corrigen con otra merma o
-  conteo.

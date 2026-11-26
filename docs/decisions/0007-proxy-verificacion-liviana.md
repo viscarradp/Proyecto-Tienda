@@ -1,5 +1,8 @@
 # 0007 — `proxy.ts`: verificación liviana (presencia + expiración), sin validar firma
 
+> **Complementado por [ADR 0013](0013-produccion-render-vercel-supabase.md):** el backend quedó en Render (no en GCP) y
+> el frontend en Vercel.
+
 **Estado:** Aceptado · **Fecha:** 2026-07-03 (Fase 2 de endurecimiento)
 
 ## Contexto

@@ -1,10 +1,9 @@
 # Especificaciones — Modelo de Efectivo y Trazabilidad (Bloque 1)
 
-> **Estado:** Borrador para revisión conjunta · **Fecha:** 2026-07-05 · **Rama:** `feature/bloque1-modelo-contable`
+> **Estado:** Implementado (2026-07) y archivado · **Fecha:** 2026-07-05 · **Rama:** `feature/bloque1-modelo-contable`
 >
-> Fuente de verdad de la remediación del modelo contable. El *qué* y el *porqué*
-> viven aquí; el *cómo/cuándo* en [`01-plan-implementacion.md`](01-plan-implementacion.md);
-> el avance real en [`02-bitacora.md`](02-bitacora.md).
+> El *qué* y el *porqué* de la remediación del modelo contable. Las reglas vigentes están en
+> [`../../domain/`](../../domain/caja-y-ventas.md); si algo de aquí las contradice, ganan ellas y el código.
 >
 > **Origen:** [auditoría de negocio/contable 2026-07-04](../../auditorias/2026-07-04-auditoria-negocio-contable.md), sección 10 "Priorización final", **Bloque 1**.
 

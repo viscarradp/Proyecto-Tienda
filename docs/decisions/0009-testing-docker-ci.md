@@ -1,5 +1,9 @@
 # 0009 — Testing e2e, Docker mínimo y CI (Fase 3)
 
+> **Complementado (2026-11):** `docker-compose.yml` ahora también puede levantar backend y frontend para desarrollo
+> ([`../operations/docker-development.md`](../operations/docker-development.md)); los e2e y la CI siguen usando solo
+> Postgres. El destino de producción quedó en el [ADR 0013](0013-produccion-render-vercel-supabase.md).
+
 **Estado:** Aceptado · **Fecha:** 2026-07-04 (Fase 3 de endurecimiento)
 
 ## Contexto

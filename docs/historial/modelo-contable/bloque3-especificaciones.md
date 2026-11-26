@@ -1,10 +1,9 @@
 # Especificaciones — Bloque 3 (Con el sistema ya operando)
 
-> **Estado:** Borrador para revisión conjunta · **Fecha:** 2026-07-08 · **Rama:** `feature/bloque3-operacion`
+> **Estado:** Implementado (2026-07) y archivado · **Fecha:** 2026-07-08 · **Rama:** `feature/bloque3-operacion`
 >
 > Continúa el trabajo de [`bloque2-especificaciones.md`](bloque2-especificaciones.md).
 > Origen: [auditoría de negocio/contable](../../auditorias/2026-07-04-auditoria-negocio-contable.md) §10, **Bloque 3**.
-> El avance se registra en [`02-bitacora.md`](02-bitacora.md).
 
 ## 1. Propósito
 

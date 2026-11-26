@@ -1,11 +1,10 @@
 # Especificaciones de Rediseño UX/UI — ERP/POS Tienda Karlita
 
-> **Estado:** Borrador para revisión conjunta · **Fecha:** 2026-07-04 · **Rama:** `feature/rediseno-ux`
+> **Estado:** Implementado (2026-07) y archivado · **Fecha:** 2026-07-04 · **Rama:** `feature/rediseno-ux`
 >
-> Este documento es la **fuente de verdad** del rediseño de interfaz. Describe el
-> *qué* y el *porqué*. El *cómo* y el *cuándo* viven en
-> [`01-plan-implementacion.md`](01-plan-implementacion.md). El progreso real se
-> registra en [`02-bitacora.md`](02-bitacora.md).
+> El *qué* y el *porqué* del rediseño de interfaz. El código (`app/globals.css`) cita su §5.1 para los tokens de
+> diseño. La interfaz cambió bastante desde entonces (auditoría de UX/UI y seis olas, 2026-11): ver el
+> [backlog del ciclo](../../roadmap/backlog-ciclo-2026-11.md#4-auditoría-integral-de-uxui-2026-11-25).
 
 ---
 
@@ -28,7 +27,7 @@ navegación mobile-first, y el rediseño de las 6 pantallas.
 ## 2. Contexto de negocio y usuarios
 
 - **Producto:** POS + ERP para una tienda / puesto de mercado minorista en El Salvador.
-- **Prioridad absoluta** (heredada de [`GEMINI_FRONT.md`](../../../erp-tienda-frontend/GEMINI_FRONT.md)):
+- **Prioridad absoluta** (heredada del antiguo `GEMINI_FRONT.md`, ya eliminado):
   **velocidad de uso en pantallas táctiles**, claridad visual y cero distracciones.
 - **Usuarios:**
   - **Cajero (`CAJERO`):** opera el POS todo el día. Ve POS, Inventario, Movimientos, Gastos.

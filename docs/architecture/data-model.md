@@ -2,18 +2,13 @@
 
 Esquema completo en [`erp-tienda-backend/prisma/schema.prisma`](../../erp-tienda-backend/prisma/schema.prisma).
 Este documento explica el *porqué* de las tablas clave, no repite el schema. Las reglas de negocio de cada tabla están en
-[`../domain/`](../domain/caja-y-ventas.md).
+[`../domain/`](../domain/) (el índice es [`caja-y-ventas.md`](../domain/caja-y-ventas.md)).
 
-## Nota importante: sin migraciones (por ahora)
+## Cambios de esquema
 
-`schema.prisma` fue generado por introspección (`prisma db pull`) desde una
-base de Supabase ya existente — **no hay carpeta `prisma/migrations`**. Es una
-decisión deliberada mientras el proyecto está en desarrollo activo (ver
-[`../decisions/0002-sin-migraciones-hasta-produccion.md`](../decisions/0002-sin-migraciones-hasta-produccion.md)).
-Esto significa: los cambios de schema se aplican con `prisma db push` y **no** hay historial versionado de cambios de
-BD todavía. Antes de producción con datos reales, esto debe resolverse. Los cambios de schema del ciclo 2026-11 que
-faltan aplicar en Supabase están listados en
-[`../roadmap/plan-fases.md`](../roadmap/plan-fases.md#antes-de-la-primera-venta-real).
+No hay carpeta `prisma/migrations`: los cambios se aplican con `prisma db push`
+([ADR 0002](../decisions/0002-sin-migraciones-hasta-produccion.md)). Lo que falta aplicar en Supabase está en
+[`../roadmap/plan-fases.md`](../roadmap/plan-fases.md#cambios-de-esquema-pendientes-en-supabase).
 
 ## Catálogo
 
@@ -82,9 +77,8 @@ cajas_turnos ──< ventas
   `tipo_movimiento` y `cuenta_origen` → `cuenta_destino` de un catálogo cerrado (`GAVETA`, `BOVEDA`, `DUEÑOS`, `GASTO`,
   `PROVEEDOR`); `MERMA_INVENTARIO` no tiene cuentas (no es efectivo). `caja_turno_id` es nullable (movimientos de bóveda,
   mermas sin turno). Tabla completa de tipos en [`../domain/dinero-y-cuentas.md`](../domain/dinero-y-cuentas.md).
-- **La bóveda ya no es una tabla.** La antigua `caja_general` se **eliminó** (Bloque 1.C): el saldo de bóveda se **deriva**
-  del libro, `Σ(destino=BOVEDA) − Σ(origen=BOVEDA)`, con índices en `cuenta_origen` y `cuenta_destino`. Así el efectivo se
-  conserva por construcción y no hay dos convenciones de signo que reconciliar. El módulo `caja_general` del backend solo
+- **La bóveda no es una tabla:** su saldo se **deriva** del libro, `Σ(destino=BOVEDA) − Σ(origen=BOVEDA)`, con índices en
+  `cuenta_origen` y `cuenta_destino`. Así el efectivo se conserva por construcción. El módulo `caja_general` del backend solo
   expone lecturas de ese saldo/libro, la inyección y el arqueo.
 
 ## Compras y deudas
@@ -108,10 +102,20 @@ específico, con `costo_asumido` (la pérdida al costo de adquisición de ese lo
 - **Autoría:** `usuario_id` en turnos, ventas, movimientos, ajustes, devoluciones, historial de precios, compras y abonos;
   más `ventas.anulada_por_id` y `cajas_turnos.cerrado_por_id`. Todas con `onDelete: SetNull`.
 
+## Bot de Telegram
+
+Reglas en [`../domain/bot.md`](../domain/bot.md).
+
+- **`bot_conversaciones`**: una fila por chat (`chat_id`, único) con el `borrador` de compra en Json, su `estado`
+  (`BORRADOR` | `GUARDANDO`), `usuario_id` y `actualizado_en`.
+- **`bot_alias`**: memoria de equivalencias "como lo dice la dueña" → presentación: `texto_normalizado`, `proveedor`
+  (opcional), `presentacion_id`, `usos`, y, cuando lo comprado no es una presentación del catálogo (una caja, un fardo),
+  `paquete` (cómo lo nombró) y `unidades_paquete` (cuántas de la presentación trae). Autor en `creado_por_id`.
+
 ## Otras tablas
 
-- **`activos_fijos`**: registro simple de activos del negocio (mobiliario, equipo); entra al patrimonio a su valor
-  estimado, sin depreciación. Aún no tiene pantalla.
+- **`activos_fijos`**: activos del negocio (mobiliario, equipo) con `valor_estimado`. No hay pantalla ni endpoint para darlos
+  de alta; solo los lee el patrimonio, que los suma a su valor estimado, sin depreciación.
 
 ## Índices
 

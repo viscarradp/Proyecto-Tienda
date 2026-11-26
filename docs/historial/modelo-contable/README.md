@@ -1,24 +1,14 @@
-# Modelo de Efectivo y Trazabilidad — Bloque 1
+# Modelo de efectivo y trazabilidad (Bloques 1–3)
 
-> **Proyecto terminado (2026-07), archivado en [`historial/`](../README.md).** Las reglas vigentes viven en
-> [`../../domain/`](../../domain/caja-y-ventas.md); este material es contexto histórico.
+> **Proyecto terminado (2026-07), archivado.** Las reglas vigentes están en [`../../domain/`](../../domain/caja-y-ventas.md);
+> estas especificaciones son el porqué de cómo quedó el modelo.
 
-Remediación del modelo de flujo de efectivo del ERP (Bloque 1 de la
-[auditoría de negocio/contable 2026-07-04](../../auditorias/2026-07-04-auditoria-negocio-contable.md)).
-Fuente de verdad de este trabajo.
+Remediación de la [auditoría de negocio/contable 2026-07-04](../../auditorias/2026-07-04-auditoria-negocio-contable.md) §10.
 
-## Índice
-
-| Documento | Para qué |
+| Documento | Bloque |
 |---|---|
-| [`00-especificaciones.md`](00-especificaciones.md) | **Specs.** Diagnóstico (F1-F7), diseño origen→destino, y spec por ítem. ⭐ empieza aquí. |
-| [`01-plan-implementacion.md`](01-plan-implementacion.md) | **Plan.** 6 sub-fases (1.A–1.F), tareas y criterios de aceptación. |
-| [`02-bitacora.md`](02-bitacora.md) | **Bitácora.** Estado y avance real. |
+| [`00-especificaciones.md`](00-especificaciones.md) | **1 · Modelo de efectivo:** diagnóstico, movimientos origen→destino (`GAVETA`, `BOVEDA`, `DUEÑOS`, `GASTO`, `PROVEEDOR`), bóveda derivada del libro, trazabilidad. El código cita su §5. |
+| [`bloque2-especificaciones.md`](bloque2-especificaciones.md) | **2 · Confianza en los números:** faltantes y sobrantes en el estado de resultados, arqueo de bóveda, tolerancia de descuadre y cierre forzado, conteo físico. |
+| [`bloque3-especificaciones.md`](bloque3-especificaciones.md) | **3 · Con el sistema operando:** patrimonio y flujo de efectivo, devoluciones después del turno, modo contingencia. El código cita su §3. |
 
-## Contexto rápido
-
-- **Objetivo:** cerrar el modelo de efectivo **antes de la primera venta real** (BD vacía = cambios baratos).
-- **Causa raíz:** movimientos de efectivo sin origen/destino → 4 fugas. Fix: catálogo cerrado `GAVETA, BOVEDA, DUEÑOS, GASTO, PROVEEDOR`.
-- **Decisiones:** fraccionados = SÍ (Decimal); alcance = backend + frontend; bóveda derivada del libro.
-- **Rama:** `feature/bloque1-modelo-contable` (merge `--no-ff` a `master` por sub-fase).
-- **Regla:** sin migraciones Prisma (`db push`); el push a Supabase real es paso manual del usuario.
+Los planes y bitácoras de implementación se retiraron el 2026-11-26; están en el historial de git.

@@ -18,7 +18,10 @@
 ## Autorización
 
 - Dos guards globales (`APP_GUARD` en `app.module.ts`) se aplican a **todo** endpoint por defecto:
-  - `JwtAuthGuard`: exige un JWT válido, salvo que el endpoint tenga `@Public()` (hoy: `POST /auth/login`, `GET /salud`, y `GET /` y `GET /health`, que no tocan la BD).
+  - `JwtAuthGuard`: exige un JWT válido, salvo que el endpoint tenga `@Public()` (hoy: `POST /auth/login`, `GET /salud`, `POST /telegram/webhook`, y `GET /` y `GET /health`, que no tocan la BD).
+    `POST /telegram/webhook` exige el encabezado `X-Telegram-Bot-Api-Secret-Token` igual a `TELEGRAM_WEBHOOK_SECRET`
+    (comparación en tiempo constante; 401 si falta o no coincide, 404 si el bot no está en modo `webhook`) y no lleva
+    rate-limit (`@SkipThrottle`) para que Telegram no reciba 429.
   - `RolesGuard`: si el controlador/endpoint tiene `@Roles('ADMIN', ...)`, exige que el rol del usuario autenticado esté en esa lista.
 - Roles: `ADMIN` (la dueña) y `CAJERO`. Todo 403 por rol responde "Esto lo hace la dueña (administradora)."
   (`RolesGuard` y `common/permisos.ts`). `POST /movimientos-financieros` decide por `tipo_movimiento` y `origen_fondos`
@@ -65,6 +68,9 @@
 | Rate-limit ciego detrás de un balanceador (toda la tienda como una IP) | `TRUST_PROXY` (saltos de proxy o CIDR; `true` se rechaza porque permitiría falsificar la IP) | `main.ts`, `deployment.md` |
 | Un error de conexión ociosa tumba el proceso; pool sin tope | `DB_POOL_MAX` + timeouts + `pool.on('error')` | `prisma.service.ts`, `common/pool-config.ts` |
 | Usuario despedido con token vigente | Validación del usuario en cada request; los usuarios se desactivan, no se borran | `jwt.strategy.ts`, [`roles-y-permisos.md`](../domain/roles-y-permisos.md) |
+| Webhook del bot abierto o mal configurado | Con `NODE_ENV=production` y `TELEGRAM_MODO=webhook`, el arranque exige `TELEGRAM_BOT_TOKEN` y un `TELEGRAM_WEBHOOK_SECRET` de 16 caracteres o más; solo usan el bot los usuarios de `TELEGRAM_USUARIOS` (ADMIN activos) | `common/config-produccion.ts`, `bot/telegram/telegram.controller.ts` |
+| Datos de compras enviados a un proveedor de IA que los conserve | `OPENROUTER_DATA_COLLECTION=deny` por defecto: se piden solo proveedores que no guardan los datos; `allow` es opt-in | `bot/nucleo/llm/openrouter.cliente.ts` |
+| Tablas expuestas por la API de datos de Supabase | RLS activado **sin políticas** en todas las tablas de `public`: la API de datos (PostgREST) no las expone; el backend entra como dueño de las tablas. Defensa en profundidad, no sustituye la autorización del backend | Supabase, ver [`../operations/deployment.md`](../operations/deployment.md) |
 | Datos de la tienda perdidos o expuestos en un respaldo | Respaldo nocturno **cifrado** (AES-256) con `pg_dump` | [`../operations/respaldos.md`](../operations/respaldos.md) |
 
 Detalle de cada decisión en [`../decisions/`](../decisions/).

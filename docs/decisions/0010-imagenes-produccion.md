@@ -1,5 +1,8 @@
 # 0010 — Imágenes de producción separadas y defaults seguros de despliegue
 
+> **Complementado por [ADR 0013](0013-produccion-render-vercel-supabase.md):** el destino final es Render + Vercel +
+> Supabase, no Cloud Run; `TRUST_PROXY=1` vale igual en Render, y el esquema se aplica con el MCP de Supabase.
+
 **Estado:** Aceptado · **Fecha:** 2026-11 (ciclo 2026-11, lote L3a)
 
 ## Contexto

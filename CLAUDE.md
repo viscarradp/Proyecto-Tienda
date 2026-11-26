@@ -1,7 +1,8 @@
 # Proyecto-Tienda — instrucciones para Claude
 
 Micro ERP para una tiendita colonial de El Salvador: punto de venta, caja y turnos, inventario FIFO por lotes,
-gastos, deudas con proveedores y estadísticas para la dueña. Monorepo:
+gastos, deudas con proveedores, "Mi negocio" (los números de la dueña) y un bot de Telegram para registrar compras.
+Monorepo:
 
 - `erp-tienda-backend/` — NestJS 11 + Prisma 7 (`@prisma/adapter-pg`) + PostgreSQL (Supabase en producción).
 - `erp-tienda-frontend/` — Next.js 16 (App Router), React 19, Tailwind 4, shadcn/ui. **Lee
@@ -10,11 +11,13 @@ gastos, deudas con proveedores y estadísticas para la dueña. Monorepo:
 ## Por dónde empezar
 
 1. [`docs/roadmap/plan-fases.md`](docs/roadmap/plan-fases.md) — estado vivo del proyecto y qué sigue. Léelo primero.
-2. [`docs/roadmap/backlog-ciclo-2026-11.md`](docs/roadmap/backlog-ciclo-2026-11.md) — backlog con lotes, decisiones y estado.
+2. [`docs/roadmap/backlog-ciclo-2026-11.md`](docs/roadmap/backlog-ciclo-2026-11.md) — lo pendiente (§1), las
+   decisiones tomadas y el registro de lotes y olas.
 3. [`docs/domain/`](docs/domain/) — reglas de negocio vigentes por tema (caja y turnos, ventas, inventario, dinero,
-   reportes, roles, modo contingencia).
-4. [`docs/decisions/`](docs/decisions/) — ADRs. Clave: 0001 (orden de locks), 0002 (sin migraciones: `db push`),
-   0011 (registrar y avisar), 0012 (anular sin borrar).
+   reportes, roles, modo contingencia, bot de Telegram).
+4. [`docs/decisions/`](docs/decisions/) — ADRs. Clave: 0001 (orden de locks), 0002 y 0013 (sin migraciones;
+   producción en Render, Vercel y Supabase), 0011 (registrar y avisar), 0012 (anular sin borrar).
+5. [`docs/operations/deployment.md`](docs/operations/deployment.md) — producción y cómo se aplica un cambio de esquema.
 
 ## Principio rector: apoyar, no imponer
 
@@ -49,8 +52,9 @@ Textos de pantalla en español llano de tienda, con los nombres de `erp-tienda-f
   (`erp_tienda_<algo>` en el Postgres de `docker-compose.yml`), nunca la de desarrollo con datos ni una remota.
   Prisma 7 exige `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`: **pide el consentimiento al usuario** y no lo
   inventes. Guía: [`docs/operations/testing.md`](docs/operations/testing.md).
-- **No hay migraciones** (ADR 0002): los cambios de schema se aplican con `npx prisma db push`. Si agregas columnas,
-  anótalas en la tabla de "Antes de la primera venta real" de `plan-fases.md` (Supabase las necesita).
+- **No hay migraciones** (ADR 0002 y 0013): en local los cambios de schema se aplican con `npx prisma db push`. Si
+  agregas tablas o columnas, anótalas en "Cambios de esquema pendientes en Supabase" de `plan-fases.md` en el mismo
+  cambio (Supabase las necesita).
 - `npm run lint` del backend corre con `--fix` y puede tocar archivos que no cambiaste. Revisa `git status` después.
 - `core.autocrlf=true` en Windows: reformatear archivos ajenos genera ruido de CRLF. Descarta los que no cambiaron
   de verdad.

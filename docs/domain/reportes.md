@@ -1,7 +1,7 @@
 # Reportes
 
-> Reglas vigentes (ciclo 2026-11). Verificadas contra `reportes.service.ts` y `common/zona-horaria.ts`.
-> Todos los endpoints de `/reportes/*` son **solo de la dueña**. Pantalla: Mi negocio (antes Estadísticas).
+> Reglas vigentes. Verificadas contra `reportes.service.ts` y `common/zona-horaria.ts`.
+> Todos los endpoints de `/reportes/*` son **solo de la dueña**. Pantalla: Mi negocio (`/dashboard/stats`).
 
 ## Zona horaria del negocio
 
@@ -42,10 +42,10 @@ Detalles que importan al interpretarlo:
 - **No restan de la utilidad:** `RETIRO_PERSONAL` (es una distribución de patrimonio; se informa aparte como
   `retiros_duenos`), `PAGO_PROVEEDOR` y abonos de deuda (el costo ya entró por el FIFO), los traslados entre gaveta y
   bóveda y los aportes de capital.
-- **`ventas_sin_costo`** `{ monto_vendido, lineas, productos[], producto_ids[] }` (DUE-27): lo vendido en el período cuyo
+- **`ventas_sin_costo`** `{ monto_vendido, lineas, productos[], producto_ids[] }`: lo vendido en el período cuyo
   costo sigue en $0 (deuda de stock con `costo_unitario_estimado = 0`, es decir, producto sin compras que aún no se
   cubrió). Solo ventas `COMPLETADA`; el monto prorratea el subtotal de la línea y descuenta lo devuelto. Cuando una compra
-  lo cubre, el estimado pasa al costo real y vuelve a 0. Estadísticas avisa en ámbar ("la ganancia puede estar de más") y
+  lo cubre, el estimado pasa al costo real y vuelve a 0. Mi negocio avisa en ámbar ("la ganancia puede estar de más") y
   marca esos productos con "sin costo". Registra y avisa; no bloquea.
 - Nombres en pantalla: la fila bruta se llama "Cobrado en ventas", "Vendido" es solo el neto; `faltantes` se muestra como
   "Faltó al contar el dinero" (gaveta y bóveda) y las mermas como "Mercadería perdida (rota, vencida o que no se encontró)".
@@ -89,20 +89,19 @@ Entradas y salidas por cuenta de efectivo real en el período, derivadas del mod
 
 ## Cómo se organiza "Mi negocio" (pantalla)
 
-La pantalla de estadísticas se llama "Mi negocio" y va en tres bloques, en este orden: **La respuesta** (la frase
-"ganaste/perdiste $X (de $Y vendidos)", el aviso de ventas sin costo y el renglón **"Qué hacer"**), **Mi dinero**
-(Gaveta + Bóveda = Efectivo total, menos lo que se debe a proveedores, con "Poner dinero", "Contar la bóveda" y el libro
-de la bóveda) y **Cómo salió la ganancia** (plegado). Después van los productos (una sola lista: "Lo que más vendes" o
-"Lo que menos deja", de `margen-por-producto`) y **Más detalle** (plegado: "Lo que vale el negocio" y "Entradas y salidas
-de dinero"). "Qué hacer" solo muestra lo que existe y cada cosa lleva su enlace: productos "por revisar" y con ventas
-sin stock registrado (de `GET /productos`, a Inventario), deudas con proveedores pendientes (de
-`GET /cuentas-por-pagar?estado=pendientes`, a Gastos y deudas) y productos vendidos sin costo (de
-`estado-resultados`). El libro de la bóveda (`GET /caja-general`, solo la dueña) se pide al abrir "Ver movimientos de la
-bóveda" y muestra fecha, rótulo, monto con signo y autor. El aviso de bóveda inicial va debajo de la respuesta y "Ahora
-no" lo oculta (se recuerda en `localStorage`).
+De arriba abajo:
+
+1. **La respuesta:** "ganaste/perdiste $X (de $Y vendidos)", el aviso de ventas sin costo y **"Qué hacer"**, que solo muestra
+   lo que existe y lleva su enlace: productos "por revisar" o con ventas sin stock registrado (a Inventario), deudas con
+   proveedores pendientes (a Gastos y deudas) y productos vendidos sin costo.
+2. **Mi dinero:** Gaveta + Bóveda = Efectivo total, menos lo que se debe a proveedores, con "Poner dinero", "Contar la
+   bóveda" y el libro de la bóveda (`GET /caja-general`, se pide al abrirlo). El aviso de bóveda inicial va debajo de la
+   respuesta y "Ahora no" lo oculta (se recuerda en `localStorage`).
+3. **Cómo salió la ganancia** (plegado).
+4. **Productos:** una sola lista, "Lo que más vendes" o "Lo que menos deja" (`margen-por-producto`).
+5. **Más detalle** (plegado): "Lo que vale el negocio" y "Entradas y salidas de dinero".
 
 ## Fuera de reportes
 
-La paginación de Movimientos (turnos y ventas por cursor) y los listados de deudas no son reportes: ver
-[`caja-y-turnos.md`](caja-y-turnos.md) y [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md). Aún no construido: resumen
-diario (D-07) y lenguaje "este mes ganaste $X" (L10), ver [backlog](../roadmap/backlog-ciclo-2026-11.md).
+La paginación de Ventas y turnos (turnos y ventas por cursor) y los listados de deudas no son reportes: ver
+[`caja-y-turnos.md`](caja-y-turnos.md) y [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md).
