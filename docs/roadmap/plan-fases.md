@@ -6,7 +6,7 @@
 >
 > **Última actualización:** 2026-11-24 (**Ciclo 2026-11 terminado y ⏸ en pausa para la prueba con la tienda real**; ver [Pausa para la prueba real](#pausa-para-la-prueba-real)).
 >
-> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó los Niveles 1 y 2 de su backlog (lotes L1–L14 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **El desarrollo está en pausa a propósito** para que la tienda lo use de verdad. Antes de esa prueba solo faltan pasos manuales de infraestructura (`db push` en Supabase, activar el respaldo, ensayar una restauración y desplegar): checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después de la prueba se retoma con lo que la tienda reporte, el Nivel 3 y las decisiones del primer mes; ver [Pausa para la prueba real](#pausa-para-la-prueba-real). El 2026-11-25 se hizo además una **[auditoría integral de UX/UI](../auditorias/2026-11-25-auditoria-ux-ui.md)** (143 hallazgos, 6 🔴 verificados) con seis olas de corrección, **todas implementadas y verificadas en el navegador entre el 2026-11-25 y el 2026-11-26** (estado y detalle en el §5 del [backlog](backlog-ciclo-2026-11.md)). Desde entonces la dueña entra a "Mi negocio" y el menú dice Mi negocio · Vender · Inventario · Gastos y deudas · Ventas y turnos · Usuarios.
+> **¿Qué sigue?** El **Ciclo 2026-11** (bugs mayores → auditorías → decisiones → implementación → docs) terminó los Niveles 1 y 2 de su backlog (lotes L1–L14 y la documentación); su estado vive en la sección "Ciclo 2026-11" de este documento y en el [backlog consolidado](backlog-ciclo-2026-11.md). Antes de él: las 4 fases técnicas (0–3) y los **Bloques 1–3** de la [auditoría de negocio/contable](../auditorias/2026-07-04-auditoria-negocio-contable.md) §10 están cerrados — su tracker es [`../historial/modelo-contable/02-bitacora.md`](../historial/modelo-contable/02-bitacora.md). **El desarrollo está en pausa a propósito** para que la tienda lo use de verdad. El 2026-11-26 quedaron aplicados el esquema en Supabase (conservando el catálogo real) y el despliegue en Render + Vercel; antes de la prueba faltan el primer ingreso, activar el respaldo y ensayar una restauración: checklist en [Antes de la primera venta real](#antes-de-la-primera-venta-real). Después de la prueba se retoma con lo que la tienda reporte, el Nivel 3 y las decisiones del primer mes; ver [Pausa para la prueba real](#pausa-para-la-prueba-real). El 2026-11-25 se hizo además una **[auditoría integral de UX/UI](../auditorias/2026-11-25-auditoria-ux-ui.md)** (143 hallazgos, 6 🔴 verificados) con seis olas de corrección, **todas implementadas y verificadas en el navegador entre el 2026-11-25 y el 2026-11-26** (estado y detalle en el §5 del [backlog](backlog-ciclo-2026-11.md)). Desde entonces la dueña entra a "Mi negocio" y el menú dice Mi negocio · Vender · Inventario · Gastos y deudas · Ventas y turnos · Usuarios.
 
 ---
 
@@ -365,9 +365,17 @@ quedó cada una: [`../domain/`](../domain/caja-y-ventas.md). Siguen sin decidir 
 Todo el código y los tests están listos; lo que falta son **pasos manuales** que este repo no puede hacer por ti (no
 tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
 
-1. **Aplicar el esquema en Supabase (`db push`).** La Supabase real nunca recibió los cambios de schema posteriores a su
-   creación (índices de Fase 1, bloques contables 1–3 y los de este ciclo). Desde tu máquina, con la URL **directa** de
-   Supabase (no la del pooler, que no soporta DDL; ver [`../operations/deployment.md`](../operations/deployment.md)):
+1. ✅ **Hecho el 2026-11-26 con el MCP de Supabase** (permiso del usuario). La base tenía el esquema de marzo y un
+   catálogo real cargado (31 productos, 40 presentaciones con código de barras, 9 categorías) sin lotes, ventas ni
+   movimientos. Se movieron las 16 tablas viejas, con sus datos, al esquema `respaldo_2026_11_26` (no se borró nada);
+   se creó el esquema actual completo (`prisma migrate diff --from-empty`), se copiaron catálogo y categoría de gastos
+   (decisión del usuario: sin el usuario viejo; `admin` lo crea el backend con `INITIAL_ADMIN_PASSWORD`) y se activó RLS
+   sin políticas en las 22 tablas (la API de datos de Supabase no las expone; el backend entra como dueño). Ensayado
+   antes en una base local: estructura idéntica a Prisma (`migrate diff` vacío) y huella de columnas, índices y
+   restricciones igual en Supabase. Pendiente: la dueña valida los precios del catálogo; el esquema `respaldo_2026_11_26`
+   se puede borrar cuando el sistema ya esté en uso. Para cambios futuros: anotar aquí, ensayar en local y aplicar con
+   el MCP. Procedimiento anterior, por referencia — desde tu máquina, con la URL **directa** de Supabase (no la del
+   pooler, que no soporta DDL; ver [`../operations/deployment.md`](../operations/deployment.md)):
 
    ```bash
    cd erp-tienda-backend
@@ -394,10 +402,13 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    confirmar que queda verde y **sin** el aviso "no configurado". Guía: [`../operations/respaldos.md`](../operations/respaldos.md).
 3. **Ensayo de restauración.** Descargar ese primer respaldo y restaurarlo en una base local vacía; comparar conteos de
    `ventas`, `productos` y `usuarios`. Un respaldo que nunca se restauró no es un respaldo.
-4. **Desplegar** el API y el frontend con las variables de [`../operations/configuration.md`](../operations/configuration.md)
-   (`CORS_ORIGINS`, `JWT_SECRET` ≥ 32 caracteres, `TRUST_PROXY=1` en Cloud Run, `NEXT_PUBLIC_API_URL` como `--build-arg`),
-   comprobar `GET /salud` y poner un monitor externo sobre él. Proveedores decididos: Render + Vercel + Supabase
-   (decisión 1 abajo; variables en [`../operations/render.env.example`](../operations/render.env.example)).
+4. ✅ **Desplegado el 2026-11-26** (Render + Vercel + Supabase). Todos los despliegues de Render fallaban desde el
+   2026-11-24 porque faltaba `CORS_ORIGINS`; con el MCP de Render se agregaron `CORS_ORIGINS`
+   (`https://proyecto-tienda-sand.vercel.app`), `TRUST_PROXY=1` y `ZONA_HORARIA_NEGOCIO` sin tocar los secretos. El
+   backend (`https://proyecto-tienda-nbi6.onrender.com`) arrancó, creó `admin` y responde `GET /salud` → 200; CORS
+   acepta el frontend; el frontend de Vercel ya es la versión actual y apunta a ese backend. Render (plan gratis) se
+   despliega solo con cada push a `master` y se duerme sin tráfico. Pendiente: monitor externo / mantener despierto
+   sobre `/salud` (el usuario lo correrá en la laptop del POS) y el bot en modo `webhook` cuando se pruebe.
 5. **Primer ingreso:** entrar como `admin`, **cambiar la contraseña inicial** y retirar `INITIAL_ADMIN_PASSWORD`; crear el
    usuario de la cajera (rol `CAJERO`).
 6. **Carga inicial:** inventario inicial como compra con origen `CAPITAL_DUEÑOS`; en Estadísticas, declarar el efectivo
