@@ -386,7 +386,8 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    | L8 | `compras_inventario.usuario_id` (FK, con índice); tabla `abonos_cuentas_por_pagar` (+ índices) |
    | L11 | `productos.activo` (boolean, default `true`) |
    | L12 | En `movimientos_financieros`, `compras_inventario` y `ajustes_inventario`: `anulado` (default `false`), `anulado_en`, `anulado_por_id` (FK a `usuarios`), `motivo_anulacion`; en `movimientos_financieros` además `compra_id`, `ajuste_id` (FK) y `es_apertura` (default `false`) |
-| Bot de compras (Telegram) | Tablas nuevas `bot_conversaciones` (`chat_id` único, borrador `Json`, estado) y `bot_alias` (texto normalizado → presentación, con índices); ver [`../domain/bot.md`](../domain/bot.md) |
+   | Bot de compras (Telegram) | Tablas nuevas `bot_conversaciones` (`chat_id` único, borrador `Json`, estado) y `bot_alias` (texto normalizado → presentación, con índices); ver [`../domain/bot.md`](../domain/bot.md) |
+   | Bot: compras por caja (2026-11-26) | En `bot_alias`: `paquete` (texto ≤ 50, nullable) y `unidades_paquete` (`Decimal(12,3)`, nullable) |
 
 2. **Activar el respaldo nocturno.** Cargar en GitHub los secretos `BACKUP_DATABASE_URL` (conexión directa) y
    `BACKUP_PASSPHRASE` (clave de cifrado, **guardada también fuera de GitHub**), lanzar *Respaldo nocturno* a mano y

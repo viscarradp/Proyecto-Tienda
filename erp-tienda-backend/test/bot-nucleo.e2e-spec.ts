@@ -266,8 +266,9 @@ describe('Núcleo del bot de compras (e2e)', () => {
           {
             texto_original: 'galletas marilu',
             nombre: `Galletas Marilú ${sufijo}`,
-            descripcion_presentacion: 'Caja de 12',
+            descripcion_presentacion: 'Caja',
             factor: 12,
+            unidad_venta: 'Unidad',
             cantidad: 2,
             total_linea: 24,
             precio_venta: precio,
@@ -304,29 +305,24 @@ describe('Núcleo del bot de compras (e2e)', () => {
       include: { presentaciones: true, lotes_inventario: true },
     });
     expect(producto.por_revisar).toBe(true);
-    expect(
-      producto.presentaciones
-        .map((p) => Number(p.factor_conversion))
-        .sort((a, b) => a - b),
-    ).toEqual([1, 12]);
-    const caja = producto.presentaciones.find(
-      (p) => Number(p.factor_conversion) === 12,
-    )!;
-    expect(caja.descripcion).toBe('Caja de 12');
-    expect(Number(caja.precio_venta)).toBe(6);
+    // Solo queda su unidad de venta: la caja es cómo se compró, no se vende.
+    expect(producto.presentaciones).toHaveLength(1);
+    const unidad = producto.presentaciones[0];
+    expect(unidad.descripcion).toBe('Unidad');
+    expect(Number(unidad.factor_conversion)).toBe(1);
+    expect(Number(unidad.precio_venta)).toBe(0.5);
+    // 2 cajas de 12 en $24: 24 unidades a $1
     expect(Number(producto.lotes_inventario[0].cantidad_inicial)).toBe(24);
     expect(
       Number(producto.lotes_inventario[0].costo_unitario_adquisicion),
     ).toBe(1);
-    // Su alias apunta a la presentación comprada
-    expect(
-      await prisma.bot_alias.count({
-        where: {
-          texto_normalizado: 'galletas marilu',
-          presentacion_id: caja.id,
-        },
-      }),
-    ).toBe(1);
+    // Su alias apunta a la unidad y recuerda la caja de 12
+    const alias = await prisma.bot_alias.findFirstOrThrow({
+      where: { texto_normalizado: 'galletas marilu' },
+    });
+    expect(alias.presentacion_id).toBe(unidad.id);
+    expect(alias.paquete).toBe('caja');
+    expect(Number(alias.unidades_paquete)).toBe(12);
   });
 
   it('6. deshacer: anula la compra con el motivo; vencido a los 10 minutos', async () => {
@@ -475,6 +471,184 @@ describe('Núcleo del bot de compras (e2e)', () => {
     const r = await msg('');
     expect(r.texto).toContain('Cuéntame qué compraste');
     expect(llm.llamadas).toHaveLength(0);
+  });
+
+  // ── Paquete: lo que compró y no es una presentación del catálogo ──────────
+
+  let aceiteUnidad: number;
+  let aceiteProductoId: number;
+  const lineaAceite = (extra: Record<string, unknown> = {}) => ({
+    texto_original: 'aceite de oliva',
+    presentacion_id: aceiteUnidad,
+    cantidad: 2,
+    total_linea: null,
+    precio_unitario: 20,
+    paquete: { descripcion: 'Caja', unidades: 24 },
+    confianza: 'alta',
+    ...extra,
+  });
+
+  it('13. producto solo con "Unidad": 2 cajas de 24 a $20 c/u guardan 48 a $0.8333', async () => {
+    const aceite = await crearProducto('Aceite oliva', [
+      { descripcion: 'Unidad', factor: 1, precio: 1 },
+    ]);
+    aceiteProductoId = aceite.id;
+    aceiteUnidad = aceite.presentaciones[0];
+
+    llm.cola.push(
+      json({
+        proveedor: 'La Fuente',
+        origen_pago: 'BOVEDA',
+        lineas: [lineaAceite()],
+      }),
+    );
+    const r1 = await msg('2 cajas de aceite de oliva de 24 a 20 c/u');
+    expect(r1.texto).toContain(
+      '2 Caja (24 Unidad c/u) de Aceite oliva-' + sufijo,
+    );
+    expect(r1.texto).toContain('48 unidades a $0.8333');
+    expect(datosBotones(r1)).toContain('guardar');
+
+    const g = await accion('guardar');
+    expect(g.texto).toMatch(/compra #\d+ por \$40\.00/);
+    const id = Number(/compra #(\d+)/.exec(g.texto)![1]);
+    const compra = await prisma.compras_inventario.findUniqueOrThrow({
+      where: { id },
+      include: { lotes_inventario: true },
+    });
+    expect(Number(compra.monto_total)).toBe(40);
+    expect(compra.lotes_inventario).toHaveLength(1);
+    expect(compra.lotes_inventario[0].producto_id).toBe(aceiteProductoId);
+    expect(Number(compra.lotes_inventario[0].cantidad_inicial)).toBe(48);
+    expect(Number(compra.lotes_inventario[0].costo_unitario_adquisicion)).toBe(
+      0.8333,
+    );
+
+    const alias = await prisma.bot_alias.findFirstOrThrow({
+      where: { texto_normalizado: 'aceite de oliva', paquete: 'caja' },
+    });
+    expect(alias.presentacion_id).toBe(aceiteUnidad);
+    expect(Number(alias.unidades_paquete)).toBe(24);
+  });
+
+  it('14. paquete sin unidades: pregunta, no ofrece guardar, y la corrección lo completa', async () => {
+    llm.cola.push(
+      json({
+        proveedor: 'Distribuidora Sol',
+        origen_pago: 'BOVEDA',
+        lineas: [
+          lineaAceite({
+            texto_original: 'aceite de girasol',
+            paquete: { descripcion: 'Caja', unidades: null },
+          }),
+        ],
+      }),
+    );
+    const r1 = await msg('2 cajas de aceite de girasol a 20 c/u');
+    expect(r1.texto).toContain(
+      '¿Cuántas unidades trae cada caja de Aceite oliva-' + sufijo + '?',
+    );
+    expect(datosBotones(r1)).not.toContain('guardar');
+    // Aunque toque guardar a la fuerza, no guarda
+    const forzado = await accion('guardar');
+    expect(datosBotones(forzado)).not.toContain('guardar');
+    expect(forzado.texto).toContain('¿Cuántas unidades trae cada caja');
+
+    llm.cola.push(
+      json({
+        proveedor: 'Distribuidora Sol',
+        origen_pago: 'BOVEDA',
+        lineas: [
+          lineaAceite({
+            texto_original: 'aceite de girasol',
+            paquete: { descripcion: 'Caja', unidades: 12 },
+          }),
+        ],
+      }),
+    );
+    const r2 = await msg('trae 12');
+    expect(r2.texto).toContain('24 unidades a $1.6667');
+    expect(datosBotones(r2)).toContain('guardar');
+    const g = await accion('guardar');
+    const id = Number(/compra #(\d+)/.exec(g.texto)![1]);
+    const lote = await prisma.lotes_inventario.findFirstOrThrow({
+      where: { compra_id: id },
+    });
+    expect(Number(lote.cantidad_inicial)).toBe(24);
+  });
+
+  it('15. memoria: el mismo texto y paquete sin unidades se completa solo', async () => {
+    // Por la compra de la prueba 13, "aceite de oliva" + caja = 24 ya se recuerda.
+    llm.cola.push(
+      json({
+        proveedor: 'Otra Tienda',
+        origen_pago: 'BOVEDA',
+        lineas: [
+          lineaAceite({ paquete: { descripcion: 'Caja', unidades: null } }),
+        ],
+      }),
+    );
+    llm.llamadas.length = 0;
+    const r = await msg('3 cajas de aceite de oliva a 20 c/u');
+    expect(JSON.stringify(llm.llamadas[0])).toContain(
+      `en caja -> ${aceiteUnidad} (caja = 24)`,
+    );
+    expect(r.texto).not.toContain('¿Cuántas');
+    expect(r.texto).toContain('2 Caja (24 Unidad c/u)');
+    expect(r.texto).toContain('48 unidades a $0.8333');
+    expect(datosBotones(r)).toContain('guardar');
+
+    // Al guardar de nuevo, la memoria suma un uso y conserva el último valor
+    await accion('guardar');
+    const alias = await prisma.bot_alias.findFirstOrThrow({
+      where: {
+        texto_normalizado: 'aceite de oliva',
+        paquete: 'caja',
+        proveedor: 'otra tienda',
+      },
+    });
+    expect(alias.usos).toBe(1);
+    expect(Number(alias.unidades_paquete)).toBe(24);
+  });
+
+  it('16. producto nuevo por caja sin decir cuántas trae: pregunta y luego se crea solo con la unidad', async () => {
+    const nuevo = (factor: number | null) =>
+      json({
+        proveedor: 'Distribuidora Sol',
+        origen_pago: 'BOVEDA',
+        productos_nuevos: [
+          {
+            texto_original: 'jabon rosa',
+            nombre: `Jabón rosa ${sufijo}`,
+            descripcion_presentacion: 'Caja',
+            factor,
+            unidad_venta: 'Unidad',
+            cantidad: 1,
+            total_linea: 12,
+            precio_venta: 0.75,
+          },
+        ],
+      });
+    llm.cola.push(nuevo(null));
+    const r1 = await msg('una caja de jabón rosa en 12, nuevo');
+    expect(r1.texto).toContain(
+      '¿Cuántas unidades trae cada caja de Jabón rosa ' + sufijo + '?',
+    );
+    expect(datosBotones(r1)).not.toContain('guardar');
+
+    llm.cola.push(nuevo(12));
+    const r2 = await msg('trae 12');
+    expect(datosBotones(r2)).toContain('guardar');
+    await accion('guardar');
+    const producto = await prisma.productos.findFirstOrThrow({
+      where: { nombre: `Jabón rosa ${sufijo}` },
+      include: { presentaciones: true, lotes_inventario: true },
+    });
+    expect(producto.presentaciones).toHaveLength(1);
+    expect(Number(producto.lotes_inventario[0].cantidad_inicial)).toBe(12);
+    expect(
+      Number(producto.lotes_inventario[0].costo_unitario_adquisicion),
+    ).toBe(1);
   });
 
   it('12. foto: viaja como image_url al modelo', async () => {
