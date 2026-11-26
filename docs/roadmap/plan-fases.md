@@ -407,8 +407,12 @@ tiene las credenciales de Supabase ni de GitHub). Hazlos en este orden:
    (`https://proyecto-tienda-sand.vercel.app`), `TRUST_PROXY=1` y `ZONA_HORARIA_NEGOCIO` sin tocar los secretos. El
    backend (`https://proyecto-tienda-nbi6.onrender.com`) arrancó, creó `admin` y responde `GET /salud` → 200; CORS
    acepta el frontend; el frontend de Vercel ya es la versión actual y apunta a ese backend. Render (plan gratis) se
-   despliega solo con cada push a `master` y se duerme sin tráfico. Pendiente: monitor externo / mantener despierto
-   sobre `/salud` (el usuario lo correrá en la laptop del POS) y el bot en modo `webhook` cuando se pruebe.
+   despliega solo con cada push a `master` y se duerme sin tráfico. **Laptop del POS** (2026-11-26): guía
+   [`../operations/laptop-pos.md`](../operations/laptop-pos.md) e instalador `scripts/pos/instalar.sh` (Linux Mint 22
+   Xfce: inicio automático, Chromium en kiosco que se reabre solo, tapa que enchufada no suspende, sin bloqueos, y ping a
+   `/salud` cada 10 min de 05:30 a 21:30 más al arrancar y al despertar, para no gastar las 750 h gratis de Render).
+   Escrito sin una laptop Linux para probar: la guía trae la lista de verificación. Pendiente: que el usuario lo
+   instale y lo verifique, y el bot en modo `webhook` cuando se pruebe.
 5. **Primer ingreso:** entrar como `admin`, **cambiar la contraseña inicial** y retirar `INITIAL_ADMIN_PASSWORD`; crear el
    usuario de la cajera (rol `CAJERO`).
 6. **Carga inicial:** inventario inicial como compra con origen `CAPITAL_DUEÑOS`; en Estadísticas, declarar el efectivo

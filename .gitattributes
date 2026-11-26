@@ -1,2 +1,5 @@
 # Los scripts de shell siempre con LF (en Windows, CRLF rompe bash).
 *.sh text eol=lf
+
+# Archivos de la laptop del punto de venta (scripts, unidades systemd): siempre LF.
+scripts/pos/** text eol=lf

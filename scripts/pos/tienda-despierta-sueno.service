@@ -1,0 +1,14 @@
+[Unit]
+Description=Tienda: ping al despertar de una suspension (aunque sea fuera de horario)
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+# Da unos segundos a que el Wi-Fi vuelva a conectarse.
+ExecStartPre=/bin/sleep 8
+ExecStart=/opt/tienda-pos/tienda-ping.sh --siempre
+SyslogIdentifier=tienda-despierta
+TimeoutStartSec=400
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

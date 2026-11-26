@@ -1,0 +1,13 @@
+[Unit]
+Description=Tienda: ping al arrancar la laptop (aunque sea fuera de horario)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tienda-pos/tienda-ping.sh --siempre
+SyslogIdentifier=tienda-despierta
+TimeoutStartSec=400
+
+[Install]
+WantedBy=multi-user.target
