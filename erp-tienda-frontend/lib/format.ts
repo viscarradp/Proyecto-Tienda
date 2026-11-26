@@ -93,3 +93,37 @@ export function stockEnPresentacion(
 export function normalizarBusqueda(texto: string): string {
   return texto.normalize("NFD").replace(/[\u0300-\u036F]/g, "").toLowerCase().trim()
 }
+
+const ZONA_NEGOCIO = "America/El_Salvador"
+
+/**
+ * Fecha en es-SV y zona del negocio.
+ * "corta" \u2192 "24 nov 2026"; "con hora" \u2192 "24 nov 2026, 13:28"; "hora" \u2192 "13:28".
+ */
+export function formatFecha(
+  iso: string | number | Date | null | undefined,
+  formato: "corta" | "con hora" | "hora" = "corta",
+): string {
+  if (iso === null || iso === undefined || iso === "") return ""
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const partes = new Intl.DateTimeFormat("es-SV", {
+    timeZone: ZONA_NEGOCIO,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d)
+  const p = (t: string) => (partes.find((x) => x.type === t)?.value ?? "").replace(/\.$/, "")
+  const hora = `${p("hour")}:${p("minute")}`
+  const fecha = `${p("day")} ${p("month")} ${p("year")}`
+  if (formato === "hora") return hora
+  return formato === "con hora" ? `${fecha}, ${hora}` : fecha
+}
+
+/** N\u00FAmero de venta con 5 d\u00EDgitos: 14 \u2192 "#00014". */
+export function formatNumeroVenta(id: number | string): string {
+  return `#${String(id).padStart(5, "0")}`
+}

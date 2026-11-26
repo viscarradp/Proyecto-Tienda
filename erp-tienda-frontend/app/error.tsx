@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { mensajeError } from "@/lib/glosario"
 
 export default function Error({
   error,
@@ -23,7 +24,7 @@ export default function Error({
       <div className="space-y-1 text-center">
         <h2 className="text-lg font-semibold">Algo salió mal</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Ocurrió un error inesperado. Puedes intentar de nuevo; si persiste, contacta soporte.
+          {mensajeError("cargar la pantalla")}
         </p>
       </div>
       <Button onClick={() => unstable_retry()} className="gap-2">

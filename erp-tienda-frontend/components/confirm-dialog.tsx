@@ -21,7 +21,10 @@ interface ConfirmDialogProps {
   description: React.ReactNode
   confirmLabel?: string
   cancelLabel?: string
+  /** true (por defecto) = botón rojo sólido (`destructive-solid`). */
   destructive?: boolean
+  /** Variante del botón de confirmar; si se pasa, manda sobre `destructive`. Ej.: "success". */
+  confirmVariant?: "default" | "success" | "warning" | "destructive-solid"
   onConfirm: () => void | Promise<void>
 }
 
@@ -37,6 +40,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   destructive = true,
+  confirmVariant,
   onConfirm,
 }: ConfirmDialogProps) {
   const [busy, setBusy] = React.useState(false)
@@ -70,7 +74,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             type="button"
-            variant={destructive ? "destructive" : "default"}
+            variant={confirmVariant ?? (destructive ? "destructive-solid" : "default")}
             onClick={handleConfirm}
             disabled={busy}
           >

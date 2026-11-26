@@ -55,6 +55,22 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   REGLA DE COLOR (VIS-05). Aplícala igual en todas las pantallas:
+   - verde  (success)     = dinero que entra o resultado bueno.
+   - rojo   (destructive) = error, pérdida o descuadre. NO es un gasto normal.
+   - ámbar  (warning)     = "mira esto": aviso, pendiente, falta algo.
+   - azul   (primary)     = acción e interacción, no datos.
+   - gris   (foreground / muted-foreground) = dato normal (gastos, costos, totales).
+
+   CONTRASTE (VIS-02): todo color usado como texto debe dar >= 4.5:1 sobre
+   --background y --card, y el texto sobre un botón sólido también. Por eso en
+   el tema claro --success y --destructive ya son lo bastante oscuros para
+   servir de texto y de fondo. El ámbar claro sigue siendo solo fondo/borde:
+   como texto usa --warning-text. En el tema oscuro --primary-foreground es
+   oscuro (el azul claro con texto blanco daba 3.5:1).
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────
    Design tokens — Rediseño "Estación de trabajo" (funcional).
    Ver docs/historial/rediseno/00-especificaciones.md §5.1. Estos tokens son la ÚNICA
    fuente de verdad de color; las pantallas no deben hardcodear bg-black/zinc.
@@ -78,9 +94,9 @@
   --accent: oklch(0.94 0 0);
   --accent-foreground: oklch(0.205 0 0);
   /* Semánticos */
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.5 0.2 27.3);
   --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.58 0.15 150);
+  --success: oklch(0.5 0.13 150);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.72 0.15 75);
   --warning-foreground: oklch(0.205 0 0);
@@ -92,9 +108,9 @@
   --ring: oklch(0.52 0.20 255);
   /* Gráficos (Estadísticas) */
   --chart-1: oklch(0.52 0.20 255);
-  --chart-2: oklch(0.58 0.15 150);
+  --chart-2: oklch(0.5 0.13 150);
   --chart-3: oklch(0.72 0.15 75);
-  --chart-4: oklch(0.577 0.245 27.325);
+  --chart-4: oklch(0.5 0.2 27.3);
   --chart-5: oklch(0.55 0.16 300);
   /* Radio base — 2px (superficies casi rectas) */
   --radius: 0.125rem;
@@ -119,7 +135,7 @@
   --popover-foreground: oklch(0.96 0 0);
   /* Acción principal (azul funcional, algo más brillante en oscuro) */
   --primary: oklch(0.62 0.19 255);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.16 0 0);
   --secondary: oklch(0.27 0 0);
   --secondary-foreground: oklch(0.96 0 0);
   --muted: oklch(0.27 0 0);
@@ -148,7 +164,7 @@
   --sidebar: oklch(0.185 0 0);
   --sidebar-foreground: oklch(0.96 0 0);
   --sidebar-primary: oklch(0.62 0.19 255);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.16 0 0);
   --sidebar-accent: oklch(0.27 0 0);
   --sidebar-accent-foreground: oklch(0.96 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);

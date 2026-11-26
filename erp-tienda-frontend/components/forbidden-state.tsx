@@ -3,6 +3,7 @@ import { ShieldAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { getHomeRoute } from "@/lib/navigation"
+import { mensajeError } from "@/lib/glosario"
 import type { CurrentUser } from "@/hooks/useCurrentUser"
 
 /**
@@ -21,7 +22,7 @@ export function ForbiddenState({ user }: { user: CurrentUser | null }) {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-foreground">Sin permiso</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Tu rol no tiene acceso a esta sección. Si crees que es un error, contacta al administrador.
+          {mensajeError("abrir esta pantalla", undefined, "Esto lo hace la dueña.")}
         </p>
       </div>
       {home !== "/auth/login" && (
