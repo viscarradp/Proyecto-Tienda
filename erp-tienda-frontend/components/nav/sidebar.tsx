@@ -10,7 +10,7 @@ import { getNavItems } from "@/lib/navigation"
 import type { CurrentUser } from "@/hooks/useCurrentUser"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLogout } from "@/hooks/useLogout"
-import { etiquetaRol } from "@/lib/roles"
+import { etiquetaRol } from "@/lib/glosario"
 
 /**
  * Sidebar de escritorio (oculta en móvil; en móvil manda <BottomNav />).
@@ -32,7 +32,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold tracking-tight">Tienda Karlita</h1>
           <p className="text-xs text-muted-foreground">
-            {user?.rol === "CAJERO" ? "Cajero · POS" : user?.rol === "ADMIN" ? "Administrador" : "ERP"}
+            {user ? etiquetaRol(user.rol) : "Tienda"}
           </p>
         </div>
       </div>
@@ -69,7 +69,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user ? user.nombre : "Cargando…"}</p>
             <p className="text-xs text-muted-foreground">
-              {etiquetaRol(user?.rol)}
+              {user ? etiquetaRol(user.rol) : ""}
             </p>
           </div>
           <ThemeToggle />

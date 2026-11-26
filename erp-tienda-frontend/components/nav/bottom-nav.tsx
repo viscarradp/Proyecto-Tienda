@@ -31,7 +31,7 @@ export function BottomNav({ user }: { user: CurrentUser | null }) {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-medium transition-colors",
+                  "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium transition-colors",
                   isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >

@@ -4,7 +4,13 @@
  * "Caja del día" y "Caja general": el dinero vive en dos lugares.
  */
 
-/** El efectivo del mostrador (la caja del turno). */
+/**
+ * DECISIÓN (VIS-38): "Caja" = el turno (abrir caja, cerrar caja, "No hay caja
+ * abierta"). "Gaveta" = el efectivo del mostrador. Nunca "turno" en pantalla.
+ */
+export const CAJA = "Caja"
+
+/** El efectivo del mostrador (la gaveta del turno). */
 export const GAVETA = "Gaveta"
 /** El dinero guardado aparte. */
 export const BOVEDA = "Bóveda"
@@ -48,4 +54,67 @@ export const ETIQUETA_MOVIMIENTO: Record<string, string> = {
 
 export function etiquetaMovimiento(tipo: string): string {
   return ETIQUETA_MOVIMIENTO[tipo] ?? tipo
+}
+
+/**
+ * Términos para las pantallas (§4 de la auditoría VIS). Cada clave dice cuál
+ * palabra usar y cuál reemplaza. La fase 2 las aplica pantalla por pantalla.
+ */
+export const TERMINOS = {
+  /** En lugar de "Procesar pago". */
+  cobrar: "Cobrar",
+  /** Un solo nombre para el modo apagón (CAJ-24). En lugar de "Modo apagón" / "Venta durante un apagón". */
+  ventaCuaderno: "Venta del cuaderno",
+  /** En lugar de "Cierre declarado". */
+  loQueConto: "Lo que contó",
+  /** En lugar de "Descuadre" (negativo). */
+  falto: "Faltó",
+  /** En lugar de "Descuadre" (positivo). */
+  sobro: "Sobró",
+  cuadra: "Cuadra",
+  /** En lugar de "Reingresar". */
+  vuelveAlEstante: "Vuelve al estante",
+  /** En lugar de "Merma" / "Mercadería echada a perder". */
+  mercaderiaPerdida: "Mercadería perdida",
+  /** En lugar de "Artículos". */
+  productos: "Productos",
+  /** En lugar de "Present." / "pres.". */
+  presentaciones: "Presentaciones",
+  /** En lugar de "lote" ("Lotes de inventario", "Agregar lote"). */
+  compra: "Compra",
+  tanda: "Tanda",
+  /** En lugar de "Múltiplo" / "Factor de conversión". */
+  unidadesQueTrae: "Unidades que trae",
+  /** En lugar de "Fondo siguiente turno". */
+  fondoSiguiente: "Para empezar mañana",
+  /** En lugar de "Capital de la dueña" / "aporte del dueño en especie". */
+  aporteDuena: "Puesto por la dueña",
+  /** En lugar de "Retiro personal" / "Lo que sacaste para ti" (un solo nombre). */
+  retiroDuena: "Lo que sacaste para ti",
+  /** En lugar de "uds" / "op.". */
+  unidades: "unidades",
+  ventas: "ventas",
+  /** En lugar de "Haz clic": en celular se toca. */
+  toca: "toca",
+} as const
+
+/** Nombre del rol en lenguaje de tienda (VIV-17, CAJ-34). */
+export function etiquetaRol(rol?: string | null): string {
+  if (rol === "ADMIN") return "Dueña"
+  if (rol === "CAJERO") return "Cajera"
+  return "Usuario"
+}
+
+/**
+ * Fórmula única de error (VIS-42): "No se pudo {acción}. {qué hacer}."
+ * `accion` va en infinitivo: mensajeError("cerrar la caja", err).
+ * Si el error trae un mensaje del servidor (Error.message) se agrega al final.
+ */
+export function mensajeError(
+  accion: string,
+  err?: unknown,
+  queHacer = "Intenta de nuevo; si sigue, avísale a la dueña.",
+): string {
+  const detalle = err instanceof Error && err.message ? ` (${err.message})` : ""
+  return `No se pudo ${accion}. ${queHacer}${detalle}`
 }

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/bottom-sheet"
 import type { CurrentUser } from "@/hooks/useCurrentUser"
 import { useLogout } from "@/hooks/useLogout"
-import { etiquetaRol } from "@/lib/roles"
+import { etiquetaRol } from "@/lib/glosario"
 
 /**
  * Menú de usuario del encabezado móvil (en celular el sidebar no se ve):
@@ -46,7 +46,7 @@ export function UserMenu({ user }: { user: CurrentUser | null }) {
       <BottomSheetContent>
         <BottomSheetHeader>
           <BottomSheetTitle>{user ? user.nombre : "Usuario"}</BottomSheetTitle>
-          <BottomSheetDescription>{etiquetaRol(user?.rol) || "Sesión iniciada"}</BottomSheetDescription>
+          <BottomSheetDescription>{etiquetaRol(user?.rol)}</BottomSheetDescription>
         </BottomSheetHeader>
         <div className="px-4 pb-2">
           <Button
