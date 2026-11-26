@@ -105,7 +105,17 @@ const CATEGORIA_ALTA_RAPIDA = "Por revisar"
 const nombreCategoria = (prod: Producto) =>
   prod.por_revisar && prod.categorias.nombre === CATEGORIA_ALTA_RAPIDA ? "Sin categoría" : prod.categorias.nombre
 
-const textoPresentaciones = (n: number) => `${n} ${n === 1 ? "presentación" : "presentaciones"}`
+/** Precio para el catálogo: el de la presentación principal (factor 1 o la primera); "desde $X" si hay varios precios. */
+const precioCatalogo = (prod: Producto): string | null => {
+  const pres = prod.presentaciones
+  if (pres.length === 0) return null
+  const principal = pres.find(p => aNumero(p.factor_conversion) === 1) ?? pres[0]
+  const precios = pres.map(p => aNumero(p.precio_venta))
+  const hayVarios = precios.some(x => Math.round(x * 100) !== Math.round(aNumero(principal.precio_venta) * 100))
+  return hayVarios ? `desde ${formatMoney(Math.min(...precios))}` : formatMoney(aNumero(principal.precio_venta))
+}
+
+const textoPresentaciones =(n: number) => `${n} ${n === 1 ? "presentación" : "presentaciones"}`
 
 /** Vencimiento: es una fecha sin hora; se fija a mediodía para que la zona horaria no la corra un día. */
 const fechaVence = (iso: string) => formatFecha(`${iso.slice(0, 10)}T12:00:00Z`)
@@ -511,6 +521,7 @@ export default function InventarioPage() {
                       <div className="w-6" />
                       <div className="flex-1">Producto</div>
                       <div className="w-32 text-right">Categoría</div>
+                      <div className="w-28 text-right">Precio</div>
                       <div className="w-28 text-right">Stock</div>
                     </div>
 
@@ -535,6 +546,7 @@ export default function InventarioPage() {
                               <p className="truncate text-sm font-medium text-foreground">{prod.nombre}</p>
                               <p className="truncate text-xs text-muted-foreground lg:hidden">
                                 {nombreCategoria(prod)} · {textoPresentaciones(prod.presentaciones.length)}
+                                {precioCatalogo(prod) && <> · <span className="font-mono tabular-nums">{precioCatalogo(prod)}</span></>}
                               </p>
                               {(prod.por_revisar || pendiente > 0) && (
                                 <div className="mt-1 flex flex-wrap gap-1">
@@ -547,6 +559,9 @@ export default function InventarioPage() {
                             </div>
                             <div className="hidden w-32 text-right lg:block">
                               <Badge variant="outline" className="text-xs font-normal">{nombreCategoria(prod)}</Badge>
+                            </div>
+                            <div className="hidden w-28 text-right font-mono text-sm tabular-nums text-foreground lg:block">
+                              {precioCatalogo(prod) ?? "—"}
                             </div>
                             <div className="w-auto shrink-0 text-right lg:w-28">
                               <StatePill tone={stock > 0 ? "success" : "warning"} className="font-mono tabular-nums">

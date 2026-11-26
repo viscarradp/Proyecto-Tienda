@@ -30,7 +30,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
           <Store className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold tracking-tight">Tienda Karlita</h1>
+          <p className="truncate text-sm font-semibold tracking-tight">Tienda Karlita</p>
           <p className="text-xs text-muted-foreground">
             {user ? etiquetaRol(user.rol) : "Tienda"}
           </p>
@@ -38,7 +38,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav aria-label="Menú principal" className="flex-1 overflow-y-auto p-3">
         <ul className="flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
@@ -46,8 +46,9 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
@@ -78,7 +79,7 @@ export function Sidebar({ user }: { user: CurrentUser | null }) {
             onClick={pedirSalida}
             aria-label="Cerrar sesión"
             title="Cerrar sesión"
-            className="flex h-9 items-center justify-center gap-1.5 rounded-sm px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="flex h-9 items-center justify-center gap-1.5 rounded-sm px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <LogOut className="h-5 w-5" />
             Salir

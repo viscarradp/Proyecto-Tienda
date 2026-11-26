@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select"
 import { MoneyValue } from "@/components/money-value"
 import { apiFetch } from "@/lib/api"
-import { formatMoney } from "@/lib/format"
+import { aNumero, formatMoney } from "@/lib/format"
+import { convertirLineaCompra, unidadBase } from "@/lib/unidades"
 import { GAVETA, BOVEDA, TERMINOS, mensajeError } from "@/lib/glosario"
 import { CampoError } from "@/components/campo-error"
 import { SeccionTitulo } from "@/components/seccion-titulo"
@@ -30,8 +31,29 @@ interface Producto {
   nombre: string
   presentaciones: {
     id: number
+    descripcion: string
     codigo_barras: string | null
+    factor_conversion: number | string
   }[]
+}
+
+/** Presentación con la que se arranca una línea: la de factor 1 o, si no hay, la primera. */
+function presentacionInicial(prod: Producto | undefined, preferida?: number): string {
+  const pres = prod?.presentaciones ?? []
+  const elegida = pres.find(p => p.id === preferida) ?? pres.find(p => aNumero(p.factor_conversion) === 1) ?? pres[0]
+  return elegida ? String(elegida.id) : ""
+}
+
+/** "24 unidades", "1 unidad", "2.5 lb". */
+function textoCantidadBase(n: number, unidad: string): string {
+  const num = n.toLocaleString("en-US", { maximumFractionDigits: 3 })
+  if (unidad !== "uds") return `${num} ${unidad}`
+  return `${num} ${n === 1 ? "unidad" : "unidades"}`
+}
+
+/** Costo por unidad: 2 decimales como mínimo, hasta 4 si hacen falta ("$0.8333", "$1.50"). */
+function textoCosto(n: number): string {
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
 }
 
 // ─── Custom Searchable Select ───
@@ -151,8 +173,11 @@ function ProductSearchableSelect({
 interface LoteLineForm {
   key: string
   producto_id: string
+  presentacion_id: string
+  /** Cuántas compraste, en la presentación elegida. */
   cantidad_inicial: string
-  costo_unitario_adquisicion: string
+  /** Lo que pagaste por toda la línea (el dato de la factura). */
+  total_linea: string
   fecha_vencimiento: string
 }
 
@@ -186,14 +211,23 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
     setLineas([...lineas, {
       key: generarId(),
       producto_id: "",
+      presentacion_id: "",
       cantidad_inicial: "1",
-      costo_unitario_adquisicion: "",
+      total_linea: "",
       fecha_vencimiento: "",
     }])
   }
 
   const updateLinea = (key: string, field: keyof LoteLineForm, value: string) => {
     setLineas(prev => prev.map(l => l.key === key ? { ...l, [field]: value } : l))
+  }
+
+  // Al cambiar de producto, la presentación vuelve a la principal de ese producto.
+  const elegirProducto = (key: string, productoId: string) => {
+    const prod = productos.find(p => String(p.id) === productoId)
+    setLineas(prev => prev.map(l =>
+      l.key === key ? { ...l, producto_id: productoId, presentacion_id: presentacionInicial(prod) } : l,
+    ))
   }
 
   const removeLinea = (key: string) => {
@@ -210,8 +244,13 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
         setLineas(prev => [...prev, {
           key: generarId(),
           producto_id: String(targetProd.id),
+          // El código escaneado identifica la presentación exacta (six-pack, caja...).
+          presentacion_id: presentacionInicial(
+            targetProd,
+            targetProd.presentaciones.find(pres => pres.codigo_barras === barcode)?.id,
+          ),
           cantidad_inicial: "1",
-          costo_unitario_adquisicion: "",
+          total_linea: "",
           fecha_vencimiento: "",
         }])
       } else {
@@ -221,11 +260,22 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
   })
 
   // ─── Cálculo automático del monto total ───
-  const montoTotal = lineas.reduce((sum, l) => {
-    const qty = parseFloat(l.cantidad_inicial) || 0
-    const cost = parseFloat(l.costo_unitario_adquisicion) || 0
-    return sum + (qty * cost)
-  }, 0)
+  // Convierte lo que dice la factura a lo que guarda el sistema (unidad base y costo
+  // con 4 decimales). El total es la suma de lo que el servidor guardará por línea.
+  const convertir = (l: LoteLineForm) => {
+    const prod = productos.find(p => String(p.id) === l.producto_id)
+    const pres = prod?.presentaciones.find(p => String(p.id) === l.presentacion_id)
+    const unidad = unidadBase(prod?.presentaciones)
+    const conv = convertirLineaCompra(
+      parseFloat(l.cantidad_inicial) || 0,
+      aNumero(pres?.factor_conversion),
+      parseFloat(l.total_linea) || 0,
+    )
+    return { conv, unidad }
+  }
+  const montoTotal = Math.round(
+    lineas.reduce((sum, l) => sum + (convertir(l).conv?.totalGuardado ?? 0), 0) * 100,
+  ) / 100
 
   const alCredito = !inicial && estadoPago === "AL_CREDITO"
   // La carga inicial siempre es aporte en especie; una compra pagada exige
@@ -241,7 +291,12 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
   const errLinea = (l: LoteLineForm) => ({
     producto: intentado && !l.producto_id ? "Elige el producto." : null,
     cantidad: intentado && (parseFloat(l.cantidad_inicial) || 0) <= 0 ? "La cantidad debe ser mayor a 0." : null,
-    costo: intentado && (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0 ? "Escribe cuánto costó (mayor a 0)." : null,
+    total:
+      intentado && (parseFloat(l.total_linea) || 0) <= 0
+        ? "Escribe cuánto pagaste por esta línea (mayor a 0)."
+        : intentado && (parseFloat(l.cantidad_inicial) || 0) > 0 && !convertir(l).conv
+          ? "Con esa cantidad, el costo por unidad queda en $0. Revisa lo que pagaste."
+          : null,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -256,7 +311,7 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
     const hayErrores =
       !proveedor.trim() ||
       (!alCredito && !origen) ||
-      lineas.some(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) <= 0 || (parseFloat(l.costo_unitario_adquisicion) || 0) <= 0)
+      lineas.some(l => !l.producto_id || (parseFloat(l.cantidad_inicial) || 0) <= 0 || (parseFloat(l.total_linea) || 0) <= 0 || !convertir(l).conv)
     if (hayErrores) {
       setError("Revisa los campos marcados en rojo.")
       return
@@ -271,12 +326,15 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
           monto_total: montoTotal,
           estado_pago: estadoPago,
           ...(alCredito ? {} : { origen_fondos: origen }),
-          detalles_lotes: lineas.map(l => ({
-            producto_id: parseInt(l.producto_id),
-            cantidad_inicial: parseFloat(l.cantidad_inicial) || 0,
-            costo_unitario_adquisicion: parseFloat(l.costo_unitario_adquisicion) || 0,
-            fecha_vencimiento: l.fecha_vencimiento || undefined,
-          })),
+          detalles_lotes: lineas.map(l => {
+            const { conv } = convertir(l)
+            return {
+              producto_id: parseInt(l.producto_id),
+              cantidad_inicial: conv?.cantidadBase ?? 0,
+              costo_unitario_adquisicion: conv?.costoUnitario ?? 0,
+              fecha_vencimiento: l.fecha_vencimiento || undefined,
+            }
+          }),
         }),
       })
 
@@ -391,6 +449,8 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
 
         {lineas.map((linea, idx) => {
           const errs = errLinea(linea)
+          const { conv, unidad } = convertir(linea)
+          const presentaciones = productos.find(p => String(p.id) === linea.producto_id)?.presentaciones ?? []
           return (
           <div key={linea.key} className="rounded-sm border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
@@ -410,7 +470,7 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
                   id={`compra-producto-${linea.key}`}
                   productos={productos}
                   value={linea.producto_id}
-                  onChange={(v) => updateLinea(linea.key, "producto_id", v)}
+                  onChange={(v) => elegirProducto(linea.key, v)}
                   invalid={!!errs.producto}
                   describedBy={errs.producto ? `compra-producto-${linea.key}-error` : undefined}
                 />
@@ -418,7 +478,27 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
               </div>
 
               <div>
-                <Label htmlFor={`compra-cant-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Cantidad</Label>
+                <Label htmlFor={`compra-pres-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Presentación</Label>
+                <Select
+                  value={linea.presentacion_id}
+                  onValueChange={(v) => updateLinea(linea.key, "presentacion_id", v)}
+                  disabled={presentaciones.length === 0}
+                >
+                  <SelectTrigger id={`compra-pres-${linea.key}`} className="w-full">
+                    <SelectValue placeholder="Elige el producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {presentaciones.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.descripcion}{aNumero(p.factor_conversion) !== 1 ? ` (×${aNumero(p.factor_conversion)})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor={`compra-cant-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Cuántas compraste</Label>
                 <Input id={`compra-cant-${linea.key}`} type="number" min={0.001} step="0.001" inputMode="decimal" value={linea.cantidad_inicial}
                   onChange={(e) => updateLinea(linea.key, "cantidad_inicial", e.target.value)}
                   className="font-mono text-sm"
@@ -427,14 +507,14 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
                 {errs.cantidad && <CampoError id={`compra-cant-${linea.key}-error`} className="mt-1">{errs.cantidad}</CampoError>}
               </div>
 
-              <div>
-                <Label htmlFor={`compra-costo-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Costo por unidad ($)</Label>
-                <Input id={`compra-costo-${linea.key}`} type="number" min={0} step="0.01" value={linea.costo_unitario_adquisicion}
-                  onChange={(e) => updateLinea(linea.key, "costo_unitario_adquisicion", e.target.value)}
+              <div className="col-span-2">
+                <Label htmlFor={`compra-total-${linea.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">Cuánto pagaste por esta línea ($)</Label>
+                <Input id={`compra-total-${linea.key}`} type="number" min={0} step="0.01" inputMode="decimal" value={linea.total_linea}
+                  onChange={(e) => updateLinea(linea.key, "total_linea", e.target.value)}
                   className="font-mono text-sm"
-                  aria-invalid={!!errs.costo}
-                  aria-describedby={errs.costo ? `compra-costo-${linea.key}-error` : undefined} />
-                {errs.costo && <CampoError id={`compra-costo-${linea.key}-error`} className="mt-1">{errs.costo}</CampoError>}
+                  aria-invalid={!!errs.total}
+                  aria-describedby={errs.total ? `compra-total-${linea.key}-error` : `compra-guardara-${linea.key}`} />
+                {errs.total && <CampoError id={`compra-total-${linea.key}-error`} className="mt-1">{errs.total}</CampoError>}
               </div>
 
               <div className="col-span-2">
@@ -444,15 +524,20 @@ export function CompraForm({ productos, onSuccess, onCambioSucio, inicial = fals
                   className="text-sm" />
               </div>
 
-              <div className="col-span-2 flex items-end justify-end">
-                <div className="text-right">
-                  <span className="text-xs text-muted-foreground">Subtotal: </span>
-                  <MoneyValue
-                    value={(parseFloat(linea.cantidad_inicial) || 0) * (parseFloat(linea.costo_unitario_adquisicion) || 0)}
-                    className="text-sm font-semibold"
-                  />
+              {conv && (
+                <div id={`compra-guardara-${linea.key}`} className="col-span-2 text-xs text-muted-foreground md:col-span-4">
+                  <p>
+                    = {textoCantidadBase(conv.cantidadBase, unidad)} a {textoCosto(conv.costoUnitario)} c/u
+                    {" · "}se guardará <MoneyValue value={conv.totalGuardado} className="font-semibold text-foreground" />
+                  </p>
+                  {conv.diferencia !== 0 && (
+                    <p className="mt-0.5">
+                      El sistema guarda el costo con 4 decimales, así que esta línea queda {formatMoney(Math.abs(conv.diferencia))}{" "}
+                      {conv.diferencia > 0 ? "arriba" : "abajo"} de lo que pagaste. Para dejarla exacta, divide la compra en dos líneas.
+                    </p>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           </div>
           )

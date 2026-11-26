@@ -706,7 +706,7 @@ export default function POSPage() {
                 onClick={() => setCategoriaActiva(cat)}
                 aria-pressed={categoriaActiva === cat}
                 className={cn(
-                  "inline-flex min-h-11 shrink-0 items-center rounded-sm px-3 py-1.5 text-xs font-medium transition-colors md:min-h-0",
+                  "inline-flex min-h-11 shrink-0 items-center rounded-sm px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0",
                   categoriaActiva === cat
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
@@ -770,7 +770,7 @@ export default function POSPage() {
                       type="button"
                       onClick={() => agregarDesdeFila(row)}
                       className={cn(
-                        "group flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 sm:gap-3 sm:py-3 xl:px-6",
+                        "group flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:gap-3 sm:py-3 xl:px-6",
                         enTicket.has(`pres-${row.presentacion_id}`) && "bg-primary/5",
                       )}
                     >
@@ -829,8 +829,8 @@ export default function POSPage() {
       <button
         type="button"
         onClick={() => setCartOpen(true)}
-        aria-label={itemCount > 0 ? `Cobrar, ${itemCount} ${itemCount === 1 ? "producto" : "productos"}, ${formatMoney(total)}` : "Ver ticket"}
         className={cn(
+          "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
           "fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 border-t px-4 py-3 text-left md:bottom-0 md:left-64 xl:hidden",
           // Fondo opaco (bg-card); el tinte de éxito va en una capa encima para que nada de atrás se vea.
           "isolate overflow-hidden bg-card",
