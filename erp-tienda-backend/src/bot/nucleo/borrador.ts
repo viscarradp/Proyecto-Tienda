@@ -9,12 +9,24 @@ export const ORIGENES_PAGO: readonly OrigenPago[] = [
 ];
 export type Confianza = 'alta' | 'media' | 'baja';
 
+/**
+ * Lo que ella compró cuando NO es una presentación del catálogo ("Caja" de 24
+ * unidades de la presentación elegida). `unidades` = cuántas de la presentación
+ * elegida trae un paquete; null = no lo dijo (el sistema pregunta).
+ */
+export interface PaqueteBorrador {
+  descripcion: string;
+  unidades: number | null;
+}
+
 export interface LineaBorrador {
   texto_original: string;
   /** null = no se encontró en el catálogo. */
   presentacion_id: number | null;
-  /** En unidades de esa presentación ("2" cajas). */
+  /** Por lo que ella nombró ("2" cajas): de la presentación, o del paquete si lo hay. */
   cantidad: number;
+  /** Ausente en borradores viejos: equivale a null. */
+  paquete: PaqueteBorrador | null;
   total_linea: number | null;
   precio_unitario: number | null;
   confianza: Confianza;
@@ -24,7 +36,10 @@ export interface ProductoNuevoBorrador {
   texto_original: string;
   nombre: string;
   descripcion_presentacion: string;
-  factor: number;
+  /** Cuántas unidades sueltas trae lo comprado. null = no lo dijo (el sistema pregunta). */
+  factor: number | null;
+  /** Cómo se vende suelto ("Unidad", "Libra"). null = "Unidad". */
+  unidad_venta: string | null;
   cantidad: number;
   total_linea: number | null;
   /** Precio de venta de la unidad suelta (la presentación de factor 1). */
@@ -51,6 +66,7 @@ export type ResultadoValidacion =
 
 const MAX_DINERO = 999999.99;
 const MAX_CANTIDAD = 99999;
+const MAX_UNIDADES_PAQUETE = 10000;
 
 type Obj = Record<string, unknown>;
 
@@ -169,6 +185,25 @@ export function validarSalidaModelo(
       if (total_linea === null && precio_unitario !== null) {
         total_linea = redondearA(precio_unitario * cantidad, 2);
       }
+      let paquete: PaqueteBorrador | null = null;
+      if (l.paquete !== null && l.paquete !== undefined) {
+        if (!esObj(l.paquete)) {
+          throw new Error(`${c}.paquete debe ser un objeto o null`);
+        }
+        paquete = {
+          descripcion: texto(
+            l.paquete.descripcion,
+            `${c}.paquete.descripcion`,
+            50,
+            true,
+          )!,
+          unidades: numero(l.paquete.unidades, `${c}.paquete.unidades`, {
+            max: MAX_UNIDADES_PAQUETE,
+            obligatorio: false,
+            decimales: 3,
+          }),
+        };
+      }
       let confianza: Confianza = 'media';
       if (l.confianza !== undefined && l.confianza !== null) {
         if (!['alta', 'media', 'baja'].includes(l.confianza as string)) {
@@ -197,6 +232,7 @@ export function validarSalidaModelo(
         texto_original,
         presentacion_id,
         cantidad,
+        paquete,
         total_linea,
         precio_unitario,
         confianza,
@@ -224,11 +260,13 @@ export function validarSalidaModelo(
               100,
               false,
             ) ?? 'Unidad',
-          factor: numero(p.factor ?? 1, `${c}.factor`, {
+          // Ausente = 1 (se compra por unidad); null explícito = no dijo cuántas trae.
+          factor: numero(p.factor === undefined ? 1 : p.factor, `${c}.factor`, {
             max: MAX_CANTIDAD,
-            obligatorio: true,
+            obligatorio: false,
             decimales: 3,
-          })!,
+          }),
+          unidad_venta: texto(p.unidad_venta, `${c}.unidad_venta`, 100, false),
           cantidad: numero(p.cantidad, `${c}.cantidad`, {
             max: MAX_CANTIDAD,
             obligatorio: true,

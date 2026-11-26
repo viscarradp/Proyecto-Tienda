@@ -3,18 +3,22 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ComprasService } from '../../compras/compras.service';
 import { ProductosService } from '../../productos/productos.service';
-import { PresentacionesService } from '../../presentaciones/presentaciones.service';
 import { CreateCompraDto } from '../../compras/dto/create-compra.dto';
-import { AliasService, normalizarTexto } from './alias.service';
+import {
+  AliasService,
+  claveAlias,
+  claveUnidades,
+  normalizarTexto,
+} from './alias.service';
 import {
   Borrador,
+  LineaBorrador,
   ORIGENES_PAGO,
   OrigenPago,
   validarSalidaModelo,
 } from './borrador';
 import { Catalogo, cargarCatalogo } from './catalogo';
 import { AccionBot, BotNucleo, EntradaBot, RespuestaBot } from './contrato';
-import { redondearA } from './conversion';
 import { CLIENTE_LLM, ErrorLlm } from './llm/cliente-llm';
 import type { ClienteLlm, MensajeLlm, ParteLlm } from './llm/cliente-llm';
 import { PROMPT_SISTEMA, TEXTO_SOLO_FOTO } from './prompt';
@@ -23,6 +27,7 @@ import {
   convertirLotes,
   dinero,
   evaluarBorrador,
+  quitarPaqueteRedundante,
   recortar,
   respuestaBorrador,
 } from './resumen';
@@ -66,7 +71,6 @@ export class BotNucleoService implements BotNucleo {
     private readonly prisma: PrismaService,
     private readonly compras: ComprasService,
     private readonly productos: ProductosService,
-    private readonly presentaciones: PresentacionesService,
     private readonly alias: AliasService,
     @Inject(CLIENTE_LLM) private readonly llm: ClienteLlm,
   ) {}
@@ -237,13 +241,17 @@ export class BotNucleoService implements BotNucleo {
       'CATALOGO (producto: [id "presentación" xfactor $precio cb:código]):',
       catalogo.paraPrompt(),
       '',
-      'MEMORIA DE EQUIVALENCIAS (como lo escribe ella -> id de presentación):',
+      'MEMORIA DE EQUIVALENCIAS (como lo escribe ella [en paquete] -> id de presentación [(paquete = cuántas trae)]):',
       memoria.length === 0
         ? '(vacía)'
         : memoria
             .map(
               (a) =>
-                `"${a.texto_normalizado}"${a.proveedor ? ` (proveedor ${a.proveedor})` : ''} -> ${a.presentacion_id}`,
+                `"${a.texto_normalizado}"${a.proveedor ? ` (proveedor ${a.proveedor})` : ''}${a.paquete ? ` en ${a.paquete}` : ''} -> ${a.presentacion_id}${
+                  a.paquete && a.unidades_paquete !== null
+                    ? ` (${a.paquete} = ${a.unidades_paquete})`
+                    : ''
+                }`,
             )
             .join('\n'),
       '',
@@ -293,27 +301,36 @@ export class BotNucleoService implements BotNucleo {
    * Si el texto de una línea coincide EXACTAMENTE con un alias, el código fija
    * la presentación aunque el modelo dude. Excepción: en una corrección, si la
    * dueña ya tenía esa línea con otra presentación y el modelo la cambió a
-   * propósito, se respeta el cambio.
+   * propósito, se respeta el cambio. Después, si una línea trae paquete sin
+   * saber cuántas trae, se rellena con lo que ella confirmó antes.
    */
   private async aplicarAlias(
     nuevo: Borrador,
     previo: Borrador | null,
     catalogo: Catalogo,
   ): Promise<Borrador> {
+    const proveedor = nuevo.proveedor ?? previo?.proveedor ?? null;
+    nuevo = {
+      ...nuevo,
+      lineas: quitarPaqueteRedundante(nuevo.lineas, catalogo),
+    };
     const exactos = await this.alias.buscarExactos(
-      nuevo.lineas.map((l) => l.texto_original),
-      nuevo.proveedor ?? previo?.proveedor ?? null,
+      nuevo.lineas.map((l) => ({
+        texto: l.texto_original,
+        paquete: l.paquete?.descripcion ?? null,
+      })),
+      proveedor,
     );
-    if (exactos.size === 0) return nuevo;
     const previas = new Map<string, number | null>();
     for (const l of previo?.lineas ?? []) {
       previas.set(normalizarTexto(l.texto_original), l.presentacion_id);
     }
-    const lineas = nuevo.lineas.map((l) => {
-      const clave = normalizarTexto(l.texto_original);
-      const id = exactos.get(clave);
+    let lineas: LineaBorrador[] = nuevo.lineas.map((l) => {
+      const id = exactos.get(
+        claveAlias(l.texto_original, l.paquete?.descripcion ?? null),
+      );
       if (id === undefined || !catalogo.tienePresentacion(id)) return l;
-      const antes = previas.get(clave);
+      const antes = previas.get(normalizarTexto(l.texto_original));
       const corregidaAPropósito =
         antes !== undefined &&
         antes !== null &&
@@ -322,6 +339,40 @@ export class BotNucleoService implements BotNucleo {
       if (corregidaAPropósito) return l;
       return { ...l, presentacion_id: id, confianza: 'alta' as const };
     });
+
+    lineas = quitarPaqueteRedundante(lineas, catalogo);
+    const pedidas = lineas.flatMap((l) =>
+      l.paquete &&
+      (l.paquete.unidades === null || l.paquete.unidades === undefined) &&
+      l.presentacion_id !== null
+        ? [
+            {
+              texto: l.texto_original,
+              paquete: l.paquete.descripcion,
+              presentacionId: l.presentacion_id,
+            },
+          ]
+        : [],
+    );
+    const unidades = await this.alias.buscarUnidadesPaquete(pedidas, proveedor);
+    if (unidades.size > 0) {
+      lineas = lineas.map((l) => {
+        if (!l.paquete || l.presentacion_id === null) return l;
+        if (l.paquete.unidades !== null && l.paquete.unidades !== undefined) {
+          return l;
+        }
+        const u = unidades.get(
+          claveUnidades(
+            l.texto_original,
+            l.paquete.descripcion,
+            l.presentacion_id,
+          ),
+        );
+        return u === undefined
+          ? l
+          : { ...l, paquete: { ...l.paquete, unidades: u } };
+      });
+    }
     return { ...nuevo, lineas };
   }
 
@@ -391,7 +442,7 @@ export class BotNucleoService implements BotNucleo {
       //    borrador se guarda, para no duplicarlos si la compra falla.
       while (actual.productos_nuevos.length > 0) {
         const nuevo = actual.productos_nuevos[0];
-        const presentacionId = await this.crearProductoNuevo(nuevo);
+        const creada = await this.crearProductoNuevo(nuevo);
         actual = {
           ...actual,
           productos_nuevos: actual.productos_nuevos.slice(1),
@@ -399,8 +450,9 @@ export class BotNucleoService implements BotNucleo {
             ...actual.lineas,
             {
               texto_original: nuevo.texto_original,
-              presentacion_id: presentacionId,
+              presentacion_id: creada.presentacionId,
               cantidad: nuevo.cantidad,
+              paquete: creada.paquete,
               total_linea: nuevo.total_linea,
               precio_unitario: null,
               confianza: 'alta',
@@ -468,25 +520,33 @@ export class BotNucleoService implements BotNucleo {
     }
   }
 
-  /** Crea el producto "por revisar" y devuelve la presentación que se compró. */
+  /**
+   * Crea el producto "por revisar" con SOLO su unidad de venta (nunca una
+   * presentación de caja: la caja es cómo se compró, no algo que se venda).
+   * Devuelve la presentación de venta y, si lo comprado venía por paquete, el
+   * paquete de la línea.
+   */
   private async crearProductoNuevo(
     n: Borrador['productos_nuevos'][number],
-  ): Promise<number> {
-    const precio = n.precio_venta ?? 0.01;
+  ): Promise<{ presentacionId: number; paquete: LineaBorrador['paquete'] }> {
+    const factor = n.factor ?? 1;
     const producto = await this.productos.createRapido({
       nombre: n.nombre,
-      precio_venta: precio,
-      descripcion: n.factor === 1 ? n.descripcion_presentacion : 'Unidad',
+      precio_venta: n.precio_venta ?? 0.01,
+      descripcion:
+        factor === 1
+          ? n.descripcion_presentacion
+          : (n.unidad_venta ?? 'Unidad'),
     });
-    const unidad = producto.presentaciones[0];
-    if (n.factor === 1) return unidad.id;
-    const creada = await this.presentaciones.create({
-      producto_id: producto.id,
-      descripcion: n.descripcion_presentacion,
-      factor_conversion: n.factor,
-      precio_venta: Math.min(redondearA(precio * n.factor, 2), 999999.99),
-    });
-    return creada!.id;
+    const presentacionId = producto.presentaciones[0].id;
+    if (factor === 1) return { presentacionId, paquete: null };
+    return {
+      presentacionId,
+      paquete: {
+        descripcion: n.descripcion_presentacion.slice(0, 50),
+        unidades: factor,
+      },
+    };
   }
 
   private traducirError(

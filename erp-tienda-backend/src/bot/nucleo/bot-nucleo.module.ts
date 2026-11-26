@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ComprasModule } from '../../compras/compras.module';
-import { PresentacionesModule } from '../../presentaciones/presentaciones.module';
 import { ProductosModule } from '../../productos/productos.module';
 import { AliasService } from './alias.service';
 import { BotNucleoService } from './bot-nucleo.service';
@@ -13,7 +12,7 @@ import { OpenRouterCliente } from './llm/openrouter.cliente';
  * adaptadores de chat. PrismaService es global.
  */
 @Module({
-  imports: [ComprasModule, ProductosModule, PresentacionesModule],
+  imports: [ComprasModule, ProductosModule],
   providers: [
     AliasService,
     { provide: CLIENTE_LLM, useClass: OpenRouterCliente },

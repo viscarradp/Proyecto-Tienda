@@ -463,6 +463,10 @@ model bot_alias {
   proveedor         String?        @db.VarChar(150)
   presentacion_id   Int
   usos              Int            @default(1)
+  // Cómo lo compró cuando no es una presentación del catálogo ("caja") y cuántas
+  // de la presentación trae cada una. Opcionales: las filas viejas no los tienen.
+  paquete           String?        @db.VarChar(50)
+  unidades_paquete  Decimal?       @db.Decimal(12, 3)
   creado_por_id     Int?
   creado_en         DateTime       @default(now()) @db.Timestamptz(6)
   presentaciones    presentaciones @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction)

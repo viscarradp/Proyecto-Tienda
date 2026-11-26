@@ -34,7 +34,8 @@ Se importa `BotNucleoModule` (exporta `BOT_NUCLEO`).
 3. Respuesta: una línea por producto con la conversión a unidades base, el total, proveedor y pago, y **"Me falta
    saber"** con lo pendiente. Ejemplo:
    `1. 2 Caja (24 c/u) de Coca-Cola 355ml por $40.00 → 48 unidades a $0.8333` y
-   `Total $48.00 · Proveedor: La Fuente · Pago: gaveta`.
+   `Total $48.00 · Proveedor: La Fuente · Pago: gaveta`. Si compró por algo que no es una presentación del catálogo,
+   se ve el paquete: `1. 2 Caja (24 Unidad c/u) de Coca-Cola 355ml por $40.00 → 48 unidades a $0.8333`.
 4. **Botones.** Falta el pago: `[Gaveta] [Bóveda] [Quedó fiado]` (`pago:GAVETA|BOVEDA|CREDITO`). Borrador completo:
    `[Sí, guardar] [Cancelar]` (`guardar`, `cancelar`). El pago "capital de la dueña" solo se fija escribiéndolo.
 5. **Guardar:** primero los productos nuevos, luego la compra. Un borrador está completo cuando tiene proveedor, forma de
@@ -64,26 +65,53 @@ Se importa `BotNucleoModule` (exporta `BOT_NUCLEO`).
 total cuadre al centavo. Si no cuadra, el resumen avisa. Una línea con solo precio unitario ("a 20 cada una") toma
 `total = precio × cantidad`. Si la factura trae un total que difiere de la suma, se avisa (no bloquea).
 
+### Paquete: lo que compró y no es una presentación del catálogo
+
+Cada línea dice `presentacion_id` y `cantidad` de lo que ella nombró. Si el catálogo tiene esa presentación (p. ej.
+"Caja" ×24), la línea la usa y `paquete` es `null`. Si no (el producto solo tiene "Unidad" o "Libra"), la línea usa la
+presentación de unidad y trae `paquete: { descripcion: "Caja", unidades: 24 }`: cuántas de la presentación elegida trae
+cada paquete. El factor efectivo de la línea es `factor de la presentación × unidades del paquete`; con él se
+convierte a unidad base (`convertirLotes`, el resumen y la evaluación). `cantidad` y el precio siguen siendo por lo que
+ella nombró (por caja si compró cajas): "2 cajas de coca de 24 a $20 c/u" guarda 48 unidades a $0.8333.
+
+- **Si falta cuántas trae** (`unidades` null) el borrador queda incompleto (sin "Sí, guardar") y el código pregunta, sin
+  pasar por el modelo: "¿Cuántas unidades trae cada caja de Galletas?" (o "¿Cuántas libras trae cada quintal de
+  Frijol?" si la presentación no es "Unidad"). Su respuesta llega como corrección y completa la línea. Los tamaños fijos
+  (docena 12, media docena 6, six-pack 6, quintal 100 libras, arroba 25 libras) los llena el modelo; caja, fardo,
+  jaba y bolsa solo si ella dijo cuántas.
+- **Sin doble multiplicación:** si la presentación elegida ya es el paquete (p. ej. "Caja" ×24 y paquete "Caja"), el
+  código quita el paquete antes de mostrar el borrador (`quitarPaqueteRedundante`), para no guardar 24 × 24.
+- Los borradores guardados antes de este campo no lo tienen: se leen como `paquete: null`.
+
 ### Productos nuevos
 
-Se crean con `ProductosService.createRapido` (categoría "Por revisar", `por_revisar = true`, presentación "Unidad" ×1) y,
-si lo comprado viene en presentación con factor distinto de 1, una presentación extra con ese factor y precio =
-`precio_venta × factor`. `precio_venta` es el de **una unidad suelta**; el bot lo pregunta antes de guardar. Tras crear
-cada producto, pasa a ser una línea del borrador guardado, para no duplicarlo si la compra falla y se reintenta.
+Se crean con `ProductosService.createRapido` (categoría "Por revisar", `por_revisar = true`) con **solo su unidad de
+venta**: "Unidad" (o `unidad_venta`, p. ej. "Libra") ×1 con `precio_venta` = precio de **una unidad suelta**, que el bot
+pregunta antes de guardar. **Nunca se crea una presentación de caja**: la caja es cómo se compró, no algo que se venda
+(así no aparece en el punto de venta). Si lo comprado venía por paquete (`factor` > 1), la línea resultante usa la
+unidad de venta con `paquete = { descripcion_presentacion, unidades: factor }`, para que la memoria lo recuerde. Si no
+dijo cuántas trae (`factor` null) se pregunta igual que arriba. Tras crear cada producto, pasa a ser una línea del
+borrador guardado, para no duplicarlo si la compra falla y se reintenta.
 
 ## Memoria de equivalencias (`bot_alias`)
 
-`texto_normalizado` (minúsculas, sin tildes, espacios simples) + `proveedor` (normalizado, opcional) →
-`presentacion_id`, con `usos`. Al **guardar**, cada línea guarda o refuerza su alias. Antes de interpretar se le pasan al
+`texto_normalizado` (minúsculas, sin tildes, espacios simples) + `proveedor` (normalizado, opcional) + `paquete`
+(normalizado, opcional) → `presentacion_id`, con `usos` y, si hay paquete, `unidades_paquete` (el último valor
+confirmado). Al **guardar**, cada línea guarda o refuerza su alias. Antes de interpretar se le pasan al
 modelo los ~200 más usados, y si el texto de una línea coincide **exactamente** con un alias, el código fija la
 presentación aunque el modelo dude (prefiere el alias del mismo proveedor, luego el más usado). Excepción: si en una
 corrección ella ya tenía esa línea con otra presentación y el modelo la cambió a propósito, se respeta el cambio.
+Solo cuenta la memoria con el mismo paquete (o sin paquete si la línea no trae). Además, si una línea trae paquete sin
+`unidades`, el código lo rellena desde la memoria (mismo texto + mismo paquete + misma presentación; primero el del mismo
+proveedor, luego el de más usos) y no pregunta. Al modelo le llega como
+`"galletas" en caja -> 123 (caja = 12)`.
 
 ## Tablas nuevas (sin migración: `db push`; ver `plan-fases.md`)
 
 - `bot_conversaciones`: `chat_id` único, `usuario_id`, `borrador` Json, `estado` (`BORRADOR` | `GUARDANDO`),
   `actualizado_en`.
-- `bot_alias`: `texto_normalizado`, `proveedor`, `presentacion_id`, `usos`, `creado_por_id`, `creado_en`.
+- `bot_alias`: `texto_normalizado`, `proveedor`, `presentacion_id`, `usos`, `paquete` y `unidades_paquete` (opcionales),
+  `creado_por_id`, `creado_en`.
 
 ## Seguridad
 
@@ -119,5 +147,6 @@ son ~US$ 1 al mes; con modelos chinos, centavos. Los precios cambian: ver el rep
 
 ## Pruebas
 
-- Unitarios: `conversion.spec.ts`, `borrador.spec.ts` (validador, alias, unión de borradores).
+- Unitarios: `conversion.spec.ts`, `borrador.spec.ts` (validador, alias, unión de borradores), `resumen.spec.ts`
+  (paquete, pregunta de unidades).
 - e2e: `test/bot-nucleo.e2e-spec.ts`, con un `ClienteLlm` falso (sin red).

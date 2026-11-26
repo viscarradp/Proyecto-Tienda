@@ -144,6 +144,104 @@ describe('validarSalidaModelo', () => {
   });
 });
 
+describe('validarSalidaModelo: paquete y producto nuevo', () => {
+  const linea = (extra: Record<string, unknown>) =>
+    salida({
+      lineas: [
+        {
+          texto_original: 'aceite',
+          presentacion_id: 1,
+          cantidad: 2,
+          total_linea: 40,
+          ...extra,
+        },
+      ],
+    });
+
+  it('un borrador guardado sin "paquete" sigue siendo válido (queda null)', () => {
+    const r = validarSalidaModelo(linea({}), catalogo);
+    expect(r.ok && r.borrador.lineas[0].paquete).toBeNull();
+  });
+
+  it('acepta paquete con unidades, con null y redondea a 3 decimales', () => {
+    const a = validarSalidaModelo(
+      linea({ paquete: { descripcion: ' Caja ', unidades: 24 } }),
+      catalogo,
+    );
+    expect(a.ok && a.borrador.lineas[0].paquete).toEqual({
+      descripcion: 'Caja',
+      unidades: 24,
+    });
+    const b = validarSalidaModelo(
+      linea({ paquete: { descripcion: 'Caja', unidades: null } }),
+      catalogo,
+    );
+    expect(b.ok && b.borrador.lineas[0].paquete?.unidades).toBeNull();
+    const c = validarSalidaModelo(
+      linea({ paquete: { descripcion: 'Caja', unidades: 12.34567 } }),
+      catalogo,
+    );
+    expect(c.ok && c.borrador.lineas[0].paquete?.unidades).toBe(12.346);
+    const d = validarSalidaModelo(linea({ paquete: null }), catalogo);
+    expect(d.ok && d.borrador.lineas[0].paquete).toBeNull();
+  });
+
+  it('el límite de unidades es 10000 y de la descripción 50 caracteres', () => {
+    const ok = validarSalidaModelo(
+      linea({ paquete: { descripcion: 'x'.repeat(50), unidades: 10000 } }),
+      catalogo,
+    );
+    expect(ok.ok).toBe(true);
+  });
+
+  it.each([
+    ['unidades 0', { descripcion: 'Caja', unidades: 0 }],
+    ['unidades negativas', { descripcion: 'Caja', unidades: -1 }],
+    ['unidades 10001', { descripcion: 'Caja', unidades: 10001 }],
+    ['unidades en texto', { descripcion: 'Caja', unidades: '24' }],
+    ['descripción vacía', { descripcion: '  ', unidades: 2 }],
+    ['sin descripción', { unidades: 2 }],
+    ['descripción de 51', { descripcion: 'x'.repeat(51), unidades: 2 }],
+    ['paquete en texto', 'caja'],
+  ])('rechaza paquete: %s', (_n, paquete) => {
+    expect(validarSalidaModelo(linea({ paquete }), catalogo).ok).toBe(false);
+  });
+
+  it('producto nuevo: factor null (no dijo cuántas trae) y unidad_venta', () => {
+    const r = validarSalidaModelo(
+      salida({
+        lineas: [],
+        productos_nuevos: [
+          {
+            nombre: 'Galletas',
+            cantidad: 2,
+            descripcion_presentacion: 'Caja',
+            factor: null,
+            unidad_venta: 'Libra',
+          },
+        ],
+      }),
+      catalogo,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.borrador.productos_nuevos[0].factor).toBeNull();
+      expect(r.borrador.productos_nuevos[0].unidad_venta).toBe('Libra');
+    }
+  });
+
+  it('producto nuevo: unidad_venta ausente → null', () => {
+    const r = validarSalidaModelo(
+      salida({
+        lineas: [],
+        productos_nuevos: [{ nombre: 'Galletas', cantidad: 2, factor: 12 }],
+      }),
+      catalogo,
+    );
+    expect(r.ok && r.borrador.productos_nuevos[0].unidad_venta).toBeNull();
+  });
+});
+
 describe('normalizarTexto', () => {
   it('minúsculas, sin tildes, espacios simples', () => {
     expect(normalizarTexto('  Coca   de LATA ')).toBe('coca de lata');
