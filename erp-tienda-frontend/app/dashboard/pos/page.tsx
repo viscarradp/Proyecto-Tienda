@@ -168,7 +168,7 @@ export default function POSPage() {
   const [sacarDineroOpen, setSacarDineroOpen] = React.useState(false)
   const [efectivoDeclarado, setEfectivoDeclarado] = React.useState<string>("")
   const [montoBoveda, setMontoBoveda] = React.useState<string>("")
-  const [autoOpenNext, setAutoOpenNext] = React.useState(true)
+  const [autoOpenNext, setAutoOpenNext] = React.useState(false)
   const [observacionesCierre, setObservacionesCierre] = React.useState("")
   const [cajaActionLoading, setCajaActionLoading] = React.useState(false)
   // Errores por campo del cierre de caja (VIS-24).
@@ -411,7 +411,7 @@ export default function POSPage() {
       const base = err instanceof Error ? err.message : mensajeError("registrar la venta")
       // Con fallo de red o del servidor la venta pudo haber quedado registrada aunque no llegara la respuesta.
       const dudosa = ["red", "servidor"].includes(tipoDeError(err) ?? "")
-      const mensaje = dudosa ? `${base} Antes de cobrar otra vez, revisa en Movimientos si la venta ya quedó.` : base
+      const mensaje = dudosa ? `${base} Antes de cobrar otra vez, revisa en Ventas y turnos si la venta ya quedó.` : base
       setCheckoutError(mensaje)
       toast.error(mensaje, { id: "error-cobro", duration: 8000 })
     } finally {

@@ -1,3 +1,4 @@
+import { MENU } from "@/lib/glosario"
 import {
   Store,
   Package,
@@ -15,7 +16,7 @@ import {
  * (@Roles en los controllers de NestJS) para evitar llevar al usuario a
  * pantallas que responderán 403.
  *
- * D-06 "la cajera opera, la dueña controla": Gastos, Estadísticas y Usuarios
+ * D-06 "la cajera opera, la dueña controla": Mi negocio, Gastos y deudas y Usuarios
  * son de la dueña (ADMIN). Lo que la cajera sí hace (pagar gastos chicos desde
  * la gaveta, guardar en la bóveda) vive en el botón "Sacar dinero" del POS.
  */
@@ -26,15 +27,20 @@ export interface NavItem {
   href: string
   icon: LucideIcon
   roles: Rol[]
+  /** En el menú inferior del celular, pasa a "Más" cuando hay demasiados ítems. */
+  enMas?: boolean
 }
 
+/** Máximo de pestañas del menú inferior antes de agrupar el resto en "Más". */
+export const MAX_PESTANAS_MOVIL = 5
+
 export const NAV_ITEMS: NavItem[] = [
-  { name: "Vender", href: "/dashboard/pos", icon: Store, roles: ["ADMIN", "CAJERO"] },
-  { name: "Inventario", href: "/dashboard/inventario", icon: Package, roles: ["ADMIN", "CAJERO"] },
-  { name: "Movimientos", href: "/dashboard/movimientos", icon: History, roles: ["ADMIN", "CAJERO"] },
-  { name: "Gastos", href: "/dashboard/gastos", icon: Receipt, roles: ["ADMIN"] },
-  { name: "Estadísticas", href: "/dashboard/stats", icon: BarChart3, roles: ["ADMIN"] },
-  { name: "Usuarios", href: "/dashboard/usuarios", icon: Users, roles: ["ADMIN"] },
+  { name: MENU.miNegocio, href: "/dashboard/stats", icon: BarChart3, roles: ["ADMIN"] },
+  { name: MENU.vender, href: "/dashboard/pos", icon: Store, roles: ["ADMIN", "CAJERO"] },
+  { name: MENU.inventario, href: "/dashboard/inventario", icon: Package, roles: ["ADMIN", "CAJERO"] },
+  { name: MENU.gastosYDeudas, href: "/dashboard/gastos", icon: Receipt, roles: ["ADMIN"] },
+  { name: MENU.ventasYTurnos, href: "/dashboard/movimientos", icon: History, roles: ["ADMIN", "CAJERO"], enMas: true },
+  { name: MENU.usuarios, href: "/dashboard/usuarios", icon: Users, roles: ["ADMIN"], enMas: true },
 ]
 
 /** Ítems de navegación visibles para un rol dado. */
@@ -57,7 +63,22 @@ export function canAccessRoute(rol: Rol | undefined | null, pathname: string): b
   return item.roles.includes(rol)
 }
 
-/** Ruta "hogar" para un rol: su primer destino permitido (o login si ninguno). */
+/**
+ * Ruta "hogar" para un rol: la dueña llega a "Mi negocio"; la cajera, a Vender.
+ * Sin rol conocido, al login.
+ */
 export function getHomeRoute(rol: Rol | undefined | null): string {
-  return getNavItems(rol)[0]?.href ?? "/auth/login"
+  if (rol === "ADMIN") return "/dashboard/stats"
+  if (rol === "CAJERO") return "/dashboard/pos"
+  return "/auth/login"
+}
+
+/**
+ * Reparte los ítems del menú inferior del celular: pestañas visibles y los que
+ * van dentro de "Más". Con pocos ítems (la cajera) no hay "Más".
+ */
+export function getNavMovil(rol: Rol | undefined | null): { pestanas: NavItem[]; mas: NavItem[] } {
+  const items = getNavItems(rol)
+  if (items.length <= MAX_PESTANAS_MOVIL) return { pestanas: items, mas: [] }
+  return { pestanas: items.filter((i) => !i.enMas), mas: items.filter((i) => i.enMas) }
 }

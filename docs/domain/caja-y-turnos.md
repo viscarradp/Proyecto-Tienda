@@ -59,7 +59,7 @@ está bloqueado, y una devolución se reembolsa siempre desde el turno **actual*
 [`ventas-y-devoluciones.md`](ventas-y-devoluciones.md)). El cierre toma lock `FOR UPDATE` del turno: un doble clic
 no duplica el ajuste (el segundo recibe 409).
 
-El POS ofrece **"Reabrir automáticamente"** al cerrar: tras un cierre exitoso abre el turno siguiente con
+El POS ofrece **"Reabrir automáticamente"** al cerrar (desmarcado por defecto): tras un cierre exitoso abre el turno siguiente con
 `fondo_inicial = declarado − traslado a bóveda` (solo si ese fondo es mayor que 0). Es una llamada normal a
 `/abrir` desde el frontend, no una regla del servidor; si falla, la pantalla avisa que la caja ya se cerró y
 consulta el estado real.
@@ -73,7 +73,7 @@ Para un turno que la cajera dejó abierto. La dueña declara el efectivo contado
 (siempre, sin importar el monto). El turno queda `CERRADA_FORZADA`; se registra el ajuste y el traslado igual
 que en un cierre normal, y el turno se ve como tal en Movimientos.
 
-En pantalla (desde el 2026-11-25), Movimientos ofrece "Cerrar forzado" **solo en turnos viejos**: abiertos antes del día
+En pantalla (desde el 2026-11-25), Ventas y turnos (antes Movimientos) ofrece "Cerrar forzado" **solo en turnos viejos**: abiertos antes del día
 de hoy en la zona del negocio, o con más de 14 h abiertos. Así la dueña no cierra por error el turno que la cajera tiene
 en curso. El endpoint no cambia: la regla es de pantalla.
 
@@ -88,8 +88,9 @@ en curso. El endpoint no cambia: la regla es de pantalla.
   (con 0, "Cuadraron", en neutro). Se quitó "Turnos visibles". En celular son 2 columnas compactas.
 
 Al cerrar caja (normal), la pantalla muestra el resultado hasta que la cajera lo toca: "Caja cerrada · Cuadró · Fondo
-para mañana: $X" (o "Faltaron $X" / "Sobraron $X"). "Reabrir automáticamente" sigue marcado por defecto; desmarcarlo
-para que la mañana empiece con "Abrir caja" y el conteo está pendiente de decidir con la dueña.
+para mañana: $X" (o "Faltaron $X" / "Sobraron $X"). "Reabrir automáticamente" viene **desmarcado por defecto desde el
+2026-11-26** (decisión de la dueña): cada mañana empieza con "Abrir caja" y se cuenta el fondo, y la caja abierta de
+anoche no aparece como "vieja" con la opción de cierre forzado. Quien quiera reabrir al instante marca la casilla.
 
 ## Lectura
 
