@@ -270,6 +270,7 @@ model presentaciones {
   precio_venta      Decimal                            @db.Decimal(10, 2)
   detalle_ventas    detalle_ventas[]
   historial_precios historial_precios_presentaciones[]
+  bot_alias         bot_alias[]
   productos         productos                          @relation(fields: [producto_id], references: [id], onUpdate: NoAction, map: "fk_producto")
 
   @@index([producto_id])
@@ -319,6 +320,8 @@ model usuarios {
   compras_inventario      compras_inventario[]               @relation("CompraAutor")
   compras_anuladas        compras_inventario[]               @relation("CompraAnuladaPor")
   abonos_deuda            abono_deuda[]
+  bot_conversaciones      bot_conversaciones[]
+  bot_alias               bot_alias[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -438,4 +441,33 @@ model pendientes_stock {
 
   @@index([producto_id, resuelto_en])
   @@index([detalle_venta_id])
+}
+
+/// Bot de Telegram: borrador de la compra que la dueña está dictando (uno por chat).
+model bot_conversaciones {
+  id             Int      @id @default(autoincrement())
+  chat_id        String   @unique @db.VarChar(64)
+  usuario_id     Int
+  borrador       Json
+  estado         String   @default("BORRADOR") @db.VarChar(20)
+  actualizado_en DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  usuarios       usuarios @relation(fields: [usuario_id], references: [id], onUpdate: NoAction)
+
+  @@index([usuario_id])
+}
+
+/// Bot de Telegram: memoria de equivalencias "como lo dice la dueña" -> presentación.
+model bot_alias {
+  id                Int            @id @default(autoincrement())
+  texto_normalizado String         @db.VarChar(200)
+  proveedor         String?        @db.VarChar(150)
+  presentacion_id   Int
+  usos              Int            @default(1)
+  creado_por_id     Int?
+  creado_en         DateTime       @default(now()) @db.Timestamptz(6)
+  presentaciones    presentaciones @relation(fields: [presentacion_id], references: [id], onUpdate: NoAction)
+  creado_por        usuarios?      @relation(fields: [creado_por_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([texto_normalizado])
+  @@index([presentacion_id])
 }

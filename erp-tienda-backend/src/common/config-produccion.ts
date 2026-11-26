@@ -11,6 +11,7 @@ const JWT_SECRETS_DE_EJEMPLO = [
 ];
 
 export const JWT_SECRET_MIN_LENGTH = 32;
+export const TELEGRAM_SECRET_MIN_LENGTH = 16;
 
 /**
  * Con NODE_ENV=production exige la configuración mínima segura y falla con un
@@ -43,6 +44,22 @@ export function validarConfigProduccion(
     errores.push(
       'JWT_SECRET usa un valor de ejemplo del repositorio; genera uno propio (openssl rand -hex 32).',
     );
+  }
+
+  // Bot de Telegram: solo se exige algo si se usa el modo webhook (público).
+  if ((env.TELEGRAM_MODO ?? '').trim().toLowerCase() === 'webhook') {
+    if (!(env.TELEGRAM_BOT_TOKEN ?? '').trim()) {
+      errores.push(
+        'TELEGRAM_BOT_TOKEN es obligatoria con TELEGRAM_MODO=webhook.',
+      );
+    }
+    if (
+      (env.TELEGRAM_WEBHOOK_SECRET ?? '').length < TELEGRAM_SECRET_MIN_LENGTH
+    ) {
+      errores.push(
+        `TELEGRAM_WEBHOOK_SECRET debe tener al menos ${TELEGRAM_SECRET_MIN_LENGTH} caracteres con TELEGRAM_MODO=webhook.`,
+      );
+    }
   }
 
   if (errores.length > 0) {

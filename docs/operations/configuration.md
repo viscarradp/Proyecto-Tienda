@@ -19,6 +19,45 @@ subas un `.env` real al repositorio (ya está en `.gitignore`).
 | `TOLERANCIA_DESCUADRE` | No (default `1.00`) | Monto en dólares a partir del cual un descuadre al **cerrar caja** o en el **arqueo de bóveda** exige justificación. Por debajo, el ajuste es automático. Ver [`../domain/caja-y-turnos.md`](../domain/caja-y-turnos.md). |
 | `ENABLE_SWAGGER` | No | Si es `"true"`, enciende Swagger (en `/api`) aunque `NODE_ENV=production`. |
 
+## Bot de Telegram (registrar compras por chat)
+
+La dueña puede registrar compras escribiéndole al bot (texto o foto de la factura). El bot **viene apagado**: sin
+`TELEGRAM_MODO` no hace nada, así que tests y entornos sin token no cambian.
+
+| Variable | Obligatoria | Descripción |
+|---|---|---|
+| `TELEGRAM_MODO` | No (default `apagado`) | `apagado`, `polling` (demo en la laptop, sin URL pública) o `webhook` (Render). Si el modo está activo pero falta el token, el bot queda apagado y avisa en el log. |
+| `TELEGRAM_BOT_TOKEN` | Sí con `polling` o `webhook` | Token que entrega @BotFather. **Es un secreto**: solo en el `.env` local o directo en Render; nunca en el repo, el chat ni capturas. El backend lo enmascara en logs y errores. |
+| `TELEGRAM_USUARIOS` | Sí para que alguien pueda usarlo | Lista `telegramUserId:nombreDeUsuario` separada por comas, p. ej. `123456789:admin`. El nombre es el del usuario del ERP: debe existir, estar **activo** y ser **ADMIN** (las compras son de la dueña). |
+| `TELEGRAM_WEBHOOK_URL` | No (solo `webhook`) | URL pública completa, p. ej. `https://tu-backend.onrender.com/telegram/webhook`. Si está definida, el backend la registra en Telegram al arrancar. |
+| `TELEGRAM_WEBHOOK_SECRET` | Sí con `webhook` | Texto aleatorio de **16 caracteres o más** (`openssl rand -hex 24`). Telegram lo manda en `X-Telegram-Bot-Api-Secret-Token` y el backend responde 401 si no coincide. Con `NODE_ENV=production` y `webhook`, el servidor no arranca sin token ni secreto válido. |
+| `OPENROUTER_API_KEY` | Sí para que el bot entienda | Clave de OpenRouter. **Es un secreto** (mismo trato que el token). Sin ella el bot contesta "No pude leer eso ahora". |
+| `OPENROUTER_MODEL` | Sí para que el bot entienda | ID exacto del modelo en OpenRouter, p. ej. `anthropic/claude-sonnet-5.5`, `qwen/qwen3.8-max-0902` o `moonshotai/kimi-k3.1-pro` (los tres aceptan fotos; precios y criterio en [`../domain/bot.md`](../domain/bot.md)). Se cambia sin tocar código. |
+| `OPENROUTER_MODEL_VISION` | No | Modelo para las fotos de factura; si falta, se usa `OPENROUTER_MODEL` (que entonces debe aceptar imágenes). |
+| `OPENROUTER_DATA_COLLECTION` | No (default `deny`) | `deny` pide a OpenRouter solo proveedores que no guardan los datos; `allow` lo relaja si un modelo se queda sin proveedores. |
+
+Solo se atienden chats privados (los grupos se ignoran). A quien no esté en `TELEGRAM_USUARIOS` el bot le contesta su
+número de Telegram para que se lo pase a quien administra el sistema.
+
+### Crear el bot con @BotFather
+
+1. En Telegram, busca **@BotFather** y escribe `/newbot`.
+2. Elige un nombre para mostrar (p. ej. "Mi Tienda").
+3. Elige un nombre de usuario que termine en `bot` (p. ej. `mitienda_compras_bot`).
+4. BotFather responde con el token. Cópialo a `TELEGRAM_BOT_TOKEN` en tu `.env` **sin compartirlo** con nadie.
+   Si se filtra, en @BotFather usa `/revoke` para generar otro.
+
+### Demo en local (polling)
+
+1. Agrega al `erp-tienda-backend/.env`: `TELEGRAM_MODO=polling`, `TELEGRAM_BOT_TOKEN=<tu token>`,
+   `OPENROUTER_API_KEY=<tu clave>` y `OPENROUTER_MODEL=<modelo>`.
+2. Arranca el backend (`npm run start:dev`) y, desde tu cuenta, escríbele `/start` al bot.
+3. Como todavía no estás autorizado, te contesta tu número de Telegram. Ponlo en `TELEGRAM_USUARIOS`
+   (p. ej. `123456789:admin`) y reinicia el backend.
+4. Escríbele lo que compraste o mándale la foto de una factura.
+
+En `polling` el backend quita cualquier webhook previo y consulta a Telegram cada ~30 s; no necesita URL pública.
+
 ## Frontend (`erp-tienda-frontend/.env.local`)
 
 | Variable | Obligatoria | Descripción |
